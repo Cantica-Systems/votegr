@@ -63,8 +63,13 @@
       road: { motorway: '#4a5361', primary: '#3e4652', arterial: '#373e49',
               collector: '#353c48', local: '#38404d', private: '#333a46' },
       label:  '#c3ccd8', labelHalo: '#12161d', labelRoute: '#ffffff',
+      // Three hues because no jurisdiction in the county has a fourth ward:
+      // Grand Rapids, East Grand Rapids, Walker and Wyoming have three,
+      // Kentwood two, and every township none. A fourth would fall through to
+      // scopeHue and paint as a township, so check this list before trusting
+      // it on new data.
       wardHue: { '1': 265, '2': 190, '3': 32 },
-      wardSat: 54, wardL: 50, wardLStep: 10, wardAlpha: .26,
+      wardSat: 54, wardL: 50, wardLStep: 6, wardAlpha: .26,
       scopeHue: 210, scopeBorder: '#ffd76a',
       precinct: '#b5a6f0', precinctActive: '#ffffff',
       precinctHalo: 'rgba(10,13,18,.8)',
@@ -82,7 +87,7 @@
               collector: '#ffffff', local: '#ffffff', private: '#f9f7f2' },
       label:  '#4a4640', labelHalo: '#ffffff', labelRoute: '#1d1b17',
       wardHue: { '1': 265, '2': 190, '3': 32 },
-      wardSat: 60, wardL: 46, wardLStep: 11, wardAlpha: .22,
+      wardSat: 60, wardL: 46, wardLStep: 6, wardAlpha: .22,
       scopeHue: 210, scopeBorder: '#8a5b00',
       precinct: '#6d4fa8', precinctActive: '#3f1f86',
       precinctHalo: 'rgba(255,255,255,.85)',
@@ -463,6 +468,11 @@
         }
         rs.setProperty('--lg-scope', 'hsl(' + P.scopeHue + ',' + P.wardSat + '%,' + P.wardL + '%)');
         rs.setProperty('--lg-border', P.scopeBorder);
+        // The land tone the ward fills lie over. Nothing in the legend uses
+        // it; it is published so that a reader of these colours -- the tint
+        // test above all -- can compose them the way the map does instead of
+        // keeping its own copy of the backdrop and drifting from it.
+        rs.setProperty('--lg-land', P.land);
       } catch (e) {}
 
       // Project [lat,lng] -> canvas px with a precomputed linear transform.
@@ -545,6 +555,25 @@
         // consecutive numbers tend to sit next to each other. Stepping by
         // number is therefore what makes NEIGHBOURS differ, which is the whole
         // point.
+        //
+        // The step has to stay SMALL, and it did not. At 10 points over a
+        // modulus of 5 the lift spanned 40 points of lightness inside one
+        // ward, which is further apart than the three ward hues are, so the
+        // fill reported precinct % 5 and not ward: measured in CIELAB over the
+        // land tone, two precincts in ONE ward reached dE 25.9 while the
+        // closest pair from DIFFERENT wards sat at 4.8. Near the top of that
+        // range all three hues washed out towards white as well. Grand Rapids
+        // showed it worst, being the city with all three wards on screen at
+        // once.
+        //
+        // 6 points is the largest step that keeps the worst same-ward pair
+        // under half the closest cross-ward pair in BOTH themes, and it still
+        // leaves neighbours a visible dE 7.3 (dark) / 5.4 (light) apart. The
+        // lift is centred on wardL rather than climbing from it, so the range
+        // is wardL +/- 2 steps, the legend swatch at --lg-wardN is the middle
+        // of what gets painted rather than the darkest corner of it, and no
+        // precinct approaches white. tests/test_page.mjs asserts the ordering
+        // rather than these numbers, reading the tints off this renderer.
         // Tints, for the jurisdiction in scope only. A city with wards keeps
         // a hue per ward, as Grand Rapids always had; a township, having
         // none, takes one hue. Precincts step in lightness by number within
@@ -559,7 +588,7 @@
             if (!inScope(wp)) continue;
             var hue = wp.ward ? P.wardHue[String(wp.ward)] : P.scopeHue;
             if (hue == null) hue = P.scopeHue;
-            var lift = (Number(wp.precinct) % 5) * P.wardLStep;
+            var lift = ((Number(wp.precinct) % 5) - 2) * P.wardLStep;
             this._fillRings(ctx, wp.rings,
               'hsla(' + hue + ',' + P.wardSat + '%,' + (P.wardL + lift) + '%,' +
               P.wardAlpha + ')', pt);
