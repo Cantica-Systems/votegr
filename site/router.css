@@ -335,16 +335,23 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 /* ---- election day countdown ---- */
 /* A ticker, but a civic one: an instrument panel rather than a sale ending
    soon. Sits above the lede because it is the standing fact the page is
-   about, and left-aligned on the same measure as the lede so it reads as part
-   of the page rather than a banner dropped on top of it. */
+   about. Its contents are centred: it is the one thing on the start page that
+   is not read left to right like prose, so the clock sits on the column's
+   axis. The CARD is not centred and must not be. #col is a flex column, so
+   `margin: 0 auto` on a child overrides the default stretch and shrink-wraps
+   it to its digits -- a 373px badge that lines up with nothing and changes
+   width with the election name. Left on the same 31rem measure as the lede
+   and the search box, it keeps the column's rhythm and the clock still
+   lands on the axis, because the measure is what the axis is drawn through. */
 .countdown {
   margin: 0 0 20px;
   padding: 13px 15px 14px;
   background: var(--raise);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
+  border-top: 3px solid var(--accent);
   border-radius: 10px;
   max-width: 31rem;
+  text-align: center;
 }
 .countdown[hidden] { display: none; }
 
@@ -369,12 +376,14 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   text-transform: uppercase; color: var(--accent);
 }
 
-.cd-clock { display: flex; align-items: flex-start; }
+.cd-clock { display: flex; align-items: flex-start; justify-content: center; }
 .cd-unit {
   display: flex; flex-direction: column; gap: 3px;
   padding: 0 clamp(11px, 4vw, 20px);
 }
-.cd-unit:first-child { padding-left: 0; }
+/* No first-child padding reset any more. It existed to pull the row flush
+   with the card's left edge; on a centred row it would push the four units
+   half a gutter to the right of the axis they are supposed to sit on. */
 /* Hairlines rather than gaps alone: four numbers in a row need to read as one
    clock, and the rules do that without adding weight. */
 .cd-unit + .cd-unit { border-left: 1px solid var(--line); }
