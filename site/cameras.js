@@ -27,7 +27,19 @@
     'electricity', 'height', 'level', 'start_date', 'survey:date', 'check_date',
     'ref', 'note', 'description'];
 
-  var SIZE = 58, CENTRE = SIZE / 2;
+  // Two numbers, not one. BOX is the drawing's own coordinate space, which
+  // every coordinate in bodySvg and the view cone is written in; SIZE is the
+  // pixel box the marker is rendered into. They used to be the same 58, so
+  // the robot could only be made smaller by rewriting every coordinate in the
+  // figure. Kept apart, the viewBox scales the whole marker -- cone, pulse
+  // ring and robot together -- by SIZE/BOX, and the art is untouched.
+  //
+  // 58px of robot was too much map: in Grand Rapids the 235 cameras overlapped
+  // into a continuous band downtown and buried the precinct fills and the
+  // voting-site pins underneath them. At 38 the figure is still readable and
+  // the cone still points, and the tap target stays well above the 24px floor.
+  var BOX = 58, CENTRE = BOX / 2;
+  var SIZE = 38;
 
   // Its own escape rather than a shared one, so this module has no load-order
   // dependency on the page that uses it. Four lines is a cheaper price than a
@@ -166,16 +178,19 @@
     return {
       // The hover title. RoboCop is what he is.
       html: '<span title="RoboCop" style="display:block;width:100%;height:100%">' +
-        '<svg width="' + SIZE + '" height="' + SIZE + '" viewBox="0 0 ' + SIZE + ' ' + SIZE + '">' +
+        '<svg width="' + SIZE + '" height="' + SIZE + '" viewBox="0 0 ' + BOX + ' ' + BOX + '">' +
         cone + ring + bodySvg(fill, CENTRE, ringColour) + '</svg></span>',
       size: SIZE,
-      centre: CENTRE
+      // In PIXELS, so the caller can anchor the marker on the camera. CENTRE
+      // is in drawing units and is the wrong number once the two differ.
+      centre: SIZE / 2
     };
   }
 
   // The same robot for the legend key, cropped to the figure rather than the
-  // marker's 58px box, which is mostly empty space held for the direction cone
-  // the key does not show.
+  // marker's full BOX, which is mostly empty space held for the direction cone
+  // the key does not show. Its own size, unaffected by SIZE: the key is read
+  // at arm's length in a legend row, not picked out of a crowd on a map.
   function legendSvg(ringColour) {
     return '<svg viewBox="16 15 26 26" width="18" height="18" style="display:block">' +
       bodySvg('#ff4d4d', 29, ringColour) + '</svg>';

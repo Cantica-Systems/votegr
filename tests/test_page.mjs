@@ -671,8 +671,10 @@ for (const w of WIDTHS) {
       }),
       // Where a card has a list button too, the two share a row and a shape,
       // and the list button leads. They share a LINE only where there is
-      // room: on a phone "Show all my early voting site options" plus a
-      // button is wider than the screen, and wrapping is what should happen.
+      // room: on a narrow phone a list button plus a Directions button can be
+      // wider than the screen, and wrapping is what should happen. Asserted
+      // either way rather than against a width, so shortening a label cannot
+      // turn a correct layout into a failure.
       pairedRow: [...document.querySelectorAll('.vi-actions')].filter(r =>
         r.children.length === 2).every(r => {
           const [a, b] = r.children;
