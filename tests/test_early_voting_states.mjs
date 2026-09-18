@@ -56,7 +56,7 @@ const CASES = [
    { label: /early voting closed/i, site: false }],
   ['upcoming', base({ early_voting_from: iso(5), early_voting_to: iso(10),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting upcoming/i, site: false }],
+   { label: /early voting dates/i, site: false }],
   ['none',     base({ early_voting_sites: SITES }),
    { label: null, site: false }],
 ];

@@ -1747,7 +1747,7 @@
         : '<div class="pp-addr">No site published yet.</div>') +
       (ev ? actionRow('early', ev.all.length > 1
             ? '<button type="button" class="box-open" id="evListBtn">' +
-              'Show all my early voting site options</button>'
+              'Show all voting sites</button>'
             : '') : '') +
       '</div>';
     html += section('early', where,
@@ -2135,7 +2135,7 @@
         // upcoming site is a published, dated fact, and a voter planning
         // around it is better served knowing where than being told to come
         // back in October.
-        return { label: 'Early voting upcoming',
+        return { label: 'Early voting dates',
                  status: Elections.dayMonth(window.early_voting_from) +
                          ' to ' + Elections.dayMonth(to),
                  site: inGrandRapids(current) && clerkForThisElection() };
