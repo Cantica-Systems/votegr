@@ -6,10 +6,15 @@ Overpass, and write the cached camera floor (site/data/cameras.json).
 This is the ONLY camera source. The browser used to be able to re-query
 Overpass live, adding to this set but never showing fewer; that control is
 gone, so the page shows exactly what this script last wrote and nothing
-corrects it at read time. So this file must be complete: the pull walks an endpoint fallback chain and REFUSES to write a
-truncated result (Overpass signals truncation with a 'remark' at HTTP 200, and
-its main front 504s under load). A busy mirror is retried, with a growing
-wait; a truncated answer is not, because asking again returns the same one.
+corrects it at read time. So the pull walks an endpoint fallback chain and
+refuses to write an INCOMPLETE answer (Overpass signals truncation with a
+'remark' at HTTP 200, and its main front 504s under load). A busy mirror is
+retried, with a growing wait; a truncated answer is not, because asking again
+returns the same one.
+
+Completeness of the ANSWER is the test. The count is not: a complete answer
+with fewer cameras than last time is published as-is, because OSM removals are
+real and a never-fewer rule cannot tell one from a bad day.
 
 Every ALPR node counts, all operators and zones: police, Flock, retail, HOA.
 """
@@ -60,11 +65,19 @@ ENDPOINT_PAUSE_S = 2             # between endpoints inside one round
 RETRY_AFTER_CAP_S = 300
 OUT = Path(__file__).resolve().parent.parent / "site" / "data" / "cameras.json"
 MIN_CAMERAS = 20   # GR metro has hundreds; a handful back = truncated/broken
-# Widening the box must not LOSE cameras. Overpass returning a clean but
-# short result is indistinguishable from a real decline unless we say what
-# we already had, and a silent drop here quietly re-opens the exact hole
-# this widening closes.
-FLOOR_IS_PREVIOUS = True
+# There is deliberately NO never-fewer-than-last-time rule. There was one, and
+# it treated every shrink as a truncated answer, which meant a camera genuinely
+# removed from OSM could never leave this file and one bad day from a loaded
+# mirror latched the job red until someone intervened: it refused on 2026-09-18
+# at 4 cameras short, then at 42. The published set is now whatever the last
+# complete answer said, removals included.
+#
+# What still has to hold is that the ANSWER was complete, which is a different
+# question from whether the count went down and is checked where it belongs, in
+# fetch_result(): Overpass flags a server-side timeout with a 'remark' at HTTP
+# 200, and that response is skipped in favour of the next mirror. MIN_CAMERAS
+# stays as the absolute floor, since a result in the single digits is a broken
+# query rather than a county that removed its readers overnight.
 
 QL = f"""[out:json][timeout:60];
 (
@@ -188,20 +201,19 @@ def main():
         sys.exit(f"REFUSE: only {len(cams)} cameras (< {MIN_CAMERAS}); "
                  "likely truncated or wrong bbox")
 
-    # Every camera we already published must still be here. A strictly larger
-    # bbox cannot honestly return fewer, so a drop means a truncated answer
-    # dressed up as a complete one -- which is the one failure this file's
-    # whole design is against.
-    if FLOOR_IS_PREVIOUS and OUT.exists():
+    # A shrink is reported, not refused. Knowing the set got smaller is worth
+    # having in the run log, since it is the one change nobody is expecting,
+    # but it is a fact about OSM rather than a reason to keep publishing a
+    # stale file.
+    if OUT.exists():
         try:
             had = {c["id"] for c in json.loads(OUT.read_text()).get("cameras", [])}
         except (ValueError, KeyError):
             had = set()
         lost = had - {c["id"] for c in cams}
         if lost:
-            sys.exit(f"REFUSE: {len(lost)} camera(s) in the committed file are "
-                     f"missing from this result, e.g. {sorted(lost)[:5]}. A wider "
-                     "bbox cannot return fewer; treat this as a truncated query.")
+            print(f"note: {len(lost)} camera(s) from the previous file are not in "
+                  f"this answer, e.g. {sorted(lost)[:5]}; taking the new set.")
 
     payload = {
         "meta": {
@@ -219,8 +231,9 @@ def main():
                           ".github/workflows/refresh-cameras.yml, which commits "
                           "only when the set changed. Run by hand to force it.",
             endpoint_fallbacks=ENDPOINTS[1:],
-            floor_note="This file is the completeness FLOOR. The browser may "
-                       "add to it from a live query but must never show fewer."),
+            floor_note="This file is the whole camera set the page shows: it "
+                       "is not corrected at read time, and it is replaced by "
+                       "each complete Overpass answer, removals included."),
         "cameras": cams,
     }
     OUT.write_text(json.dumps(payload, separators=(",", ":")))
