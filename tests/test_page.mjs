@@ -1471,17 +1471,21 @@ for (const w of [390, 1280]) {
 
 // --- street names stay put when the map is dragged -------------------
 // A name belongs to a piece of road, so panning must not move it to a
-// different piece. It did: selection was ranked by distance to the SCREEN
-// centre, so moving the centre re-picked the block, and the occupancy grid
-// that breaks ties was keyed on canvas pixels, whose origin moves with the
-// pan. A 150px drag re-placed 14 of 51 visible names, one of them by 756m.
+// different piece. Selection used to be ranked by distance to the SCREEN
+// centre; it is now one winner per fixed geographic cell, decided on the
+// geography alone, so a pan cannot re-pick it.
 //
-// Measured off the real renderer: fillText on the label canvas is wrapped and
-// every draw converted to a lat/lng at DRAW time, while the frame that drew it
-// is still current. The draw point has to go THROUGH the transform: street
-// names translate() and draw at 0,0, precinct labels pass x,y as arguments.
-// Precinct labels are the calibration -- they sit on fixed points, so if they
-// do not come out at 0m the probe is wrong and the whole check is void.
+// This test is deliberately paranoid, because the first version of it passed
+// while the bug was still there. It got two things wrong, both worth keeping
+// in mind before loosening anything here:
+//
+//  1. It dragged LEFT only, which was the one direction that happened to be
+//     clean. Up, down and diagonal still moved names.
+//  2. It matched each name's CLOSEST before/after position. Once a long
+//     street is named in more than one cell, a label that moved still sits
+//     near another copy of itself, and the check scored it zero.
+//
+// So: every placement is matched as a SET, and several directions are driven.
 {
   const ctx = await browser.newContext({ viewport: { width: 1100, height: 900 } });
   const page = await ctx.newPage();
@@ -1493,10 +1497,14 @@ for (const w of [390, 1280]) {
   });
   await page.goto(URL_, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
+  // Convert at DRAW time and THROUGH the transform: street names translate()
+  // and draw at 0,0, precinct labels pass x,y as arguments. Reading the matrix
+  // translation alone puts every precinct label at the canvas origin, which
+  // does move with the pan -- that is what the calibration below catches.
   await page.evaluate(() => {
-    window.__fills = [];
-    const proto = CanvasRenderingContext2D.prototype, of_ = proto.fillText;
-    proto.fillText = function (t, x, y) {
+    window.__f = [];
+    const pr = CanvasRenderingContext2D.prototype, o = pr.fillText;
+    pr.fillText = function (t, x, y) {
       const cv = this.canvas;
       if (cv && /basemap-labels/.test(cv.className || '') && window.__map) {
         const tr = this.getTransform(), dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1504,9 +1512,10 @@ for (const w of [390, 1280]) {
         const px = (tr.a * x + tr.c * y + tr.e) / dpr;
         const py = (tr.b * x + tr.d * y + tr.f) / dpr;
         const ll = window.__map.layerPointToLatLng(L.point(pos.x + px, pos.y + py));
-        window.__fills.push({ txt: t, lat: ll.lat, lng: ll.lng });
+        const cp = window.__map.latLngToContainerPoint(ll);
+        window.__f.push({ txt: t, lat: ll.lat, lng: ll.lng, cx: cp.x, cy: cp.y });
       }
-      return of_.call(this, t, x, y);
+      return o.call(this, t, x, y);
     };
   });
   await page.fill('#addr', '');
@@ -1519,60 +1528,72 @@ for (const w of [390, 1280]) {
 
   const read = () => page.evaluate(() => {
     const o = {};
-    for (const f of window.__fills) (o[f.txt] = o[f.txt] || []).push([f.lat, f.lng]);
-    return { labels: o, zoom: window.__map.getZoom() };
+    for (const f of window.__f) (o[f.txt] = o[f.txt] || []).push(f);
+    const sz = window.__map.getSize();
+    return { labels: o, w: sz.x, h: sz.y, zoom: window.__map.getZoom() };
   });
-  const clear = () => page.evaluate(() => { window.__fills = []; });
-
-  // One redraw with no movement, then exactly the redraw the drag causes.
-  await clear();
-  await page.evaluate(() => window.__map.fire('moveend'));
-  await page.waitForTimeout(1400);
-  const A = await read();
-
-  await clear();
-  const mb = await page.locator('#map').boundingBox();
-  const X = mb.x + mb.width * 0.6, Y = mb.y + mb.height * 0.5;
-  await page.mouse.move(X, Y);
-  await page.mouse.down();
-  await page.waitForTimeout(60);
-  for (let i = 1; i <= 15; i++) { await page.mouse.move(X - i * 10, Y, { steps: 1 }); await page.waitForTimeout(25); }
-  await page.waitForTimeout(100);
-  await page.mouse.up();
-  await page.waitForTimeout(2000);
-  const B = await read();
-
+  const clear = () => page.evaluate(() => { window.__f = []; });
   const R = 6371000, rad = d => d * Math.PI / 180;
-  const dist = (a, b) => { const dLat = rad(b[0] - a[0]), dLng = rad(b[1] - a[1]);
-    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLng / 2) ** 2;
+  const dist = (a, b) => { const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(h)); };
-  const compare = pick => {
-    const names = Object.keys(A.labels).filter(n => B.labels[n] && pick(n));
-    const moved = [];
-    for (const n of names) {
-      const d = Math.min(...B.labels[n].map(bb => Math.min(...A.labels[n].map(aa => dist(aa, bb)))));
-      if (d > 3) moved.push(n + ' ' + Math.round(d) + 'm');
+
+  async function dragBy(dx, dy) {
+    await clear();
+    await page.evaluate(() => window.__map.fire('moveend'));
+    await page.waitForTimeout(1400);
+    const A = await read();
+    await clear();
+    const mb = await page.locator('#map').boundingBox();
+    const X = mb.x + mb.width * 0.5, Y = mb.y + mb.height * 0.5;
+    await page.mouse.move(X, Y);
+    await page.mouse.down();
+    await page.waitForTimeout(60);
+    for (let i = 1; i <= 15; i++) {
+      await page.mouse.move(X + dx * i / 15, Y + dy * i / 15, { steps: 1 });
+      await page.waitForTimeout(25);
     }
-    return { n: names.length, moved };
-  };
-
-  ok('the zoom did not change under the drag', A.zoom === B.zoom);
-  const cal = compare(n => /^Precinct /.test(n));
-  // Without this the next assertion could pass on a probe that measures nothing.
-  ok('the probe is calibrated: fixed labels measure as fixed',
-     cal.n > 0 && cal.moved.length === 0);
-  if (cal.moved.length) console.log('       calibration off: ' + cal.moved.join(', '));
-
-  const st = compare(n => !/^Precinct /.test(n) && !/^\d+$/.test(n));
-  ok('street names are drawn before and after the drag', st.n > 10);
-  // Names entering and leaving at the edges is correct and not asserted; what
-  // must not happen is a name that survives the drag changing where it sits.
-  ok('a street name that survives a drag has not moved over the ground',
-     st.moved.length === 0);
-  if (st.moved.length) {
-    console.log('       ' + st.moved.length + ' of ' + st.n + ' re-placed: ' +
-                st.moved.slice(0, 6).join(', '));
+    await page.waitForTimeout(100);
+    await page.mouse.up();
+    await page.waitForTimeout(2000);
+    const B = await read();
+    // A margin, so a label that merely left the view is not counted against
+    // the fix. Names entering and leaving at the edges is correct behaviour.
+    const M = 60;
+    const out = { zoomSame: A.zoom === B.zoom, checked: 0, moved: [], cal: { n: 0, bad: [] } };
+    for (const n of Object.keys(A.labels)) {
+      const isCal = /^Precinct /.test(n);
+      if (!isCal && /^\d+$/.test(n)) continue;
+      for (const a of A.labels[n]) {
+        const nx = a.cx + dx, ny = a.cy + dy;
+        if (nx < M || nx > A.w - M || ny < M || ny > A.h - M) continue;
+        const bs = B.labels[n] || [];
+        const d = bs.length ? Math.min(...bs.map(bb => dist(a, bb))) : Infinity;
+        if (isCal) { out.cal.n++; if (d > 3) out.cal.bad.push(n); continue; }
+        out.checked++;
+        if (d > 3) out.moved.push(n + ' ' + (d === Infinity ? 'gone' : Math.round(d) + 'm'));
+      }
+    }
+    return out;
   }
+
+  let totalChecked = 0, calTotal = 0;
+  const failures = [];
+  for (const [dx, dy, what] of [[-150, 0, 'left'], [150, 0, 'right'], [0, -150, 'up'],
+                                [0, 150, 'down'], [-260, -180, 'diagonally']]) {
+    const r = await dragBy(dx, dy);
+    ok('the zoom holds while dragging ' + what, r.zoomSame);
+    totalChecked += r.checked; calTotal += r.cal.n;
+    if (r.cal.bad.length) failures.push('CALIBRATION ' + what + ': ' + r.cal.bad.join(','));
+    if (r.moved.length) failures.push(what + ': ' + [...new Set(r.moved)].slice(0, 5).join(' | '));
+  }
+  // Without this the real assertion could pass on a probe measuring nothing.
+  ok('the probe is calibrated: fixed labels measure as fixed',
+     calTotal > 0 && !failures.some(f => /^CALIBRATION/.test(f)));
+  ok('there are street names to check across the drags', totalChecked > 30);
+  ok('no street name moves along its street when the map is dragged',
+     failures.length === 0);
+  if (failures.length) failures.forEach(f => console.log('       ' + f));
   await ctx.close();
 }
 

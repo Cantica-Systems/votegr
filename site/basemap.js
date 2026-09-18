@@ -152,6 +152,16 @@
   // cannot drift apart.
   var MARKER_R = 29;
 
+  // Does block x deserve its cell's name more than block y? Route proximity
+  // first, then the longest run, then the edge index. The last term is what
+  // makes it TOTAL: without it two equally good blocks are ordered by whichever
+  // the loop met first, and that is not a property of the map.
+  function betterBlock(x, y) {
+    if (x.rd !== y.rd) return x.rd < y.rd;
+    if (x.len !== y.len) return x.len > y.len;
+    return x.idx < y.idx;
+  }
+
   // Which occupancy cells a rotated text run covers. Sampled along the
   // baseline rather than computed as a rotated rectangle: the sampling is
   // cheap, and a label only needs to reserve roughly what it covers.
@@ -739,13 +749,19 @@
       // road. A cell keyed on world pixels cannot move under a pan, so the
       // same block wins every redraw and the name stays on the road it names.
       //
-      // The cell is about a canvas across, which keeps roughly the density the
-      // screen rule gave. It also fixes what that rule was introduced for: a
-      // long avenue now earns a name in each cell it crosses, so it is labelled
-      // wherever you are on it rather than only when its best block happens to
-      // be near the middle of the view.
+      // 300 world px, chosen by measuring: a cell the size of the canvas gave
+      // 42 distinct names on a downtown view, 560 gave 46, 400 gave 47, 300
+      // gave 50 and 220 fell back to 45 as the extra winners began crowding
+      // each other out of the occupancy grid. Smaller cells also waste fewer
+      // of them, since a cell whose winner lands outside the drawable canvas
+      // contributes nothing.
+      //
+      // It also fixes what the screen-centre rule was introduced for: a long
+      // avenue now earns a name in each cell it crosses, so it is labelled
+      // wherever you are on it rather than only when its best block happens
+      // to be near the middle of the view.
       var wx = worldOff ? worldOff.x : 0, wy = worldOff ? worldOff.y : 0;
-      var LCELL = Math.max(320, Math.round(Math.max(size.x, size.y)));
+      var LCELL = 300;   // world px; see the sweep in the commit message
       var route = this._routeStreets || {};
       var routeScreen = null;
       if (this._routePts && this._routePts.length) {
@@ -765,8 +781,17 @@
         if (lastPt < 1) continue;
         var a = pt([g.edgePointLat(i, 0), g.edgePointLng(i, 0)]);
         var b = pt([g.edgePointLat(i, lastPt), g.edgePointLng(i, lastPt)]);
-        if ((a[0] < 0 && b[0] < 0) || (a[0] > size.x && b[0] > size.x) ||
-            (a[1] < 0 && b[1] < 0) || (a[1] > size.y && b[1] > size.y)) continue;
+        // Collected a whole cell BEYOND the canvas on each side, not just
+        // what is drawable. The cell decides which block carries the name, so
+        // every block in a cell that touches the canvas has to compete for it.
+        // Clipped to the canvas, a block sliding into view became a new
+        // candidate and could take the name off the block that had it, which
+        // is the drag-and-it-moved this is about: the cell was stable, the
+        // pool inside it was not.
+        if ((a[0] < -LCELL && b[0] < -LCELL) ||
+            (a[0] > size.x + LCELL && b[0] > size.x + LCELL) ||
+            (a[1] < -LCELL && b[1] < -LCELL) ||
+            (a[1] > size.y + LCELL && b[1] > size.y + LCELL)) continue;
         var dx = b[0] - a[0], dy = b[1] - a[1];
         var len = Math.sqrt(dx * dx + dy * dy);
         // A name needs a long block to sit along; a shield only needs to fit
@@ -802,19 +827,18 @@
         var cellY = Math.floor((my0 + wy) / LCELL);
         var cand = { len: len, a: a, b: b, cls: ec, rd: rd, idx: i };
         var key = en + '\u0000' + cellX + ',' + cellY;
-        var slot = best[key] || (best[key] = { name: en, cands: [] });
-        slot.cands.push(cand);
-        // Deterministic, and on properties of the GEOGRAPHY: route proximity,
-        // then the longest run, then the edge's own index to break a tie. The
-        // same block therefore wins on every redraw. The bench stays deep for
-        // the same reason as before: if the first few blocks fall in cells
-        // already claimed by cross streets the name would be dropped entirely.
-        slot.cands.sort(function (x, y) {
-          return (x.rd - y.rd) || (y.len - x.len) || (x.idx - y.idx);
-        });
-        if (slot.cands.length > (ec === 1 ? 24 : 10)) {
-          slot.cands.length = ec === 1 ? 24 : 10;
-        }
+        var slot = best[key];
+        // ONE winner per cell, decided on the geography alone: route
+        // proximity, then the longest run, then the edge's own index so the
+        // comparison is total and two equal blocks cannot swap. There is
+        // deliberately no bench behind it. A list meant the drawing pass
+        // could walk down to a different block when the first was off screen
+        // or blocked, and "which block is on screen" is exactly the thing
+        // that changes when you drag. A cell whose winner is not drawable
+        // now yields no label, and the street is named in the next cell
+        // along instead.
+        if (!slot) best[key] = { name: en, best: cand };
+        else if (betterBlock(cand, slot.best)) slot.best = cand;
       }
 
       var names = Object.keys(best);
@@ -826,11 +850,11 @@
         var X = best[x], Y = best[y];
         var rx = route[X.name] ? 0 : 1, ry = route[Y.name] ? 0 : 1;
         if (rx !== ry) return rx - ry;
-        var d = X.cands[0].cls - Y.cands[0].cls;
+        var d = X.best.cls - Y.best.cls;
         if (d !== 0) return d;
-        d = Y.cands[0].len - X.cands[0].len;
+        d = Y.best.len - X.best.len;
         if (d !== 0) return d;
-        return X.cands[0].idx - Y.cands[0].idx;
+        return X.best.idx - Y.best.idx;
       });
 
       // The collision grid tightens with zoom. One fixed cell size meant the
@@ -883,17 +907,16 @@
         // best is keyed by name AND cell now, so the display name comes off
         // the slot rather than out of the key.
         var slotK = best[names[k]], streetName = slotK.name;
-        var cands = slotK.cands;
         var onRoute = !!route[streetName];
         var placed = 0;
-        // Try each candidate block until one fits on screen, clears the
-        // occupancy grid, and is long enough for its own name. A route street
-        // may be named twice on a long run, so it stays identifiable as you
-        // follow it across the view.
+        // Exactly one attempt: this cell's winner, or nothing. The loop that
+        // used to walk a bench of alternates is gone, because every reason it
+        // gave up on a block -- off screen, cell already claimed -- is a fact
+        // about the current view, so the name landed somewhere else as soon as
+        // the view changed. A street that loses one cell is still named in the
+        // next, and a name that cannot be drawn here simply is not drawn here.
+        var cands = [slotK.best];
         for (var q = 0; q < cands.length; q++) {
-          // One shield per highway per view. Three of them marching down
-          // US-131 was clutter, and the routing never uses a freeway anyway:
-          // these are context, so they should be findable, not loud.
           if (placed >= (onRoute ? 2 : 1)) break;
           var it = cands[q];
           var mx = (it.a[0] + it.b[0]) / 2, my = (it.a[1] + it.b[1]) / 2;
