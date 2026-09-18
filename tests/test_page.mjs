@@ -1362,6 +1362,111 @@ for (const w of [390, 1280]) {
   await ctx.close();
 }
 
+// --- the ward tint means WARD ---------------------------------------
+// The legend calls this layer "Wards, or your township" and basemap.js says a
+// precinct "steps in lightness by number within it so neighbours differ while
+// the area still reads as one". Both halves are checkable, and the first one
+// silently stopped being true: a lightness step of 10-11 points over a modulus
+// of 5 spanned 40 points inside one ward, which is further than the three ward
+// hues are apart, so the fill encoded precinct % 5 rather than ward. Grand
+// Rapids showed it worst, having all three wards.
+//
+// The tints are read off the real renderer rather than re-derived here: a copy
+// of the formula in the test would agree with a wrong formula in the source.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
+  const page = await ctx.newPage();
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
+
+  // Record every tint fill with the precinct it was painted for.
+  await page.evaluate(() => {
+    window.__tints = [];
+    const proto = Object.getPrototypeOf(window.BasemapLayer({}));
+    const orig = proto._fillRings;
+    proto._fillRings = function (c, rings, color, pt) {
+      if (this._precincts) {
+        for (const pr of this._precincts) {
+          if (pr.rings === rings) { window.__tints.push({ precinct: pr.precinct, ward: pr.ward, mcd: pr.mcd, color }); break; }
+        }
+      }
+      return orig.call(this, c, rings, color, pt);
+    };
+  });
+
+  await page.fill('#addr', '');
+  await page.type('#addr', '300 Monroe Ave NW', { delay: 25 });
+  await page.waitForSelector('#ac-addr .ac-item', { timeout: 15000 });
+  await page.locator('#ac-addr .ac-item').first().click();
+  await page.waitForTimeout(2500);
+
+  const tints = await page.evaluate(() => {
+    const byP = {};
+    for (const t of window.__tints) {
+      if (t.mcd == null || !/^hsla\(/.test(t.color)) continue;
+      byP[t.precinct] = { precinct: t.precinct, ward: String(t.ward), color: t.color };
+    }
+    // The land tone underneath, so the comparison is of what a reader sees
+    // rather than of translucent paint in the abstract.
+    const land = getComputedStyle(document.documentElement).getPropertyValue('--lg-land').trim();
+    return { tints: Object.values(byP), land };
+  });
+  ok('the ward tint is painted for a warded city', tints.tints.length > 10);
+  const wards = new Set(tints.tints.map(t => t.ward));
+  ok('and Grand Rapids paints all three of its wards', wards.size === 3);
+
+  // hsla() over an opaque backdrop, then CIELAB, which is the only space in
+  // which "further apart" means what a reader means by it.
+  const LAND = /^#[0-9a-f]{6}$/i.test(tints.land) ? tints.land : '#20242c';
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const hsl2rgb = (h, s, l) => { h /= 360; s /= 100; l /= 100;
+    const f = n => { const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l);
+      return (l - a * Math.max(-1, Math.min(k - 3, Math.min(9 - k, 1)))) * 255; };
+    return [f(0), f(8), f(4)]; };
+  const lab = rgb => { const f = c => { c /= 255; return c > 0.04045 ? Math.pow((c + 0.055) / 1.055, 2.4) : c / 12.92; };
+    const [r, g, b] = rgb.map(f);
+    let X = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047,
+        Y = r * 0.2126 + g * 0.7152 + b * 0.0722,
+        Z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+    const t = c => c > 0.008856 ? Math.cbrt(c) : 7.787 * c + 16 / 116;
+    X = t(X); Y = t(Y); Z = t(Z);
+    return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)]; };
+  const dE = (a, b) => { const A = lab(a), B = lab(b);
+    return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]); };
+  const bg = hex(LAND);
+  const seen = tints.tints.map(t => {
+    const m = /^hsla\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*,\s*([\d.]+)\s*\)$/.exec(t.color);
+    const [h, sa, l, al] = m.slice(1).map(Number);
+    const fg = hsl2rgb(h, sa, l);
+    return { ...t, rgb: fg.map((c, i) => c * al + bg[i] * (1 - al)) };
+  });
+  let maxSame = 0, minCross = Infinity, maxAdj = 0;
+  for (const a of seen) for (const b of seen) {
+    if (a.precinct === b.precinct) continue;
+    const d = dE(a.rgb, b.rgb);
+    if (a.ward === b.ward) { if (d > maxSame) maxSame = d;
+                             if (Math.abs(a.precinct - b.precinct) === 1 && d > maxAdj) maxAdj = d; }
+    else if (d < minCross) minCross = d;
+  }
+  // The invariant. Two precincts in one ward must look more alike than two
+  // precincts in different wards, or the colour is not reporting ward at all.
+  // Held to half, which is the margin the lightness step was chosen against,
+  // and both themes have to clear it.
+  ok('two precincts in one ward look closer than two in different wards',
+     maxSame < minCross);
+  ok('and with the margin the step was set against (same < cross / 2)',
+     maxSame < minCross / 2);
+  if (!(maxSame < minCross / 2)) {
+    console.log('       worst same-ward dE ' + maxSame.toFixed(1) +
+                ', closest cross-ward dE ' + minCross.toFixed(1));
+  }
+  // The other half of the intent: a smaller step must not become no step, or
+  // neighbouring precincts stop being tellable apart inside their ward.
+  ok('neighbouring precincts still differ inside a ward', maxAdj > 2.3);
+
+  await ctx.close();
+}
+
 // Plain load, no panel.
 {
   const ctx = await browser.newContext();

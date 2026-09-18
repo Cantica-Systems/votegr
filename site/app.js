@@ -873,7 +873,13 @@
         '<div class="layer-toggles" id="layerToggles">' +
         '<div class="lyr"><input type="checkbox" id="lyrPrecincts" checked><label for="lyrPrecincts">Precinct boundaries</label></div>' +
         '<div class="lyr"><input type="checkbox" id="lyrNumbers" checked><label for="lyrNumbers">Precinct numbers</label></div>' +
-        '<div class="lyr"><input type="checkbox" id="lyrWards" checked><label for="lyrWards">Your city or township</label></div>' +
+        // "Your city or township" named the one thing this switch does not
+        // control: the jurisdiction border draws from _scopeBorder whenever
+        // precincts are on, so turning this off left the city line exactly
+        // where it was, and the legend lists that line separately. What the
+        // switch actually governs is the ward-hued fill inside your own
+        // jurisdiction, so it now says so.
+        '<div class="lyr"><input type="checkbox" id="lyrWards" checked><label for="lyrWards">Ward and precinct colors</label></div>' +
         '<div class="lyr"><input type="checkbox" id="lyrPolling" checked><label for="lyrPolling">Voting locations</label></div>' +
         '<div class="lyr"><input type="checkbox" id="lyrCameras" checked><label for="lyrCameras">License plate cameras</label></div>' +
         '</div>' +
