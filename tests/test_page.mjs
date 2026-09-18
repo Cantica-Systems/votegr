@@ -404,7 +404,7 @@ for (const w of WIDTHS) {
   ok('the About panel says what the tool is and what it is for',
      await page.evaluate(() => {
        const t = document.getElementById('aboutModal').innerText;
-       return /What this is/i.test(t) && /maximizes your anonymity/i.test(t) &&
+       return /What this is/i.test(t) && /entirely in your web browser/i.test(t) &&
               /proof of concept/i.test(t);
      }));
   await page.evaluate(() => document.querySelector('#aboutModal .modal-x').click());
