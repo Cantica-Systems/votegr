@@ -369,10 +369,21 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
    .vi-lbl does: this titles a whole card, not a word above a single value,
    and it has to stay the largest label inside it. At .74rem it sat under the
    election name two lines below and read as that line's caption. Tracking
-   eases with the size, as it does there. */
+   eases with the size, as it does there.
+
+   1.25rem rather than 1rem: this is the line that says what the four numbers
+   under it are counting, and at 1rem it read as a caption on a card whose
+   digits are 2.1rem. It has a ceiling as well as a floor -- .cd-num has to
+   stay the largest thing in the card, since the figure is what a reader came
+   for -- so it cannot simply track the digits. The floor and the ceiling are
+   both asserted in tests/test_page.mjs rather than left to a later eye.
+
+   The label is also the longest string in the card on election day itself,
+   when it becomes "Polls Have Closed:", so the step-down below is sized off
+   that phrase at 320px and not off this one. */
 .cd-label {
-  margin: 0 0 9px;
-  font-weight: 700; font-size: 1rem; letter-spacing: .06em;
+  margin: 0 0 10px;
+  font-weight: 700; font-size: 1.25rem; letter-spacing: .05em;
   text-transform: uppercase; color: var(--accent);
 }
 
@@ -439,7 +450,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   .cd-unit { padding: 0 clamp(8px, 3.5vw, 14px); }
   .cd-num, .cd-today { font-size: 1.4rem; }
   .cd-lab { font-size: .58rem; letter-spacing: .07em; }
-  .cd-label { font-size: .88rem; letter-spacing: .05em; }
+  .cd-label { font-size: 1.05rem; letter-spacing: .04em; }
   .cd-for, .cd-when { font-size: .87rem; }
 }
 
