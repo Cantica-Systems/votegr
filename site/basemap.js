@@ -155,7 +155,10 @@
   // Which occupancy cells a rotated text run covers. Sampled along the
   // baseline rather than computed as a rotated rectangle: the sampling is
   // cheap, and a label only needs to reserve roughly what it covers.
-  function spanCells(mx, my, ang, tw, fontPx, CELL) {
+  // wx/wy shift canvas pixels into WORLD pixels so the cell boundaries are
+  // fixed to the ground. Keyed on canvas pixels the whole lattice slid with
+  // every pan, which changed who won a contested cell and moved names about.
+  function spanCells(mx, my, ang, tw, fontPx, CELL, wx, wy) {
     var out = [], seen = {};
     var half = tw / 2, cosA = Math.cos(ang), sinA = Math.sin(ang);
     var steps = Math.max(2, Math.ceil(tw / (CELL * 0.55)));
@@ -163,8 +166,8 @@
       var t = -half + (tw * i / steps);
       var x = mx + t * cosA, y = my + t * sinA;
       for (var s2 = -1; s2 <= 1; s2 += 2) {            // a little vertical body
-        var ox = x - s2 * (fontPx * 0.34) * sinA;
-        var oy = y + s2 * (fontPx * 0.34) * cosA;
+        var ox = x - s2 * (fontPx * 0.34) * sinA + wx;
+        var oy = y + s2 * (fontPx * 0.34) * cosA + wy;
         var k = Math.round(ox / CELL) + ':' + Math.round(oy / CELL);
         if (!seen[k]) { seen[k] = 1; out.push(k); }
       }
@@ -700,7 +703,11 @@
         lctx.restore();
       }
 
-      if (lctx) this._labels(lctx, P, z, { x: cw, y: ch }, pt);
+      // Canvas pixel -> world pixel, constant for this redraw. Layer point
+      // plus the map's pixel origin is fixed to the ground at a given zoom,
+      // which is what lets the label pass be pan-invariant.
+      var worldOff = origin.add(map.getPixelOrigin());
+      if (lctx) this._labels(lctx, P, z, { x: cw, y: ch }, pt, worldOff);
     },
 
     // Street names. Without them this is a diagram rather than a map: you can
@@ -709,7 +716,7 @@
     // One label per street name per screen, placed on its longest visible run
     // and rotated to follow it, with a coarse occupancy grid so names do not
     // pile up on each other. Which classes get labelled rises with zoom.
-    _labels: function (ctx, P, z, size, pt) {
+    _labels: function (ctx, P, z, size, pt, worldOff) {
       if (z < 10 || !this._graph) return;
       // Label more of the network sooner. At z13-14 only arterials were named,
       // which is most of a city with no names on it.
@@ -725,7 +732,20 @@
       // labels; the center-most visible block is the one a reader wants
       // named anyway.
       var best = {};
-      var cx = size.x / 2, cy = size.y / 2;
+      // ONE NAME PER GEOGRAPHIC CELL, not one per screen. The old rule ranked
+      // every candidate block by how close it sat to the SCREEN centre, so
+      // panning moved the centre, re-ranked the blocks and re-placed the name:
+      // a 150px drag moved 14 of 51 visible names, one of them 756m down the
+      // road. A cell keyed on world pixels cannot move under a pan, so the
+      // same block wins every redraw and the name stays on the road it names.
+      //
+      // The cell is about a canvas across, which keeps roughly the density the
+      // screen rule gave. It also fixes what that rule was introduced for: a
+      // long avenue now earns a name in each cell it crosses, so it is labelled
+      // wherever you are on it rather than only when its best block happens to
+      // be near the middle of the view.
+      var wx = worldOff ? worldOff.x : 0, wy = worldOff ? worldOff.y : 0;
+      var LCELL = Math.max(320, Math.round(Math.max(size.x, size.y)));
       var route = this._routeStreets || {};
       var routeScreen = null;
       if (this._routePts && this._routePts.length) {
@@ -765,39 +785,52 @@
         else minRun = z >= 17 ? 22 : z >= 16 ? 26 : z >= 15 ? 30 : z >= 14 ? 34 : 40;
         if (len < minRun) continue;
         var mx0 = (a[0] + b[0]) / 2, my0 = (a[1] + b[1]) / 2;
-        var d2 = (mx0 - cx) * (mx0 - cx) + (my0 - cy) * (my0 - cy);
-        // For a street the route uses, rank by distance to the route line
-        // instead of to the screen center.
+        // For a street the route uses, still prefer the block that hugs the
+        // route line: a distance between two canvas points does not change
+        // when the canvas moves, so this stays pan-invariant.
+        var rd = 0;
         if (routeScreen && route[en]) {
-          var rd = Infinity;
+          var near = Infinity;
           for (var rp = 0; rp < routeScreen.length; rp++) {
             var ddx = routeScreen[rp][0] - mx0, ddy = routeScreen[rp][1] - my0;
             var dd = ddx * ddx + ddy * ddy;
-            if (dd < rd) rd = dd;
+            if (dd < near) near = dd;
           }
-          // 30px of the line counts as "on it"; beyond that it sorts worse
-          d2 = rd < 900 ? rd : 1e7 + rd;
+          rd = near < 900 ? near : 1e7 + near;   // 30px of the line is "on it"
         }
-        var cand = { len: len, a: a, b: b, cls: ec, d2: d2 };
-        var lst = best[en] || (best[en] = []);
-        lst.push(cand);
-        // Prefer blocks near the middle of the screen, but keep a deep bench:
-        // a long avenue crossing the whole view has many blocks, and if the
-        // first few fall in cells already claimed by cross streets the name
-        // was being dropped entirely.
-        lst.sort(function (x, y) { return x.d2 - y.d2; });
-        if (lst.length > (ec === 1 ? 24 : 10)) {
-          lst.length = ec === 1 ? 24 : 10;
+        var cellX = Math.floor((mx0 + wx) / LCELL);
+        var cellY = Math.floor((my0 + wy) / LCELL);
+        var cand = { len: len, a: a, b: b, cls: ec, rd: rd, idx: i };
+        var key = en + '\u0000' + cellX + ',' + cellY;
+        var slot = best[key] || (best[key] = { name: en, cands: [] });
+        slot.cands.push(cand);
+        // Deterministic, and on properties of the GEOGRAPHY: route proximity,
+        // then the longest run, then the edge's own index to break a tie. The
+        // same block therefore wins on every redraw. The bench stays deep for
+        // the same reason as before: if the first few blocks fall in cells
+        // already claimed by cross streets the name would be dropped entirely.
+        slot.cands.sort(function (x, y) {
+          return (x.rd - y.rd) || (y.len - x.len) || (x.idx - y.idx);
+        });
+        if (slot.cands.length > (ec === 1 ? 24 : 10)) {
+          slot.cands.length = ec === 1 ? 24 : 10;
         }
       }
 
       var names = Object.keys(best);
       names.sort(function (x, y) {
-        // Route streets first, then bigger roads, then longer runs.
-        var rx = route[x] ? 0 : 1, ry = route[y] ? 0 : 1;
+        // Route streets first, then bigger roads, then longer runs. Ends on
+        // the edge index so the order is total: two names that tie on every
+        // other term must still resolve the same way on every redraw, or the
+        // occupancy contest hands the cell to a different one each pan.
+        var X = best[x], Y = best[y];
+        var rx = route[X.name] ? 0 : 1, ry = route[Y.name] ? 0 : 1;
         if (rx !== ry) return rx - ry;
-        var d = best[x][0].cls - best[y][0].cls;
-        return d !== 0 ? d : best[y][0].len - best[x][0].len;
+        var d = X.cands[0].cls - Y.cands[0].cls;
+        if (d !== 0) return d;
+        d = Y.cands[0].len - X.cands[0].len;
+        if (d !== 0) return d;
+        return X.cands[0].idx - Y.cands[0].idx;
       });
 
       // The collision grid tightens with zoom. One fixed cell size meant the
@@ -818,10 +851,10 @@
         if (op[0] < -OB || op[0] > size.x + OB ||
             op[1] < -OB || op[1] > size.y + OB) continue;
         obsPx.push(op);
-        var gx1 = Math.round((op[0] + OB) / CELL);
-        var gy1 = Math.round((op[1] + OB) / CELL);
-        for (var gx = Math.round((op[0] - OB) / CELL); gx <= gx1; gx++) {
-          for (var gy = Math.round((op[1] - OB) / CELL); gy <= gy1; gy++) {
+        var gx1 = Math.round((op[0] + OB + wx) / CELL);
+        var gy1 = Math.round((op[1] + OB + wy) / CELL);
+        for (var gx = Math.round((op[0] - OB + wx) / CELL); gx <= gx1; gx++) {
+          for (var gy = Math.round((op[1] - OB + wy) / CELL); gy <= gy1; gy++) {
             taken[gx + ':' + gy] = 1;
           }
         }
@@ -834,9 +867,9 @@
       var preBoxes = this._precinctBoxes || [];
       for (var pb = 0; pb < preBoxes.length; pb++) {
         var B = preBoxes[pb];
-        var bx1 = Math.round((B.x + B.hw) / CELL), by1 = Math.round((B.y + B.hh) / CELL);
-        for (var bx = Math.round((B.x - B.hw) / CELL); bx <= bx1; bx++) {
-          for (var by = Math.round((B.y - B.hh) / CELL); by <= by1; by++) {
+        var bx1 = Math.round((B.x + B.hw + wx) / CELL), by1 = Math.round((B.y + B.hh + wy) / CELL);
+        for (var bx = Math.round((B.x - B.hw + wx) / CELL); bx <= bx1; bx++) {
+          for (var by = Math.round((B.y - B.hh + wy) / CELL); by <= by1; by++) {
             taken[bx + ':' + by] = 1;
           }
         }
@@ -847,8 +880,11 @@
       ctx.lineJoin = 'round';
 
       for (var k = 0; k < names.length; k++) {
-        var cands = best[names[k]];
-        var onRoute = !!route[names[k]];
+        // best is keyed by name AND cell now, so the display name comes off
+        // the slot rather than out of the key.
+        var slotK = best[names[k]], streetName = slotK.name;
+        var cands = slotK.cands;
+        var onRoute = !!route[streetName];
         var placed = 0;
         // Try each candidate block until one fits on screen, clears the
         // occupancy grid, and is long enough for its own name. A route street
@@ -866,7 +902,7 @@
           if (ang > Math.PI / 2) ang -= Math.PI;      // keep text upright
           if (ang < -Math.PI / 2) ang += Math.PI;
 
-          var sh = it.cls <= 2 ? shieldFor(names[k]) : null;
+          var sh = it.cls <= 2 ? shieldFor(streetName) : null;
           if (sh) {
             // A shield sits upright across the road rather than running along
             // it, which is how every road map does it and how a driver reads
@@ -875,7 +911,7 @@
             // short when zoomed out. A shield sits ACROSS the road rather than
             // along it, so it needs far less room than a name would.
             if (it.len < 22) continue;
-            var shx = Math.round(mx / CELL), shy = Math.round(my / CELL);
+            var shx = Math.round((mx + wx) / CELL), shy = Math.round((my + wy) / CELL);
             // A shield is a solid badge, so it must not land on a name that is
             // already there. Claim the centre cell and its four neighbors,
             // which is roughly the badge's footprint.
@@ -901,7 +937,7 @@
           }
           var size_px = it.cls <= 2 ? 13.5 : it.cls === 3 ? 12.5 : 12;
           ctx.font = '600 ' + size_px + 'px "Hanken Grotesk", system-ui, sans-serif';
-          var label = labelText(names[k]);
+          var label = labelText(streetName);
           // The name may overrun the block it is anchored to. A block is an
           // arbitrary slice of a street that keeps going, so demanding the
           // text fit inside one was rejecting nearly every label at mid
@@ -914,7 +950,7 @@
           // is anchored in. Once labels were allowed to overrun their block a
           // single-cell claim stopped describing the space they occupy, and
           // downtown names began printing over each other.
-          var cells = spanCells(mx, my, ang, tw, size_px, CELL);
+          var cells = spanCells(mx, my, ang, tw, size_px, CELL, wx, wy);
           var clash = false;
           for (var ci = 0; ci < cells.length; ci++) {
             if (taken[cells[ci]]) { clash = true; break; }
