@@ -212,6 +212,31 @@ ADDRESS_OVERRIDES = {
         "source": "Algoma Township Clerk, Elections page",
         "source_url": "https://www.algomatwp.org/departments/elections/index.php",
     },
+    # Wyoming's own fire station, Wyoming ward 1 precinct 3. The street is
+    # GEZON; the county page writes GENZON, and so did this file until now.
+    # Nothing anywhere else spells it with the N: not one parcel, not one road
+    # segment in the graph this site routes on, not Wyoming's own drop box a
+    # few rows below in the same file -- "Wyoming Gezon Parkway Station",
+    # scraped from the same county page, at the same building, with the same
+    # coordinates. The state's QVF export says GEZON too.
+    #
+    # geocode_places.py already carries GENZON -> GEZON in its MISSPELLINGS
+    # table, which is the only reason this place has a coordinate at all. But
+    # that table rescues the geocoder and nothing else. The address STRING is
+    # what the page prints and what the browser's own geocoder reads, so a
+    # voter was being shown, and searched against, a street that does not
+    # exist. The name carries the same typo and is corrected with it.
+    "0818894001003": {
+        "address": "2300 Gezon Parkway SW",
+        "county_published": "2300 Genzon Parkway SW",
+        "name": "Gezon Fire Station",
+        "name_published": "Genzon Fire Station",
+        "source": "Kent County parcel layer and road centrelines, which both "
+                  "spell it GEZON, as does the Bureau of Elections' own "
+                  "November 2026 export",
+        "source_url": "https://gis.kentcountymi.gov/agisprod/rest/services/"
+                      "ParcelsWithCondos/FeatureServer/0",
+    },
 }
 
 
@@ -398,6 +423,19 @@ def main():
                                 "address": override["address"],
                                 "address_source": override["source"],
                                 "address_as_published": override["county_published"]}
+                # A misspelling in the street is usually in the venue's name
+                # too, since the venue is named after the street. Corrected
+                # only where an entry says so, and only when the page still
+                # publishes what that entry expects.
+                if override.get("name"):
+                    if row["name"] != override["name_published"]:
+                        sys.exit(
+                            f"REFUSE: the override for {code} expects the "
+                            f"county to publish the name "
+                            f"{override['name_published']!r}, but it now "
+                            f"publishes {row['name']!r}.")
+                    places[code]["name"] = override["name"]
+                    places[code]["name_as_published"] = override["name_published"]
             else:
                 places[code] = {"name": row["name"], "address": row["address"]}
             # Grand Rapids is not given one here: polling.json carries the
