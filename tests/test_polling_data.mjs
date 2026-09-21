@@ -114,5 +114,26 @@ const boxAstray = boxes.filter(v => v.lat != null && !inKent(v));
 ok('no drop box sits outside Kent County', boxAstray.length === 0,
    some(boxAstray, v => `${v.file} ${v.address} ${v.lat},${v.lng}`));
 
+// --- a row's `src` has to resolve, or the page credits nobody ---
+// provenanceHtml() looks each `src` up in sources.json and skips any id the
+// registry does not hold, so a typo or a renamed source does not throw: the
+// panel just stops saying where the list came from, and nothing says why.
+// These rows come from a FOIA release that no URL serves, which makes the
+// registry entry the only record of where they came from -- the one thing
+// worth failing a build over.
+const registry = JSON.parse(await readFile(
+  new URL('../site/data/sources.json', import.meta.url), 'utf8')).sources || {};
+const cited = boxes.filter(b => b.src);
+ok(`drop boxes cite a source (${cited.length})`, cited.length > 0);
+const dangling = cited.filter(b => !registry[b.src]);
+ok('every drop box `src` resolves in sources.json', dangling.length === 0,
+   some(dangling, b => `${b.file} ${JSON.stringify(b.src)}`));
+// publisher and url are what provenanceHtml renders, and it builds an <a> from
+// url without checking it, so a missing one ships a link to "undefined".
+const thin = [...new Set(cited.map(b => b.src))]
+  .filter(id => registry[id] && !(registry[id].publisher && registry[id].url));
+ok('every cited source names a publisher and a URL', thin.length === 0,
+   some(thin, id => id));
+
 console.log(`\n${fails === 0 ? 'polling data: all passed' : fails + ' FAILED'}`);
 process.exit(fails ? 1 : 0);

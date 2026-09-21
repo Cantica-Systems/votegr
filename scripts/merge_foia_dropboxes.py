@@ -20,11 +20,16 @@ silence: a jurisdiction whose county page lists a box is left exactly as
 scraped, and nothing here is compared against or merged into those. The state
 is a different level of government reading a different system, and where the
 two describe the same jurisdiction the closer one wins. Every row this adds
-carries `source`, so the origin is on the record and not in a commit message.
+carries `src`, pointing at the release in sources.json, so the origin is on
+the record and the page can name it rather than it living in a commit message.
 
-The FOIA release is a file, not a URL, so there is nothing to archive with
-cite() and no page to re-read. Pass the CSV to re-run this when a later
-release arrives; it is idempotent, replacing any rows it wrote before.
+The release is a file that arrived in a FOIA response, not a page anyone can
+fetch. So it is registered as NOT carried -- nothing refreshes it and nothing
+here will notice when the Bureau's data changes -- with the request, the
+release date, and the gaps found in the other two files it came with all
+written into the registry entry. There is no URL to archive with cite().
+Pass the CSV again when a later release arrives; it is idempotent, replacing
+any rows it wrote before.
 
 Coordinates are not fetched. Most of these boxes stand at a building this
 repo has already placed -- the township hall that is also the polling place,
@@ -52,13 +57,20 @@ import sys
 
 from geocode_places import (centreline, inside, load_bboxes, neighbours_of,
                             split_address, street_core)
+from sources import register
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 POLLING_DIR = ROOT / "site" / "data" / "polling"
 COUNTY = "KENT"
 
-SOURCE = ("Michigan Department of State, Bureau of Elections: November 2026 "
-          "drop box location report, released under FOIA 2026-09-21")
+SOURCE_ID = "mdos-dropbox-report-2026-11"
+RELEASED = "2026-09-21"
+# The Bureau publishes no page for this. The URL is the Bureau itself, so the
+# page can name and link who the records belong to; the registry note says how
+# they were actually obtained. Recording the Bureau with no explanation would
+# imply these were downloaded from a state website, which is not what happened.
+PUBLISHER_URL = "https://www.michigan.gov/sos/elections"
+REPORT_FILE = "November_2026_DropboxLocationReport_09212026.csv"
 
 # The state writes hours as "MONDAY 24HR;TUESDAY 24HR;...", one term per day
 # with a trailing semicolon. The county writes "24 hours a day, 7 days a
@@ -185,6 +197,37 @@ def main():
                  f"match no polling file: {sorted(set(unmatched))}. A renamed "
                  "jurisdiction would otherwise be dropped silently.")
 
+    # The source goes in the registry; each row points at it with `src`, and
+    # the page resolves that to a publisher, a licence and a date. Registered
+    # as NOT carried, the same as the MVIC reading in refresh_gr_clerk.py: this
+    # arrived as a file in a FOIA response, no script refreshes it, and nothing
+    # here will notice when the Bureau's own data changes. That is a fact about
+    # the source and belongs on the record, not in a commit message.
+    src = register(
+        SOURCE_ID,
+        publisher="Michigan Department of State, Bureau of Elections",
+        url=PUBLISHER_URL,
+        licence="Public record of the State of Michigan.",
+        retrieved=RELEASED,
+        covers="Absentee ballot drop box locations, hours and clerk, statewide, "
+               "for the November 3 2026 general election",
+        carried=False,
+        note=f"Obtained by FOIA request, released {RELEASED} as "
+             f"{REPORT_FILE}; the Bureau publishes it at no URL, so the link "
+             "above is the Bureau rather than the release and there is no "
+             "archive copy to take. The request asked for three statewide "
+             "records: election day polling places at precinct level, early "
+             "voting sites with their dates and hours, and drop boxes. Only "
+             "the drop box report is read here, and only for the 24 Kent "
+             "County jurisdictions whose county page publishes no box. "
+             "VERIFIED AGAINST THIS PROJECT: the release agrees with "
+             "precincts.json on all 202 Kent precincts, 30 jurisdictions and "
+             "every ward. GAPS IN THE RELEASE, so it is not treated as "
+             "authoritative beyond drop boxes: the early voting file covers "
+             "36 of 83 counties and 375 of 1,521 jurisdictions, omitting "
+             "Oakland County entirely; the polling place file has three Grand "
+             "Rapids ZIPs wrong, checked against USPS (see polling.json).")
+
     bboxes = load_bboxes()
     neighbours = neighbours_of(bboxes)
 
@@ -217,7 +260,7 @@ def main():
         mcd = document["mcd"]
         records = list((document.get("precincts") or {}).values())
         records += [b for b in (document.get("drop_boxes") or [])
-                    if not b.get("source")]
+                    if not b.get("src")]
         if document.get("clerk"):
             records.append(document["clerk"])
         for record in records:
@@ -250,7 +293,7 @@ def main():
         mcd, where = document["mcd"], document["jurisdiction"]
         # Anything the county published stays exactly as scraped.
         kept = [b for b in (document.get("drop_boxes") or [])
-                if b.get("source") != SOURCE]
+                if b.get("src") != SOURCE_ID]
         if kept:
             skipped.append((where, len(kept)))
             document["drop_boxes"] = kept
@@ -272,7 +315,7 @@ def main():
                     box["hours_as_published"] = row["Hours"].strip()
             if row.get("Clerk", "").strip():
                 box["clerk"] = row["Clerk"].strip().title()
-            box["source"] = SOURCE
+            box["src"] = src
             parsed = split_address(street)
             point = already_placed(mcd, parsed)
             if point:
@@ -336,9 +379,10 @@ def main():
         path, document, _, _ = added[key]
         document["provenance"]["drop_boxes_source"] = (
             "Drop boxes for this jurisdiction come from the state, not from "
-            "the county page, which publishes none. See `source` on each box. "
-            "Re-run merge_foia_dropboxes.py after refresh_polling.py to "
-            "restore them.")
+            f"the county page, which publishes none. Each carries "
+            f"\"src\": \"{SOURCE_ID}\"; sources.json says what that release "
+            "is and how it was obtained. Re-run merge_foia_dropboxes.py after "
+            "refresh_polling.py to restore them.")
         path.write_text(json.dumps(document, separators=(",", ":")) + "\n")
     print(f"\nwrote {len(added)} files to {POLLING_DIR}")
 

@@ -428,7 +428,7 @@
     // No caption under the list. Every row already carries its own distance,
     // and every row is visibly a button, so a paragraph explaining the order
     // and the click was telling the reader what they could see.
-    return html + '</ul>' + provenanceHtml();
+    return html + '</ul>' + provenanceHtml(opt);
   }
 
   // Where this list came from, said in the panel that shows it rather than

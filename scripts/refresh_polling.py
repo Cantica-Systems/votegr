@@ -418,15 +418,16 @@ def main():
         boxes = parse_dropboxes(lines)
         clerk = parse_clerk(lines)
         # Twenty-four of the thirty pages publish no drop box, and for those
-        # merge_foia_dropboxes.py has written the state's, which carry a
-        # `source`. A plain overwrite here would silently drop all of them on
-        # the next run, so they are carried forward -- but only into the
-        # silence they were written into. The moment the county publishes a box
-        # of its own for that jurisdiction, the county's is the closer source
-        # and wins outright, and the borrowed rows go.
+        # merge_foia_dropboxes.py has written the state's, which carry a `src`
+        # pointing at the FOIA release in sources.json. A plain overwrite here
+        # would silently drop all of them on the next run, so they are carried
+        # forward -- but only into the silence they were written into. The
+        # moment the county publishes a box of its own for that jurisdiction,
+        # the county's is the closer source and wins outright, and the borrowed
+        # rows go.
         borrowed = []
         if not boxes:
-            borrowed = [b for b in existing_boxes(mcd) if b.get("source")]
+            borrowed = [b for b in existing_boxes(mcd) if b.get("src")]
             boxes = borrowed
         places = {}
         for row in rows:

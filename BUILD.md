@@ -119,6 +119,39 @@ these rows forward rather than overwriting them, and drops them the moment the
 county publishes a box of its own for that jurisdiction, because the county is
 the closer source.
 
+### Where the state's data came from, and how far to trust it
+
+The three files were obtained by **FOIA request to the Michigan Department of
+State**, released 2026-09-21. They are not on a state website, so the usual
+provenance mechanism does not reach them: there is no URL to read and no page
+for the archive to capture. They are recorded instead as
+`mdos-dropbox-report-2026-11` in `site/data/sources.json`, registered
+`carried: false` -- read once, by hand, and not tracked, the same as the MVIC
+reading in `refresh_gr_clerk.py`. Every drop box row this project takes from
+the release points at that entry with `"src"`, so the page can name the Bureau
+rather than the fact living in a commit message. **The CSVs themselves are not
+in this repository**; keep them wherever the FOIA response was filed, and pass
+the path when re-running.
+
+The request asked for three statewide records: election day polling places at
+precinct level, early voting sites with their dates and hours, and drop boxes.
+Only the drop box report is read here, and only into the silence described
+above. That restraint is deliberate, because reading the release against what
+this project already had is what established how far it can be trusted:
+
+| The release | Verdict |
+|---|---|
+| Kent County precincts | **Agrees**: all 202 precincts, 30 jurisdictions and every ward flag match `precincts.json` |
+| Grand Rapids early voting | **Agrees**: same four sites, same 10/20-11/01 window, same 13 days as the city clerk |
+| Drop boxes | **Better than the county**: 53 for Kent against the county's 24, a box in all thirty jurisdictions |
+| Early voting, statewide | **Badly incomplete**: 36 of 83 counties, 375 of 1,521 jurisdictions, Oakland County absent entirely, against a constitutional nine-day requirement everywhere |
+| Grand Rapids ZIPs | **Wrong three times**: precincts 1, 24 and 34, each checked against USPS. See the note in `polling.json` |
+
+So the release is authoritative for drop boxes, a useful cross-check on
+precincts and Grand Rapids early voting, and not to be trusted for statewide
+early voting or for Grand Rapids ZIPs. If a later release is used for anything
+beyond drop boxes, check it the same way first and write down what you found.
+
 **`geocode_places.py` runs last and needs `node`.** It places every polling
 place, drop box and early voting site from the county parcel layer first and
 the street centrelines second, and the centreline pass runs `site/router.js`
