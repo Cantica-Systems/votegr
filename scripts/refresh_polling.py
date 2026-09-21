@@ -240,6 +240,20 @@ ADDRESS_OVERRIDES = {
 }
 
 
+def existing_boxes(mcd):
+    """The drop boxes already committed for a jurisdiction, or nothing.
+
+    Read before the scrape overwrites the file, so a row this script did not
+    fetch can still be carried into what it writes. Missing or unreadable is
+    not an error: the first run has no file at all.
+    """
+    path = OUT_DIR / f"{mcd}.json"
+    try:
+        return json.loads(path.read_text()).get("drop_boxes") or []
+    except (OSError, ValueError):
+        return []
+
+
 def parse_polling(lines, not_notes=frozenset()):
     """[{ward, precinct, name, address}] from the Election Day section.
 
@@ -403,6 +417,17 @@ def main():
         rows = parse_polling(lines, not_notes)
         boxes = parse_dropboxes(lines)
         clerk = parse_clerk(lines)
+        # Twenty-four of the thirty pages publish no drop box, and for those
+        # merge_foia_dropboxes.py has written the state's, which carry a
+        # `source`. A plain overwrite here would silently drop all of them on
+        # the next run, so they are carried forward -- but only into the
+        # silence they were written into. The moment the county publishes a box
+        # of its own for that jurisdiction, the county's is the closer source
+        # and wins outright, and the borrowed rows go.
+        borrowed = []
+        if not boxes:
+            borrowed = [b for b in existing_boxes(mcd) if b.get("source")]
+            boxes = borrowed
         places = {}
         for row in rows:
             key = (row["ward"], row["precinct"])
@@ -473,14 +498,22 @@ def main():
             "drop_boxes": boxes,
         }
         pending.append((OUT_DIR / f"{mcd}.json", document))
-        table.append((names[mcd], len(places), len(wanted[mcd]), len(boxes)))
+        table.append((names[mcd], len(places), len(wanted[mcd]), len(boxes),
+                      len(borrowed)))
         time.sleep(DELAY_SECONDS)
 
-    short = [(name, got, want) for name, got, want, _ in table if got != want]
+    short = [(name, got, want) for name, got, want, _, _ in table if got != want]
+    carried = sum(n for *_, n in table)
     print(f"\n{'jurisdiction':<26}{'polling':>8}{'precincts':>11}{'drop boxes':>12}")
-    for name, got, want, boxes in table:
+    for name, got, want, boxes, borrowed in table:
         flag = "" if got == want else "  <-- SHORT"
+        if borrowed:
+            flag = f"  ({borrowed} from the state){flag}"
         print(f"{name:<26}{got:>8}{want:>11}{boxes:>12}{flag}")
+    if carried:
+        print(f"\n{carried} drop box(es) carried forward from the state, for "
+              "jurisdictions whose county page publishes none. Re-run "
+              "merge_foia_dropboxes.py if a newer release has arrived.")
     if notes:
         print(f"\n{len(notes)} polling place(s) publish where to go inside:")
         for where, code, venue, note in notes:

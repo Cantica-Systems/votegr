@@ -75,12 +75,44 @@ ok('every Grand Rapids polling place has a coordinate',
    cityRows.every(v => v.lat != null && v.lng != null),
    cityRows.filter(v => v.lat == null).map(v => v.name).join(', '));
 
+// --- drop boxes, which the page silently discards without a coordinate ---
+// boxesFor() filters on lat && lng, so an unplaced box is not shown, not
+// offered and not counted -- the jurisdiction reads as though it publishes no
+// box at all and the voter is sent to the clerk's office instead. That is the
+// same class of failure as the two above, and just as invisible in a diff:
+// twenty-eight of these arrived at once from the state's report, and one of
+// them was written without a coordinate before the quadrant it was missing
+// was inferred from the polling place at the same address.
+//
+// Grand Rapids is excluded for the same reason as its polling places, plus
+// one of its own: the county writes the city's rows with the address in
+// `name` and the note in `address`, and the city's real list lives in
+// gr-clerk.json, which the browser geocodes against the graph it has loaded.
+const boxes = [];
+for (const f of files) {
+  const d = await read(f);
+  for (const b of d.drop_boxes || []) boxes.push({ file: f, mcd: d.mcd, ...b });
+}
+const countyBoxes = boxes.filter(b => b.mcd !== GR);
+ok(`drop boxes outside Grand Rapids are present (${countyBoxes.length})`,
+   countyBoxes.length > 0, `${countyBoxes.length}`);
+const boxNoCoord = countyBoxes.filter(b => b.lat == null || b.lng == null);
+ok('every drop box outside Grand Rapids has a coordinate', boxNoCoord.length === 0,
+   some(boxNoCoord, b => `${b.file} ${JSON.stringify(b.address)}`));
+const boxNoHouse = countyBoxes.filter(b => !HOUSE_NUMBER.test(b.address || ''));
+ok('every drop box outside Grand Rapids has a street address',
+   boxNoHouse.length === 0,
+   some(boxNoHouse, b => `${b.file} ${JSON.stringify(b.address)}`));
+
 // Kent County is entirely north of the equator and west of Detroit; a
 // coordinate outside this box is a geocoder that matched the wrong place.
 const inKent = v => v.lat > 42.7 && v.lat < 43.4 && v.lng > -86.0 && v.lng < -85.2;
 const astray = [...rows, ...cityRows].filter(v => v.lat != null && !inKent(v));
 ok('no polling place sits outside Kent County', astray.length === 0,
    some(astray, v => `${v.name} ${v.lat},${v.lng}`));
+const boxAstray = boxes.filter(v => v.lat != null && !inKent(v));
+ok('no drop box sits outside Kent County', boxAstray.length === 0,
+   some(boxAstray, v => `${v.file} ${v.address} ${v.lat},${v.lng}`));
 
 console.log(`\n${fails === 0 ? 'polling data: all passed' : fails + ' FAILED'}`);
 process.exit(fails ? 1 : 0);
