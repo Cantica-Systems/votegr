@@ -317,6 +317,29 @@ for (const w of WIDTHS) {
      !/No ballot drop box is published/i.test(ada.note) &&
      !/return an absentee ballot to your own clerk/i.test(ada.note));
   ok('a township shows no Ward at all', !/\bWard\b/.test(ada.info));
+
+  // Who the drop box list says it came from. Ada's boxes come from the state's
+  // FOIA release, so the panel has to name the Bureau -- and must NOT name the
+  // Grand Rapids city clerk, which it did for every jurisdiction in the county
+  // while provenanceHtml() appended the clerk document to whatever rows it was
+  // given. Crediting the wrong office is worse than crediting none: it sends a
+  // reader who wants to check to the wrong place.
+  const adaProv = await page.evaluate(async () => {
+    const btn = document.getElementById('boxListBtn');
+    if (!btn) return '(no boxListBtn)';
+    btn.click();
+    await new Promise(r => setTimeout(r, 400));
+    const p = document.querySelector('#placeModalBody .bx-prov');
+    const text = p ? p.innerText.replace(/\s+/g, ' ') : '(no provenance)';
+    const x = document.querySelector('#placeModal [data-close]');
+    if (x) x.click();
+    return text;
+  });
+  ok('a township\'s drop box list credits the state release',
+     /Bureau of Elections/.test(adaProv), adaProv);
+  ok('and does not credit the Grand Rapids city clerk for a township',
+     !/City Clerk/i.test(adaProv), adaProv);
+
   // The state's 13-digit precinct code is an identity, not a label: it had
   // been reaching the polling-place marker and the consolidation note as
   // one. A township has no ward, so its marker names bare numbers.
