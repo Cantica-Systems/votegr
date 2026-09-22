@@ -15,7 +15,8 @@
       "The directory is not carefully proofed and the November edition repeats every error the August one had: Madison as Madion, Kalamazoo as Kalamzoo, Garfield as Gafield, Orthodox as Othodox, and LaGrave as one word. Those are corrected here, so do not copy the PDF's spellings back in.",
       "Two names here are deliberately fuller than the PDF prints them, and are not errors to reconcile: precinct 47 is Martin Luther King Jr. Leadership Academy, and precinct 54 is East Congregational United Church of Christ.",
       "consolidated_with means that precinct votes at another precinct's location for this election only. Check the PDF footnotes each time.",
-      "Precinct 9 is where the city directory and the Kent County listing disagree. The city is correct, confirmed with the clerk's office on 2026-07-27."
+      "Precinct 9 is where the city directory and the Kent County listing disagree. The city is correct, confirmed with the clerk's office on 2026-07-27.",
+      "Three ZIPs here disagree with the state's November 2026 QVF export, and this file is right about all three: precinct 1 is 49504 where the state says 49503, precinct 24 is 49505 where it says 49503, and precinct 34 is 49525 where it says 49505. Checked against USPS on 2026-09-21. Do not reconcile these to the state. Precinct 34 is the one that will tempt you back: Grand Rapids Public Schools publishes 49505 for North Park Montessori on its own site, which is almost certainly where the state's value came from, and the Postal Service still says 49525."
     ],
     "caution": "Polling places change every election. If source_document names an election that has passed, this file is out of date.",
     "verified_with_clerk": "2026-07-27: the Grand Rapids City Clerk's office confirmed by phone that the city directory is correct where it differs from the Kent County listing (precinct 9), and that precinct 51 votes at precinct 45's location while Ken-O-Sha School is closed.",
