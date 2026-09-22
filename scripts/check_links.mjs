@@ -27,7 +27,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // are left out on purpose: they assemble their endpoint URLs from fragments
 // across several lines, and the data files' provenance blocks carry the
 // same endpoints whole.
-const TEXT_FILES = [
+export const TEXT_FILES = [
   'README.md', 'BUILD.md', 'UNLICENSE',
   'site/index.html', 'site/simple/index.html',
   'site/app.js', 'site/simple/lookup.js', 'scripts/compare_osrm.mjs',
@@ -35,7 +35,7 @@ const TEXT_FILES = [
 
 // Data files whose provenance block names where the data came from. Only
 // that block is read; the rest is coordinates and house numbers.
-const DATA_FILES = [
+export const DATA_FILES = [
   'addresses', 'boundary', 'cameras', 'elections', 'graph',
   'landcover', 'neighbors', 'polling', 'precincts',
 ].map(n => `site/data/${n}.json`).concat(['site/data/precincts.geojson']);
@@ -64,9 +64,9 @@ const TIMEOUT_MS = 20000;
 const RETRY_WAIT_MS = 4000;
 const SPACING_MS = 300;
 
-// What a response means. This is the whole judgement of the checker, and the
-// only part with tests (test_check_links.mjs), because it is the part that
-// decides whether a run is red.
+// What a response means. This is the whole judgement of the checker, and
+// test_check_links.mjs covers nothing but this function, because it is the
+// part that decides whether a run is red.
 //
 // Three buckets, and the rule names no host. An earlier version kept a list
 // of hosts whose firewall answers with 403 and counted those as reachable,
@@ -160,7 +160,7 @@ async function check(url) {
 // one: a path that quietly stops being read is a set of links that quietly
 // stops being checked, and only a red run gets that fixed. So it is counted
 // and it sets the exit code, at the end, after the links have been reported.
-async function collect() {
+export async function collect() {
   const foundIn = new Map();   // url -> the first file it was seen in
   const unreadable = [];       // [file, why], for the ones that are gone or broken
   const note = (list, file) => { for (const u of list) if (!foundIn.has(u)) foundIn.set(u, file); };
@@ -236,8 +236,8 @@ async function main() {
   return counts.rotted || lost ? 1 : 0;
 }
 
-// Only when run, not when imported: test_check_links.mjs imports classify
-// and must not make a single request to do it.
+// Only when run, not when imported: the two test suites import classify and
+// collect(), and must not make a single request to do it.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exit(await main());
 }

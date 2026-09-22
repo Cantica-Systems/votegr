@@ -169,6 +169,7 @@ npm ci && node tests/test_page.mjs       # 174 assertions: the page itself, in a
 node tests/test_simple_page.mjs          # 48 assertions: /simple in a browser
 node tests/test_early_voting_states.mjs  # the early voting states and election day, from a dated fixture, both pages
 node tests/test_check_links.mjs          # what the link checker makes of a response
+node tests/test_check_links_inputs.mjs   # that it can still read every file it names
 node scripts/compare_osrm.mjs 30         # differential test against OSRM, the OSM reference
 node scripts/check_links.mjs             # every external link in the docs, the pages and the data provenance
 ```
