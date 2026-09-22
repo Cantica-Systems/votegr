@@ -580,13 +580,32 @@
         // once.
         //
         // 6 points is the largest step that keeps the worst same-ward pair
-        // under half the closest cross-ward pair in BOTH themes, and it still
-        // leaves neighbours a visible dE 7.3 (dark) / 5.4 (light) apart. The
-        // lift is centred on wardL rather than climbing from it, so the range
-        // is wardL +/- 2 steps, the legend swatch at --lg-wardN is the middle
-        // of what gets painted rather than the darkest corner of it, and no
+        // under half the closest cross-ward pair in BOTH themes. The lift is
+        // centred on wardL rather than climbing from it, so the range is
+        // wardL +/- 2 steps, the legend swatch at --lg-wardN is the middle of
+        // what gets painted rather than the darkest corner of it, and no
         // precinct approaches white. tests/test_page.mjs asserts the ordering
         // rather than these numbers, reading the tints off this renderer.
+        //
+        // WHICH step a number takes is a separate question from how big the
+        // step is, and getting it wrong is what made precincts stop reading
+        // as precincts. `n % 5` hands consecutive numbers CONSECUTIVE steps,
+        // so two precincts side by side -- which, numbered in blocks per
+        // ward, is exactly what consecutive numbers are -- differed by the
+        // smallest gap the scheme has: one step. Measured in CIELAB over the
+        // land tone that is dE 1.26 in the light theme, under the threshold
+        // for telling two greys apart across a dashed line, against dE 13.7
+        // between wards. Ward read instantly and precinct did not read at
+        // all. The dE 7.3 / 5.4 once quoted here was the widest pair in a
+        // ward, four steps apart; no two neighbours were ever that far.
+        //
+        // Doubling before the modulus permutes the same five steps into the
+        // order 0, +2, -1, +1, -2, which puts every consecutive pair at least
+        // TWO steps apart. Neighbours go to dE 3.15 light / 3.76 dark. The
+        // set of steps is unchanged, so the widest same-ward pair and the
+        // closest cross-ward pair are exactly what they were (5.70 vs 13.74
+        // light, 8.28 vs 18.74 dark, same-ward worst still 42-44% of the
+        // nearest cross-ward pair): the fill still reports ward first.
         // Tints, for the jurisdiction in scope only. A city with wards keeps
         // a hue per ward, as Grand Rapids always had; a township, having
         // none, takes one hue. Precincts step in lightness by number within
@@ -601,7 +620,7 @@
             if (!inScope(wp)) continue;
             var hue = wp.ward ? P.wardHue[String(wp.ward)] : P.scopeHue;
             if (hue == null) hue = P.scopeHue;
-            var lift = ((Number(wp.precinct) % 5) - 2) * P.wardLStep;
+            var lift = (((Number(wp.precinct) * 2) % 5) - 2) * P.wardLStep;
             this._fillRings(ctx, wp.rings,
               'hsla(' + hue + ',' + P.wardSat + '%,' + (P.wardL + lift) + '%,' +
               P.wardAlpha + ')', pt);
@@ -655,15 +674,31 @@
         }
       }
 
-      // What the precinct pass actually drew, in screen pixels, for _labels
-      // to avoid. Cleared on EVERY render and outside the guard below: when
-      // numbers are switched off or the zoom is too low, nothing is drawn and
-      // the list has to be empty rather than describing the previous view.
+      // Where a precinct number sits, in screen pixels, for _labels to avoid.
+      // Cleared on EVERY render and outside the guard below, so it never
+      // describes the previous view.
+      //
+      // It records where a number WOULD go, not only where one was painted,
+      // and the difference is the point. Street names avoid these boxes, so
+      // when the list emptied on switching numbers off, every street name on
+      // the map re-placed into the freed space at once -- the map stayed
+      // still and all of its text jumped, which reads as the whole view
+      // lurching. Reserving the space either way costs a few good blocks
+      // while numbers are hidden and buys a layout that does not move when
+      // they are toggled, which is the better trade: the reflow was jarring
+      // precisely because it was everywhere at once.
+      //
+      // Only the toggle is treated this way. A label skipped for any other
+      // reason -- no anchor, off the canvas, or clashing with a marker --
+      // still reserves nothing, because with numbers ON nothing would occupy
+      // that space either, and a box there would push street names off good
+      // blocks for no reason at all.
       this._precinctBoxes = [];
 
       // Precinct numbers go on the LABEL canvas, above the route, so the
       // green line cannot cover the number of the precinct it runs through.
-      if (lctx && this._precincts && z >= 12 && (this._opts || {}).numbers !== false) {
+      if (lctx && this._precincts && z >= 12) {
+        var showNumbers = (this._opts || {}).numbers !== false;
         var actP = this._activePrecinct;
         // Precinct numbers share the label canvas with the street names, and
         // this pass runs BEFORE _labels, so it cannot inherit that pass's
@@ -700,14 +735,19 @@
             if (ndx < MARKER_R + tw / 2 + 2 && ndy < MARKER_R + fs * 0.8) { nClash = true; break; }
           }
           if (nClash) continue;
-          lctx.strokeStyle = P.labelHalo || P.land;
-          lctx.lineWidth = 4;
-          lctx.strokeText(txt, lp[0], lp[1]);
-          lctx.fillStyle = isA ? P.precinctActive : P.precinct;
-          lctx.fillText(txt, lp[0], lp[1]);
-          // Record it only here, once it is definitely on the canvas. Boxes
-          // for labels that were skipped would reserve space nothing occupies
-          // and push street names off good blocks for no reason.
+          if (showNumbers) {
+            lctx.strokeStyle = P.labelHalo || P.land;
+            lctx.lineWidth = 4;
+            lctx.strokeText(txt, lp[0], lp[1]);
+            lctx.fillStyle = isA ? P.precinctActive : P.precinct;
+            lctx.fillText(txt, lp[0], lp[1]);
+          }
+          // Recorded whether or not it was painted, and only here, past every
+          // test that decides a number belongs at this spot at all. The size
+          // is the same either way: the font is set above from the zoom and
+          // the active flag, neither of which the toggle touches, so the
+          // space held with numbers off is exactly the space filled with
+          // them on, and the street names do not move.
           this._precinctBoxes.push({ x: lp[0], y: lp[1], hw: tw / 2, hh: fs * 0.7 });
         }
         lctx.restore();

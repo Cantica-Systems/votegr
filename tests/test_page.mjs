@@ -430,7 +430,12 @@ for (const w of WIDTHS) {
     });
     return { bad, about: [...document.querySelectorAll('#aboutModal a')].length };
   });
-  ok('the About panel is full of links', linkColours.about > 4);
+  // A floor, not a count: it exists so the colour sweep below cannot pass
+  // by finding nothing. The panel held seven links until the Learning more
+  // list was removed and now holds four, so the floor sits clear of the
+  // real number rather than tracking it, and still fails if the selector
+  // ever stops matching.
+  ok('the About panel is full of links', linkColours.about > 2);
   ok('and no link is left the browser default blue or purple', linkColours.bad.length === 0);
   if (linkColours.bad.length) linkColours.bad.forEach(b => console.log('       ' + b));
   ok('the About panel says what the tool is and what it is for',
@@ -801,13 +806,16 @@ for (const w of WIDTHS) {
     const cs = credit && getComputedStyle(credit);
     return {
       saysStateNeedNotKnow: /state does not need to learn that you looked/i.test(text),
-      // Three claims, not one: that it is an estimate, that the estimate is
-      // computed on the reader's own device, and how far it can be trusted.
-      // The middle one is the whole point and is the one a rewrite would
-      // most easily drop.
-      saysBestEffort: /best effort estimate/i.test(text)
-        && /calculated on your device/i.test(text)
-        && /in most cases it should be correct/i.test(text),
+      // This used to read the accuracy hedge under "What this is" -- that the
+      // answer is a best effort estimate and is usually right -- which was
+      // removed on request, taking the words with it. Of the three claims it
+      // made, the one worth holding is the middle one: that the answer is
+      // computed on the reader's own machine. That is the whole privacy
+      // proposition rather than a caveat about it, "How it works" still makes
+      // it, and it is the one a rewrite would most easily drop. So this now
+      // reads it there.
+      saysOnYourDevice: /runs on your device/i.test(text)
+        && /without making any network requests/i.test(text),
       creditText: credit ? credit.innerText.replace(/\s+/g, ' ').trim() : null,
       creditHref: link ? link.href : null,
       // Last thing in the sheet, and not shrunk into caption type.
@@ -817,7 +825,7 @@ for (const w of WIDTHS) {
     };
   });
   ok('About says the state need not learn you looked', a.saysStateNeedNotKnow);
-  ok('and says the estimate is worked out on your own device', a.saysBestEffort);
+  ok('and says the answer is worked out on your own device', a.saysOnYourDevice);
   ok('it closes with the Cantica Systems credit',
      a.isLast && /^An open source project of Cantica Systems\.$/.test(a.creditText));
   ok('and the credit is a real link', a.creditHref === 'https://cantica.dev/');
@@ -1626,6 +1634,78 @@ for (const w of [390, 1280]) {
   ok('no street name moves along its street when the map is dragged',
      failures.length === 0);
   if (failures.length) failures.forEach(f => console.log('       ' + f));
+
+  // --- and none of them moves when precinct numbers are switched off ---
+  // Street names avoid the boxes the precinct numbers reserve. While that
+  // reservation only happened for numbers actually painted, switching the
+  // numbers off freed every box at once and every name on the map re-placed
+  // itself: the map held still and all of its text jumped, which reads as
+  // the whole view lurching. The renderer now holds the space either way, so
+  // the layout is the same with the numbers hidden as with them shown.
+  //
+  // The toggle is driven on the input rather than through the gear panel:
+  // this asserts the renderer's behaviour, and going via the panel would
+  // fail for reasons that have nothing to do with it.
+  const setNumbers = async (on) => {
+    await clear();
+    await page.evaluate((v) => {
+      const el = document.getElementById('lyrNumbers');
+      el.checked = v;
+      el.dispatchEvent(new Event('change'));
+    }, on);
+    await page.waitForTimeout(1200);
+    return read();
+  };
+
+  const onA = await setNumbers(true);
+  const off = await setNumbers(false);
+  const onB = await setNumbers(true);
+
+  const streets = (snap) => {
+    const o = {};
+    for (const n of Object.keys(snap.labels)) {
+      if (/^Precinct /.test(n) || /^\d+$/.test(n)) continue;
+      o[n] = snap.labels[n];
+    }
+    return o;
+  };
+  const shifted = (A, B) => {
+    const bad = [];
+    const bs = streets(B);
+    for (const [n, list] of Object.entries(streets(A))) {
+      for (const a of list) {
+        const cand = bs[n] || [];
+        const d = cand.length ? Math.min(...cand.map(b => dist(a, b))) : Infinity;
+        if (d > 3) bad.push(n + ' ' + (d === Infinity ? 'gone' : Math.round(d) + 'm'));
+      }
+    }
+    return [...new Set(bad)];
+  };
+
+  // Not vacuous: the numbers really do stop being drawn, so the comparison
+  // above is over a view that actually changed.
+  //
+  // Counted by the "Precinct " prefix alone. A bare all-digit label is NOT a
+  // safe test of one: the city is crossed by 196 and 131, whose shields
+  // label as digits, so counting those had this reporting numbers still on
+  // screen after they had gone. Excluding digits from the street side above
+  // stays right -- that direction is conservative -- but identifying a
+  // precinct number by them is not. The drags above label at a zoom where
+  // the word is drawn, which is what makes the prefix enough.
+  const numCount = (snap) => Object.keys(snap.labels)
+    .filter(n => /^Precinct /.test(n)).length;
+  ok('switching precinct numbers off really does stop drawing them',
+     numCount(onA) > 0 && numCount(off) === 0 && numCount(onB) > 0);
+  ok('there are street names to check across the toggle',
+     Object.keys(streets(onA)).length > 10);
+
+  const offMoved = shifted(onA, off), backMoved = shifted(onA, onB);
+  ok('no street name moves when precinct numbers are switched off',
+     offMoved.length === 0);
+  if (offMoved.length) console.log('       ' + offMoved.slice(0, 5).join(' | '));
+  ok('and none moves when they are switched back on', backMoved.length === 0);
+  if (backMoved.length) console.log('       ' + backMoved.slice(0, 5).join(' | '));
+
   await ctx.close();
 }
 

@@ -31,13 +31,29 @@ export const TEXT_FILES = [
   'README.md', 'BUILD.md', 'UNLICENSE',
   'site/index.html', 'site/simple/index.html',
   'site/app.js', 'site/simple/lookup.js', 'scripts/compare_osrm.mjs',
+  // sources.json sits here, with the text, rather than below with the data,
+  // because it has no provenance block to read: it IS provenance, all the
+  // way down. It is the registry every data file points at with a `src` key
+  // instead of repeating a publisher and a URL, which is the reason its
+  // links have to be checked here -- they are where those URLs went, and
+  // gr-clerk.json now carries none of its own. Scanning it whole also picks
+  // up the `archived` snapshot beside each source, which is the fallback
+  // when the live page rots and so is worth knowing about. Moving this name
+  // into DATA_FILES would silently stop checking all of them, because that
+  // loop reads one block and this file has no such block.
+  'site/data/sources.json',
 ];
 
 // Data files whose provenance block names where the data came from. Only
-// that block is read; the rest is coordinates and house numbers.
+// that block is read; the rest is coordinates and house numbers. Every
+// site/data/*.json is listed, so a new one is a deliberate addition rather
+// than an oversight: early-voting.json and gr-clerk.json were missing here
+// and went unchecked until 2026-09-22. A file may carry no URL of its own
+// and still belong -- gr-clerk.json names its source by `src` and leaves the
+// URL to sources.json -- because what it carries is not fixed forever.
 export const DATA_FILES = [
-  'addresses', 'boundary', 'cameras', 'elections', 'graph',
-  'landcover', 'neighbors', 'polling', 'precincts',
+  'addresses', 'boundary', 'cameras', 'early-voting', 'elections',
+  'gr-clerk', 'graph', 'landcover', 'neighbors', 'polling', 'precincts',
 ].map(n => `site/data/${n}.json`).concat(['site/data/precincts.geojson']);
 
 // URLs that are not links in the sense that matters here.
