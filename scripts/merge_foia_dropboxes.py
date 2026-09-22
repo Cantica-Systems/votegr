@@ -27,9 +27,11 @@ The release is a file that arrived in a FOIA response, not a page anyone can
 fetch. So it is registered as NOT carried -- nothing refreshes it and nothing
 here will notice when the Bureau's data changes -- with the request, the
 release date, and the gaps found in the other two files it came with all
-written into the registry entry. There is no URL to archive with cite().
-Pass the CSV again when a later release arrives; it is idempotent, replacing
-any rows it wrote before.
+written into the registry entry. There is no URL to archive with cite(), so
+the file itself is committed instead, under records/, with the request and
+those findings written up beside it. Running this with no argument reads that
+copy; pass a path when a later release arrives. Either way it is idempotent,
+replacing any rows it wrote before.
 
 Coordinates are not fetched. Most of these boxes stand at a building this
 repo has already placed -- the township hall that is also the polling place,
@@ -46,7 +48,8 @@ coordinates, and reported. The site drops an uncoordinated box from the list
 on its own, so it will not send anyone to a guess, and a box recorded without
 a marker is still a true thing to have written down.
 
-Usage: python3 merge_foia_dropboxes.py November_2026_DropboxLocationReport.csv
+Usage: python3 merge_foia_dropboxes.py                   # the committed release
+       python3 merge_foia_dropboxes.py NEWER_RELEASE.csv
 """
 import argparse
 import csv
@@ -71,6 +74,11 @@ RELEASED = "2026-09-21"
 # imply these were downloaded from a state website, which is not what happened.
 PUBLISHER_URL = "https://www.michigan.gov/sos/elections"
 REPORT_FILE = "November_2026_DropboxLocationReport_09212026.csv"
+# The release travels with the repository, under the Bureau's own file names and
+# outside site/ so the published bundle does not carry it. That is what makes a
+# run reproducible: a FOIA response is a file that arrives once, and a script
+# that reads one is not reproducible unless the file is here to read.
+RECORDS = ROOT / "records" / "mdos-foia-2026-09-21"
 
 # The state writes hours as "MONDAY 24HR;TUESDAY 24HR;...", one term per day
 # with a trailing semicolon. The county writes "24 hours a day, 7 days a
@@ -176,8 +184,11 @@ def match_jurisdiction(rows):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("report", type=pathlib.Path,
-                        help="the Bureau's drop box location report, as CSV")
+    parser.add_argument("report", type=pathlib.Path, nargs="?",
+                        default=RECORDS / REPORT_FILE,
+                        help="the Bureau's drop box location report, as CSV. "
+                             "Defaults to the committed release; pass a path "
+                             "when a later one arrives.")
     parser.add_argument("--dry-run", action="store_true",
                         help="report what would change and write nothing")
     args = parser.parse_args()
@@ -215,7 +226,9 @@ def main():
         note=f"Obtained by FOIA request, released {RELEASED} as "
              f"{REPORT_FILE}; the Bureau publishes it at no URL, so the link "
              "above is the Bureau rather than the release and there is no "
-             "archive copy to take. The request asked for three statewide "
+             "archive copy to take. The release is committed instead, at "
+             f"records/{RECORDS.name}/, with the request and these findings "
+             "written up beside it. The request asked for three statewide "
              "records: election day polling places at precinct level, early "
              "voting sites with their dates and hours, and drop boxes. Only "
              "the drop box report is read here, and only for the 24 Kent "
