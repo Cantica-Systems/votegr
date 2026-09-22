@@ -393,13 +393,31 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
 
   ok('county: drop boxes come per jurisdiction',
      C.dropBoxes('42820').length === 3 && C.dropBoxes('34000').length === 10);
-  // Twenty-four jurisdictions publish no box. Their clerk's office is the
-  // place an absentee ballot goes instead, and it has to be somewhere the
-  // page can drive to.
+  // This used to read "24 jurisdictions publish no box", because the county's
+  // pages list one for only six of the thirty. The state's own report, which
+  // covers all thirty, now fills the other twenty-four, so every jurisdiction
+  // in the county has one and the count is zero.
   const noBox = index.jurisdictions.filter((j) => C.dropBoxes(j.mcd).length === 0);
-  ok(`county: ${noBox.length} jurisdictions publish no drop box`, noBox.length >= 20);
-  ok('county: every one of them has a clerk\'s office with a coordinate',
-     noBox.every((j) => { const c = C.clerkOf(j.mcd); return c && c.lat && c.lng && c.phone; }));
+  ok(`county: every jurisdiction publishes a drop box (${noBox.length} without)`,
+     noBox.length === 0, noBox.map((j) => j.name).join(', '));
+  // The clerk's-office fallback is therefore no longer reached by any real
+  // jurisdiction, and an unexercised path rots. It still has to work: a later
+  // release could drop a jurisdiction, and MCL 168.764a still sends an
+  // absentee ballot to the voter's own clerk. So it is checked for every
+  // jurisdiction that could reach it, rather than only the ones that happened
+  // to need it when the county was the only source.
+  //
+  // Grand Rapids cannot reach it and is excluded. boxesFor() returns the
+  // city's own list from gr-clerk.json before the fallback is consulted, and
+  // geocode_places.py skips mcd 34000 on purpose, so the city clerk's office
+  // has no coordinate and needs none.
+  const couldFallBack = index.jurisdictions.filter((j) => j.mcd !== '34000');
+  const noOffice = couldFallBack.filter((j) => {
+    const c = C.clerkOf(j.mcd); return !(c && c.lat && c.lng && c.phone);
+  });
+  ok(`county: all ${couldFallBack.length} jurisdictions that can fall back to `
+     + 'the clerk have an office with a coordinate', noOffice.length === 0,
+     noOffice.map((j) => j.name).join(', '));
 }
 
 // --- the polls clock ------------------------------------------------------

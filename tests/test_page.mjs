@@ -280,11 +280,19 @@ for (const w of WIDTHS) {
   ok('and directions to it', kw.steps > 0 || /already here/i.test(kw.routes));
   ok('never a blank ward', !/Ward\s*(Precinct|$)/i.test(kw.info));
 
-  // A township with no published drop box. Ada Township is one of the 24;
-  // the fixture is a polling place there. The answer has to name the
-  // clerk's office as where an absentee ballot goes -- never a neighbouring
-  // jurisdiction's box, which by law cannot take it -- and must not describe
-  // an office as open 24/7 or as monitored.
+  // A township whose drop box comes from the state rather than the county.
+  // Ada Township was one of the 24 with no box on the county's page, and this
+  // block used to assert the clerk's-office fallback that produced. The
+  // state's report supplies one, so the assertion is now the other way round:
+  // a real box, at an address in the township -- never a neighbouring
+  // jurisdiction's, which by law cannot take the ballot -- with the hours the
+  // state publishes for it, and no fallback language left over.
+  //
+  // This is also the end-to-end check on that whole path: the report is
+  // parsed, the address geocoded against the same graph the browser routes
+  // on, and the ALL CAPS the state writes is title-cased for display. If any
+  // of those breaks, the box vanishes from the card, because boxesFor() drops
+  // a box with no coordinate and the page silently says there is none.
   await page.fill('#addr', '6330 Ada Dr SE');
   await page.press('#addr', 'Enter');
   await page.waitForFunction(() =>
@@ -299,15 +307,39 @@ for (const w of WIDTHS) {
     note: (document.querySelector('.vi-card-dropbox') || document.querySelector('.vi-when-dropbox') || {}).textContent || '',
     ward: !!document.querySelector('.vi-rail .vi-num + .vi-lbl'),
   }));
-  ok('a township with no drop box names its clerk\'s office instead',
-     /Clerk.s Office/i.test(ada.box));
-  ok('and labels it as where to return a ballot, not as a box',
-     /return an absentee ballot/i.test(ada.box));
-  ok('and says plainly that no box is published',
-     /No ballot drop box is published for Ada Township/.test(ada.note));
-  ok('and never claims 24\/7 or monitoring for an office',
-     !/24\/7/.test(ada.box) && !/monitor/i.test(ada.note));
+  ok('a township offered the state\'s drop box, not the clerk\'s office',
+     /Drop Box/i.test(ada.box) && !/Clerk.s Office/i.test(ada.box));
+  ok('and at an address inside the township',
+     /7330 Thornapple River/i.test(ada.box));
+  ok('and with the hours the state publishes for it',
+     /Open 24\/7/i.test(ada.box));
+  ok('and no leftover "no box is published" fallback',
+     !/No ballot drop box is published/i.test(ada.note) &&
+     !/return an absentee ballot to your own clerk/i.test(ada.note));
   ok('a township shows no Ward at all', !/\bWard\b/.test(ada.info));
+
+  // Who the drop box list says it came from. Ada's boxes come from the state's
+  // FOIA release, so the panel has to name the Bureau -- and must NOT name the
+  // Grand Rapids city clerk, which it did for every jurisdiction in the county
+  // while provenanceHtml() appended the clerk document to whatever rows it was
+  // given. Crediting the wrong office is worse than crediting none: it sends a
+  // reader who wants to check to the wrong place.
+  const adaProv = await page.evaluate(async () => {
+    const btn = document.getElementById('boxListBtn');
+    if (!btn) return '(no boxListBtn)';
+    btn.click();
+    await new Promise(r => setTimeout(r, 400));
+    const p = document.querySelector('#placeModalBody .bx-prov');
+    const text = p ? p.innerText.replace(/\s+/g, ' ') : '(no provenance)';
+    const x = document.querySelector('#placeModal [data-close]');
+    if (x) x.click();
+    return text;
+  });
+  ok('a township\'s drop box list credits the state release',
+     /Bureau of Elections/.test(adaProv), adaProv);
+  ok('and does not credit the Grand Rapids city clerk for a township',
+     !/City Clerk/i.test(adaProv), adaProv);
+
   // The state's 13-digit precinct code is an identity, not a label: it had
   // been reaching the polling-place marker and the consolidation note as
   // one. A township has no ward, so its marker names bare numbers.

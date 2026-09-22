@@ -28,7 +28,7 @@ alone. Everything else runs on a bare interpreter.
 | `graph/<mcd>.json` | `build_graph.py`, `build_restrictions.py`, then `build_graph_chunks.py` | REGIS/Kent centerlines, OpenStreetMap restrictions |
 | `graph/index.json` | `build_graph_chunks.py` | sizes of every chunk, so the browser allocates once and streams them |
 | `addresses/<mcd>.json` | `refresh_addresses.py` | Kent County parcels, matched to precincts, one file per jurisdiction |
-| `polling/<mcd>.json` | `refresh_polling.py`, then `geocode_places.py` | Kent County's polling place and drop box pages, then parcel centroids and street centrelines for coordinates |
+| `polling/<mcd>.json` | `refresh_polling.py`, then `merge_foia_dropboxes.py`, then `geocode_places.py` | Kent County's polling place and drop box pages, the state's drop box report for the 24 jurisdictions the county publishes none for, then parcel centroids and street centrelines for coordinates |
 | `early-voting.json` | `refresh_early_voting.py`, then `geocode_places.py` | Kent County's early voting page |
 | `cameras.json` | `refresh_cameras.py` — **automated, see below** | OpenStreetMap |
 | `addresses.json` | `refresh_addresses.py` | Kent County parcels, matched to precincts |
@@ -94,6 +94,7 @@ python3 scripts/refresh_neighbors.py     # neighbouring street names -> site/dat
 
 # Places to vote, county-wide
 python3 scripts/refresh_polling.py       # county polling places + drop boxes -> site/data/polling/
+python3 scripts/merge_foia_dropboxes.py  # the state's boxes, where the county lists none
 python3 scripts/refresh_early_voting.py  # county early voting sites -> site/data/early-voting.json
 python3 scripts/geocode_places.py        # coordinates for all of the above, in place
 
@@ -101,6 +102,65 @@ python3 scripts/geocode_places.py        # coordinates for all of the above, in 
 python3 scripts/refresh_landcover.py     # water, parks, rail      -> site/data/landcover.json
 python3 scripts/refresh_cameras.py       # plate readers           -> site/data/cameras.json
 ```
+
+**`merge_foia_dropboxes.py` fills a gap the county leaves.** Kent County's
+thirty pages list 24 drop boxes across six jurisdictions; the Bureau of
+Elections' statewide report lists 53 across all thirty. So twenty-four
+jurisdictions had no box on this site and their voters were sent to the
+clerk's office during business hours, when most of them in fact have a box
+open around the clock. This reads the Bureau's report and fills only that
+silence: a jurisdiction whose county page lists a box is left exactly as
+scraped, and every row this adds carries `src`, pointing at the release
+in `sources.json` so the page can name who published it.
+
+The report arrives as a file, not a URL, so there is nothing to archive with
+`cite()` and no page to re-read -- it is committed instead (see below), and a
+run with no argument reads it. Pass a path when a later release lands, and it
+will replace what it wrote before. `refresh_polling.py` carries
+these rows forward rather than overwriting them, and drops them the moment the
+county publishes a box of its own for that jurisdiction, because the county is
+the closer source.
+
+### Where the state's data came from, and how far to trust it
+
+The three files were obtained by **FOIA request to the Michigan Department of
+State**, released 2026-09-21. They are not on a state website, so the usual
+provenance mechanism does not reach them: there is no URL to read and no page
+for the archive to capture. They are recorded instead as
+`mdos-dropbox-report-2026-11` in `site/data/sources.json`, registered
+`carried: false` -- read once, by hand, and not tracked, the same as the MVIC
+reading in `refresh_gr_clerk.py`. Every drop box row this project takes from
+the release points at that entry with `"src"`, so the page can name the Bureau
+rather than the fact living in a commit message.
+
+**The release itself is committed, at `records/mdos-foia-2026-09-21/`**, under
+the Bureau's own file names, with the request and the findings below written
+up beside it and a sha256 for each file. It is outside `site/` on purpose:
+`pages.yml` publishes `site/` and nothing else, and 1.3 MB of CSV has no place
+in a bundle whose point is that a lookup needs nothing further from the
+network. Committing it is what makes a run reproducible -- a FOIA response
+arrives once, and a script that reads one cannot be checked by anyone who does
+not have the file. `merge_foia_dropboxes.py` reads that copy when given no
+argument.
+
+The request asked for three statewide records: election day polling places at
+precinct level, early voting sites with their dates and hours, and drop boxes.
+Only the drop box report is read here, and only into the silence described
+above. That restraint is deliberate, because reading the release against what
+this project already had is what established how far it can be trusted:
+
+| The release | Verdict |
+|---|---|
+| Kent County precincts | **Agrees**: all 202 precincts, 30 jurisdictions and every ward flag match `precincts.json` |
+| Grand Rapids early voting | **Agrees**: same four sites, same 10/20-11/01 window, same 13 days as the city clerk |
+| Drop boxes | **Better than the county**: 53 for Kent against the county's 24, a box in all thirty jurisdictions |
+| Early voting, statewide | **Badly incomplete**: 36 of 83 counties, 375 of 1,521 jurisdictions, Oakland County absent entirely, against a constitutional nine-day requirement everywhere |
+| Grand Rapids ZIPs | **Wrong three times**: precincts 1, 24 and 34, each checked against USPS. See the note in `polling.json` |
+
+So the release is authoritative for drop boxes, a useful cross-check on
+precincts and Grand Rapids early voting, and not to be trusted for statewide
+early voting or for Grand Rapids ZIPs. If a later release is used for anything
+beyond drop boxes, check it the same way first and write down what you found.
 
 **`geocode_places.py` runs last and needs `node`.** It places every polling
 place, drop box and early voting site from the county parcel layer first and
@@ -283,6 +343,7 @@ after it, and again in the last fortnight if anything looked unsettled.
 python3 scripts/refresh_polling.py        # county pages -> site/data/polling/
 python3 scripts/refresh_early_voting.py   # county + city cross-check
 python3 scripts/refresh_gr_clerk.py       # the city's own dates and sites
+python3 scripts/merge_foia_dropboxes.py NEWER.csv   # only if a newer release has arrived
 ```
 
 Then **read what they wrote**. Each script checks shape, never sense: that

@@ -428,7 +428,7 @@
     // No caption under the list. Every row already carries its own distance,
     // and every row is visibly a button, so a paragraph explaining the order
     // and the click was telling the reader what they could see.
-    return html + '</ul>' + provenanceHtml();
+    return html + '</ul>' + provenanceHtml(opt);
   }
 
   // Where this list came from, said in the panel that shows it rather than
@@ -442,9 +442,27 @@
   // read and where the archive copy sits. So a list whose entries come from
   // two places can credit both, without either file repeating a publisher's
   // name on every row.
+  // Only the rows on screen are credited. gr-clerk.json's boxes and early
+  // voting sites each carry their own `src`, so the city is credited from its
+  // rows rather than from the document, and the county's drop boxes are
+  // credited to the state release they came from.
+  //
+  // The clerk document used to be appended here unconditionally, which read
+  // "Source: City of Grand Rapids, City Clerk's Office" under Ada Township's
+  // drop box -- a township the city clerk has nothing to do with. It was
+  // invisible while the caller passed no rows at all, because then the clerk
+  // was the ONLY thing credited and every jurisdiction in the county got the
+  // city's name. Crediting a source that did not produce the row is worse than
+  // crediting nothing: it tells a reader to go and check the wrong office.
+  //
+  // One gap remains, and is not this change's to close: early-voting.json
+  // carries no `src` on its sites, so outside Grand Rapids the early voting
+  // list now credits nobody rather than crediting the city by mistake. Giving
+  // that file a source means registering the Kent County early voting page,
+  // which belongs with refresh_early_voting.py.
   function provenanceHtml(opt) {
     var ids = [], seen = {};
-    ((opt && opt.all) || []).concat([clerk || {}]).forEach(function (r) {
+    ((opt && opt.all) || []).forEach(function (r) {
       var id = r && r.src;
       if (id && sources[id] && !seen[id]) { seen[id] = 1; ids.push(id); }
     });

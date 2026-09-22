@@ -212,7 +212,46 @@ ADDRESS_OVERRIDES = {
         "source": "Algoma Township Clerk, Elections page",
         "source_url": "https://www.algomatwp.org/departments/elections/index.php",
     },
+    # Wyoming's own fire station, Wyoming ward 1 precinct 3. The street is
+    # GEZON; the county page writes GENZON, and so did this file until now.
+    # Nothing anywhere else spells it with the N: not one parcel, not one road
+    # segment in the graph this site routes on, not Wyoming's own drop box a
+    # few rows below in the same file -- "Wyoming Gezon Parkway Station",
+    # scraped from the same county page, at the same building, with the same
+    # coordinates. The state's QVF export says GEZON too.
+    #
+    # geocode_places.py already carries GENZON -> GEZON in its MISSPELLINGS
+    # table, which is the only reason this place has a coordinate at all. But
+    # that table rescues the geocoder and nothing else. The address STRING is
+    # what the page prints and what the browser's own geocoder reads, so a
+    # voter was being shown, and searched against, a street that does not
+    # exist. The name carries the same typo and is corrected with it.
+    "0818894001003": {
+        "address": "2300 Gezon Parkway SW",
+        "county_published": "2300 Genzon Parkway SW",
+        "name": "Gezon Fire Station",
+        "name_published": "Genzon Fire Station",
+        "source": "Kent County parcel layer and road centrelines, which both "
+                  "spell it GEZON, as does the Bureau of Elections' own "
+                  "November 2026 export",
+        "source_url": "https://gis.kentcountymi.gov/agisprod/rest/services/"
+                      "ParcelsWithCondos/FeatureServer/0",
+    },
 }
+
+
+def existing_boxes(mcd):
+    """The drop boxes already committed for a jurisdiction, or nothing.
+
+    Read before the scrape overwrites the file, so a row this script did not
+    fetch can still be carried into what it writes. Missing or unreadable is
+    not an error: the first run has no file at all.
+    """
+    path = OUT_DIR / f"{mcd}.json"
+    try:
+        return json.loads(path.read_text()).get("drop_boxes") or []
+    except (OSError, ValueError):
+        return []
 
 
 def parse_polling(lines, not_notes=frozenset()):
@@ -378,6 +417,18 @@ def main():
         rows = parse_polling(lines, not_notes)
         boxes = parse_dropboxes(lines)
         clerk = parse_clerk(lines)
+        # Twenty-four of the thirty pages publish no drop box, and for those
+        # merge_foia_dropboxes.py has written the state's, which carry a `src`
+        # pointing at the FOIA release in sources.json. A plain overwrite here
+        # would silently drop all of them on the next run, so they are carried
+        # forward -- but only into the silence they were written into. The
+        # moment the county publishes a box of its own for that jurisdiction,
+        # the county's is the closer source and wins outright, and the borrowed
+        # rows go.
+        borrowed = []
+        if not boxes:
+            borrowed = [b for b in existing_boxes(mcd) if b.get("src")]
+            boxes = borrowed
         places = {}
         for row in rows:
             key = (row["ward"], row["precinct"])
@@ -398,6 +449,19 @@ def main():
                                 "address": override["address"],
                                 "address_source": override["source"],
                                 "address_as_published": override["county_published"]}
+                # A misspelling in the street is usually in the venue's name
+                # too, since the venue is named after the street. Corrected
+                # only where an entry says so, and only when the page still
+                # publishes what that entry expects.
+                if override.get("name"):
+                    if row["name"] != override["name_published"]:
+                        sys.exit(
+                            f"REFUSE: the override for {code} expects the "
+                            f"county to publish the name "
+                            f"{override['name_published']!r}, but it now "
+                            f"publishes {row['name']!r}.")
+                    places[code]["name"] = override["name"]
+                    places[code]["name_as_published"] = override["name_published"]
             else:
                 places[code] = {"name": row["name"], "address": row["address"]}
             # Grand Rapids is not given one here: polling.json carries the
@@ -435,14 +499,22 @@ def main():
             "drop_boxes": boxes,
         }
         pending.append((OUT_DIR / f"{mcd}.json", document))
-        table.append((names[mcd], len(places), len(wanted[mcd]), len(boxes)))
+        table.append((names[mcd], len(places), len(wanted[mcd]), len(boxes),
+                      len(borrowed)))
         time.sleep(DELAY_SECONDS)
 
-    short = [(name, got, want) for name, got, want, _ in table if got != want]
+    short = [(name, got, want) for name, got, want, _, _ in table if got != want]
+    carried = sum(n for *_, n in table)
     print(f"\n{'jurisdiction':<26}{'polling':>8}{'precincts':>11}{'drop boxes':>12}")
-    for name, got, want, boxes in table:
+    for name, got, want, boxes, borrowed in table:
         flag = "" if got == want else "  <-- SHORT"
+        if borrowed:
+            flag = f"  ({borrowed} from the state){flag}"
         print(f"{name:<26}{got:>8}{want:>11}{boxes:>12}{flag}")
+    if carried:
+        print(f"\n{carried} drop box(es) carried forward from the state, for "
+              "jurisdictions whose county page publishes none. Re-run "
+              "merge_foia_dropboxes.py if a newer release has arrived.")
     if notes:
         print(f"\n{len(notes)} polling place(s) publish where to go inside:")
         for where, code, venue, note in notes:
