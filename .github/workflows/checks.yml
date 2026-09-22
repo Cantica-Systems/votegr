@@ -5,7 +5,7 @@
 # were run by whoever remembered. This is the step that makes remembering
 # unnecessary, and gives branch protection something real to require.
 #
-# Nine suites, cheapest first, so an obvious break fails in seconds rather
+# Ten suites, cheapest first, so an obvious break fails in seconds rather
 # than after a browser download:
 #
 #   tests/test_display_case.mjs         display casing, over the real corpus
@@ -21,6 +21,8 @@
 #   tests/test_simple_page.mjs          /simple in a real browser at three widths
 #   tests/test_early_voting_states.mjs  the four early voting states, from a fixture
 #   tests/test_check_links.mjs          what the link checker makes of a response
+#   tests/test_check_links_inputs.mjs   that the link checker can still read every
+#                                 file it names
 #
 # scripts/compare_osrm.mjs is deliberately absent. It queries a public OSRM server,
 # which makes it network-dependent and slow, and sending trips to a routing
@@ -28,10 +30,13 @@
 # reach for by hand.
 #
 # scripts/check_links.mjs is absent for the same reason and runs weekly from
-# link-check.yml instead. Its judgement about what a response means is a pure
-# function, though, and that part belongs here: it is what decides whether a
-# link-check run is red, and it is where a host-by-host exemption list would
-# grow back.
+# link-check.yml instead. Two parts of it need nobody else's server, though,
+# and both belong here. Its judgement about what a response means is a pure
+# function: it is what decides whether a link-check run is red, and it is
+# where a host-by-host exemption list would grow back. And the files it reads
+# are in this repository, so whether it can still read them is answerable on
+# the pull request that moves one -- which is a week earlier than the weekly
+# run finds out, and 98b3c81 is why that week matters.
 name: Checks
 
 on:
@@ -111,3 +116,10 @@ jobs:
       # classifier. The live check runs weekly, from link-check.yml.
       - name: Link checker rules
         run: node tests/test_check_links.mjs
+
+      # Makes no request either: it reads the files the live checker reads and
+      # fails if one of them has moved. 98b3c81 renamed a file out from under
+      # that list and this suite went green anyway; the weekly run caught it
+      # two Mondays running, which is two Mondays later than here.
+      - name: Link checker inputs
+        run: node tests/test_check_links_inputs.mjs

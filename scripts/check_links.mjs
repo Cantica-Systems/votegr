@@ -1,6 +1,6 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
 // Every external link in the docs, the two pages and the data provenance
-// blocks, checked live. Run: node check_links.mjs [--list]
+// blocks, checked live. Run: node scripts/check_links.mjs [--list]
 //
 // The rest of the suite runs on every pull request and never touches the
 // network. This one is different: it exists to notice when someone ELSE's
@@ -27,15 +27,15 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // are left out on purpose: they assemble their endpoint URLs from fragments
 // across several lines, and the data files' provenance blocks carry the
 // same endpoints whole.
-const TEXT_FILES = [
+export const TEXT_FILES = [
   'README.md', 'BUILD.md', 'UNLICENSE',
   'site/index.html', 'site/simple/index.html',
-  'site/app.js', 'site/simple/lookup.js', 'compare_osrm.mjs',
+  'site/app.js', 'site/simple/lookup.js', 'scripts/compare_osrm.mjs',
 ];
 
 // Data files whose provenance block names where the data came from. Only
 // that block is read; the rest is coordinates and house numbers.
-const DATA_FILES = [
+export const DATA_FILES = [
   'addresses', 'boundary', 'cameras', 'elections', 'graph',
   'landcover', 'neighbors', 'polling', 'precincts',
 ].map(n => `site/data/${n}.json`).concat(['site/data/precincts.geojson']);
@@ -64,9 +64,9 @@ const TIMEOUT_MS = 20000;
 const RETRY_WAIT_MS = 4000;
 const SPACING_MS = 300;
 
-// What a response means. This is the whole judgement of the checker, and the
-// only part with tests (test_check_links.mjs), because it is the part that
-// decides whether a run is red.
+// What a response means. This is the whole judgement of the checker, and
+// test_check_links.mjs covers nothing but this function, because it is the
+// part that decides whether a run is red.
 //
 // Three buckets, and the rule names no host. An earlier version kept a list
 // of hosts whose firewall answers with 403 and counted those as reachable,
@@ -148,27 +148,56 @@ async function check(url) {
 }
 
 // ---- collect ----------------------------------------------------------
-async function collect() {
+// A file named above that cannot be read is reported, and the run carries on
+// without it. This used to throw, and the cost was not theoretical: the list
+// above still said `compare_osrm.mjs` after that file moved into scripts/ on
+// 2026-09-09, so every weekly run from then on died on its first readFile and
+// reported nothing at all about the other two dozen links. Noticing that
+// something moved is the entire job, and a checker that cannot say what it
+// found is worse than one that says a file is gone and keeps going.
+//
+// It is still a failure, for the same reason the per-host exemption list was
+// one: a path that quietly stops being read is a set of links that quietly
+// stops being checked, and only a red run gets that fixed. So it is counted
+// and it sets the exit code, at the end, after the links have been reported.
+export async function collect() {
   const foundIn = new Map();   // url -> the first file it was seen in
+  const unreadable = [];       // [file, why], for the ones that are gone or broken
   const note = (list, file) => { for (const u of list) if (!foundIn.has(u)) foundIn.set(u, file); };
-  for (const f of TEXT_FILES) note(urlsIn(await readFile(join(ROOT, f), 'utf8')), f);
+  // A missing file is the case worth naming plainly. A data file whose JSON
+  // no longer parses lands here too, from JSON.parse rather than readFile,
+  // and it is the same problem: this script can no longer read something it
+  // promised to check.
+  const why = e => (e.code === 'ENOENT' ? 'no such file' : e.code || e.message);
+  for (const f of TEXT_FILES) {
+    try { note(urlsIn(await readFile(join(ROOT, f), 'utf8')), f); }
+    catch (e) { unreadable.push([f, why(e)]); }
+  }
   for (const f of DATA_FILES) {
-    const doc = JSON.parse(await readFile(join(ROOT, f), 'utf8'));
-    note(urlsIn(strings(doc.provenance || {}).join('\n')), f);
+    try {
+      const doc = JSON.parse(await readFile(join(ROOT, f), 'utf8'));
+      note(urlsIn(strings(doc.provenance || {}).join('\n')), f);
+    } catch (e) { unreadable.push([f, why(e)]); }
   }
   for (const u of [...foundIn.keys()]) if (SKIP.some(re => re.test(u))) foundIn.delete(u);
-  return foundIn;
+  return { foundIn, unreadable };
 }
 
 // ---- run --------------------------------------------------------------
 async function main() {
-  const foundIn = await collect();
+  const { foundIn, unreadable } = await collect();
   const urls = [...foundIn.keys()].sort();
+  const lost = unreadable.length;
+  const alsoLost = lost ? `, and ${lost} file${lost === 1 ? '' : 's'} it could not read` : '';
+
+  // Printed before anything else, because it says the set below is short.
+  for (const [f, why] of unreadable) console.log(`  LOST ${f}  (${why})`);
+  if (lost) console.log('');
 
   if (process.argv.includes('--list')) {
     for (const u of urls) console.log(`${u}  (${foundIn.get(u)})`);
-    console.log(`\n${urls.length} links`);
-    return 0;
+    console.log(`\n${urls.length} links${alsoLost}`);
+    return lost ? 1 : 0;
   }
 
   // One request at a time, spaced out: these are other people's servers, and
@@ -194,16 +223,21 @@ async function main() {
   }
 
   console.log(`\n${urls.length} links: ${counts.ok} ok, ` +
-              `${counts.unverifiable} unverifiable, ${counts.rotted} gone`);
-  if (counts.unverifiable && !counts.rotted) {
+              `${counts.unverifiable} unverifiable, ${counts.rotted} gone${alsoLost}`);
+  if (counts.unverifiable && !counts.rotted && !lost) {
     console.log('Unverifiable is not a failure. Those servers declined to answer a ' +
                 'non-browser client; the pages are worth an eye, not a red run.');
   }
-  return counts.rotted ? 1 : 0;
+  if (lost) {
+    console.log('A file this script names but cannot read does fail the run. The set ' +
+                'above is short by whatever that file held, and a path left stale by a ' +
+                'rename is the same rot this check watches for, in our own tree.');
+  }
+  return counts.rotted || lost ? 1 : 0;
 }
 
-// Only when run, not when imported: test_check_links.mjs imports classify
-// and must not make a single request to do it.
+// Only when run, not when imported: the two test suites import classify and
+// collect(), and must not make a single request to do it.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exit(await main());
 }

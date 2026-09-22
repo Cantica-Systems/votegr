@@ -237,6 +237,7 @@ npm ci && node tests/test_page.mjs       # the page itself, in a browser
 node tests/test_simple_page.mjs          # /simple, in a browser
 node tests/test_early_voting_states.mjs  # the early voting states and election day, from a dated fixture
 node tests/test_check_links.mjs          # what the link checker makes of a response
+node tests/test_check_links_inputs.mjs   # that it can still read every file it names
 node scripts/compare_osrm.mjs 30         # differential check against OSRM
 node scripts/check_links.mjs             # every external link, the provenance URLs included
 ```
