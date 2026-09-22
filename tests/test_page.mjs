@@ -430,7 +430,12 @@ for (const w of WIDTHS) {
     });
     return { bad, about: [...document.querySelectorAll('#aboutModal a')].length };
   });
-  ok('the About panel is full of links', linkColours.about > 4);
+  // A floor, not a count: it exists so the colour sweep below cannot pass
+  // by finding nothing. The panel held seven links until the Learning more
+  // list was removed and now holds four, so the floor sits clear of the
+  // real number rather than tracking it, and still fails if the selector
+  // ever stops matching.
+  ok('the About panel is full of links', linkColours.about > 2);
   ok('and no link is left the browser default blue or purple', linkColours.bad.length === 0);
   if (linkColours.bad.length) linkColours.bad.forEach(b => console.log('       ' + b));
   ok('the About panel says what the tool is and what it is for',
@@ -801,13 +806,16 @@ for (const w of WIDTHS) {
     const cs = credit && getComputedStyle(credit);
     return {
       saysStateNeedNotKnow: /state does not need to learn that you looked/i.test(text),
-      // Three claims, not one: that it is an estimate, that the estimate is
-      // computed on the reader's own device, and how far it can be trusted.
-      // The middle one is the whole point and is the one a rewrite would
-      // most easily drop.
-      saysBestEffort: /best effort estimate/i.test(text)
-        && /calculated on your device/i.test(text)
-        && /in most cases it should be correct/i.test(text),
+      // This used to read the accuracy hedge under "What this is" -- that the
+      // answer is a best effort estimate and is usually right -- which was
+      // removed on request, taking the words with it. Of the three claims it
+      // made, the one worth holding is the middle one: that the answer is
+      // computed on the reader's own machine. That is the whole privacy
+      // proposition rather than a caveat about it, "How it works" still makes
+      // it, and it is the one a rewrite would most easily drop. So this now
+      // reads it there.
+      saysOnYourDevice: /runs on your device/i.test(text)
+        && /without making any network requests/i.test(text),
       creditText: credit ? credit.innerText.replace(/\s+/g, ' ').trim() : null,
       creditHref: link ? link.href : null,
       // Last thing in the sheet, and not shrunk into caption type.
@@ -817,7 +825,7 @@ for (const w of WIDTHS) {
     };
   });
   ok('About says the state need not learn you looked', a.saysStateNeedNotKnow);
-  ok('and says the estimate is worked out on your own device', a.saysBestEffort);
+  ok('and says the answer is worked out on your own device', a.saysOnYourDevice);
   ok('it closes with the Cantica Systems credit',
      a.isLast && /^An open source project of Cantica Systems\.$/.test(a.creditText));
   ok('and the credit is a real link', a.creditHref === 'https://cantica.dev/');
