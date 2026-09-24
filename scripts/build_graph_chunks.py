@@ -198,6 +198,23 @@ def main():
                 "share one build fingerprint and must be deployed together.",
         "build": build_id,
         "ring_m": RING_M,
+        # The manifest is a data file like any other in this directory, and
+        # the About sheet says every one of them records where it came from
+        # and on what terms. It was the only file under site/data/ that did
+        # not, which made that sentence false by one file.
+        "provenance": provenance(
+            source="Index of the per-jurisdiction chunks beside it, written "
+                   "by the same run that writes them.",
+            source_url="build/graph.json",
+            licence="Follows the chunks it indexes: REGIS/Kent County "
+                    "centerlines published as open data, with OpenStreetMap "
+                    "turn restrictions under the ODbL. This file itself "
+                    "carries only counts, bounding boxes and the build "
+                    "fingerprint, and no road geometry.",
+            made_by="build_graph_chunks.py",
+            how_to_update="Never on its own. It is written with the chunks "
+                          "by this script and shares their build "
+                          "fingerprint, so rebuild them together."),
         "chunks": sorted(
             ({"mcd": mcd, "jurisdiction": names[mcd],
               "nodes": m["nodes"], "edges": m["edges"], "points": m["points"],
