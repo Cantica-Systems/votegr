@@ -206,14 +206,166 @@
     return m ? m[1] : null;
   }
 
+  // ---- two spellings of one street --------------------------------------
+  //
+  // The address list is the county's parcel file, and nobody else writes a
+  // street quite the way it does. A reader types "E Fulton St" where the
+  // county writes FULTON ST E, and "Saint Andrews" or "Street" where it
+  // writes ST. The state road layer that neighbors.json comes from writes
+  // HOLW for HOLLOW, RDG for RIDGE and E BELTLINE for EAST BELTLINE. So every
+  // word below folds to one form, on both sides of the comparison, and a lone
+  // N, S, E or W moves to the end whether it led or trailed. router.js reads
+  // the same leading-or-trailing disagreement between the parcel file and the
+  // centrelines this way.
+  //
+  // Unlike router.js this keeps the street type and the quadrant. The router
+  // matches a name against road segments and lets the house number settle
+  // the rest; here the name is what picks the street, and a court and a drive
+  // of one name are two streets, as is one name in two quadrants. Where the
+  // county and the state disagree about those, the disagreement stands and
+  // the street stays unanswered rather than answered as its neighbour.
+  var WORDS = {
+    STREET: 'ST', SAINT: 'ST', AVENUE: 'AVE', DRIVE: 'DR', ROAD: 'RD',
+    COURT: 'CT', LANE: 'LN', PLACE: 'PL', CIRCLE: 'CIR', BOULEVARD: 'BLVD',
+    PARKWAY: 'PKWY', TRAIL: 'TRL', TERRACE: 'TER', SQUARE: 'SQ',
+    HIGHWAY: 'HWY', HOLLOW: 'HOLW', POINT: 'PT', RIDGE: 'RDG',
+    CROSSING: 'XING', MOUNT: 'MT', VALLEY: 'VLY', HILL: 'HL', HILLS: 'HLS',
+    COVE: 'CV', BEND: 'BND', HAVEN: 'HVN', CREEK: 'CRK', TRACE: 'TRCE',
+    PARK: 'PK',
+    EAST: 'E', WEST: 'W', NORTH: 'N', SOUTH: 'S',
+    FIRST: '1ST', SECOND: '2ND', THIRD: '3RD', FOURTH: '4TH', FIFTH: '5TH',
+    SIXTH: '6TH', SEVENTH: '7TH', EIGHTH: '8TH', NINTH: '9TH', TENTH: '10TH',
+    ELEVENTH: '11TH', TWELFTH: '12TH'
+  };
+  var CARDINAL = { N: 1, S: 1, E: 1, W: 1 };
+  var QUADRANT = { NE: 1, NW: 1, SE: 1, SW: 1 };
+
+  function foldWords(text) {
+    return String(text || '').toUpperCase().replace(/[.,]/g, ' ')
+      .replace(/\s+/g, ' ').trim().split(' ').filter(Boolean)
+      .map(function (t) { return WORDS[t] || t; });
+  }
+
+  // A whole street name: "E BELTLINE AVE NE" and "EAST BELTLINE AVE NE" both
+  // come out as BELTLINE AVE NE E. `bare` leaves the quadrant out, for a name
+  // the state wrote without one.
+  function canonName(name) {
+    var w = foldWords(name), dir = null, quad = null;
+    if (w.length > 1 && CARDINAL[w[w.length - 1]]) dir = w.pop();
+    else if (w.length > 1 && CARDINAL[w[0]]) dir = w.shift();
+    if (w.length > 1 && QUADRANT[w[w.length - 1]]) quad = w.pop();
+    var bare = dir ? w.concat([dir]) : w;
+    return { key: (quad ? w.concat([quad]) : w).concat(dir ? [dir] : []).join(' '),
+             bare: bare.join(' '), quad: quad };
+  }
+
+  // What a reader has typed so far, which may stop halfway through a word.
+  // Only a LEADING direction moves: a trailing S may be the start of ST, and
+  // left where it is it still lines up with the end of the name.
+  function canonQuery(rest) {
+    var w = foldWords(rest);
+    if (w.length > 1 && CARDINAL[w[0]]) w.push(w.shift());
+    return w;
+  }
+
+  // Every street in the list in its canonical form, built once. `bare` has
+  // every name with its quadrant left out; `unquartered` only the names that
+  // never had one.
+  Precincts.prototype._canon = function () {
+    if (this._canonCache) return this._canonCache;
+    var names = this.streetNames, list = [], quartered = [];
+    var full = {}, bare = {}, unquartered = {};
+    for (var i = 0; i < names.length; i++) {
+      var c = canonName(names[i]);
+      list.push(c.key);
+      quartered.push(!!c.quad);
+      full[c.key] = 1;
+      bare[c.bare] = 1;
+      if (!c.quad) unquartered[c.bare] = 1;
+    }
+    return (this._canonCache = { list: list, quartered: quartered, full: full,
+                                 bare: bare, unquartered: unquartered });
+  };
+
   Precincts.prototype.matchingStreets = function (rest) {
     var tokens = String(rest || '').split(' ').filter(Boolean);
     if (!tokens.length) return [];
     var hits = this.streetNames.filter(function (s) { return streetMatches(s, tokens); });
-    return hits.sort(function (a, b) {
-      var lead = function (s) { return s.indexOf(tokens[0]) === 0 ? 0 : 1; };
-      return lead(a) - lead(b) || a.length - b.length || a.localeCompare(b);
-    });
+    if (hits.length) {
+      return hits.sort(function (a, b) {
+        var lead = function (s) { return s.indexOf(tokens[0]) === 0 ? 0 : 1; };
+        return lead(a) - lead(b) || a.length - b.length || a.localeCompare(b);
+      });
+    }
+    // Nothing under the county's spelling, so try it under everyone's. This
+    // runs only when the match above found nothing, so no answer that match
+    // gives can change: the lookup it was copied from still holds.
+    var q = canonQuery(rest), k = this._canon(), names = this.streetNames;
+    var canon = k.list;
+    if (!q.length) return [];
+    var at = [], i;
+    for (i = 0; i < canon.length; i++) if (streetMatches(canon[i], q)) at.push(i);
+    // Still nothing, and the text names a quadrant: try it against the
+    // streets the county writes with none. The state writes E FULTON ST SE in
+    // Ada where the county writes FULTON ST E, and covers() already counts
+    // those as one street, so the match has to be able to find it too.
+    if (!at.length) {
+      var unq = q.filter(function (t) { return !QUADRANT[t]; });
+      if (unq.length && unq.length < q.length) {
+        for (i = 0; i < canon.length; i++) {
+          if (!k.quartered[i] && streetMatches(canon[i], unq)) at.push(i);
+        }
+        q = unq;
+      }
+    }
+    return at.sort(function (a, b) {
+      var lead = function (k) { return canon[k].indexOf(q[0]) === 0 ? 0 : 1; };
+      return lead(a) - lead(b) || canon[a].length - canon[b].length ||
+             names[a].localeCompare(names[b]);
+    }).map(function (k) { return names[k]; });
+  };
+
+  // Whether the address list has this street, under any spelling of it. A
+  // quadrant on one side and none on the other is not a disagreement: the
+  // state writes ARBOR CHASE CT where the county writes ARBOR CHASE CT NE,
+  // and E FULTON ST SE in Ada where the county writes FULTON ST E. Two
+  // different quadrants are, and stay two streets.
+  Precincts.prototype.covers = function (name) {
+    var c = canonName(name), k = this._canon();
+    return !!(k.full[c.key] ||
+              (!c.quad && k.bare[c.bare]) ||
+              (c.quad && k.unquartered[c.bare]));
+  };
+
+  // Whether the address list has any addresses in this jurisdiction, by the
+  // name the precinct index gives it ("Walker", "Grand Rapids Township").
+  Precincts.prototype.coversJurisdiction = function (name) {
+    if (!this._jset) {
+      this._jset = {};
+      for (var mcd in this.jurisdictions || {}) {
+        if (Object.prototype.hasOwnProperty.call(this.jurisdictions, mcd)) {
+          this._jset[this.jurisdictions[mcd]] = 1;
+        }
+      }
+    }
+    return !!this._jset[name];
+  };
+
+  // Of a street -> [jurisdiction] map, the part this index cannot answer. A
+  // street it has under any spelling is dropped, except in a jurisdiction it
+  // has no addresses for; a street it does not have is kept whole. What is
+  // left is what the page may truthfully call a street it cannot look up.
+  Precincts.prototype.unindexed = function (streets) {
+    var out = {}, self = this;
+    for (var name in streets || {}) {
+      if (!Object.prototype.hasOwnProperty.call(streets, name)) continue;
+      var where = streets[name] || [];
+      if (this.covers(name)) {
+        where = where.filter(function (j) { return !self.coversJurisdiction(j); });
+      }
+      if (where.length) out[name] = where;
+    }
+    return out;
   };
 
   // Resolve a house number on a street. Answers only when the neighbors on

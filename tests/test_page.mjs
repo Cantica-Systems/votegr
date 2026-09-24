@@ -1783,6 +1783,63 @@ for (const w of [390, 1280]) {
   await ctx.close();
 }
 
+// --- a street the address list cannot answer --------------------------
+// The page used to tell a Grand Rapids Township reader that the township had
+// no address index, after the index had grown to cover the whole county. Two
+// ways in: a street the list has under the county's spelling ("E Fulton St"
+// for FULTON ST E) was offered as out of reach, and a township street with no
+// address in the parcel file got the same words. Numbers are 99999, which
+// exists nowhere, and the streets are a school campus road and a road in a
+// township outside the county, so no stranger's house is named here.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
+  const rows = async (text) => {
+    await page.fill('#addr', '');
+    await page.type('#addr', text);
+    await page.waitForSelector('.ac-item', { timeout: 10000 });
+    await page.waitForTimeout(300);
+    return page.evaluate(() => [...document.querySelectorAll('.ac-item')].map((el) => ({
+      street: el.querySelector('.st').textContent.trim(),
+      where: (el.querySelector('.ac-where') || { textContent: '' }).textContent.trim(),
+    })));
+  };
+  const answer = async () => {
+    await page.press('#addr', 'Enter');
+    await page.waitForTimeout(300);
+    return page.evaluate(() => document.getElementById('precinctInfo').innerText);
+  };
+
+  const fulton = await rows('99999 E Fulton St');
+  ok('"E Fulton St" is offered as the county\'s Fulton St E',
+     fulton.length > 0 && fulton.every((r) => r.street === 'Fulton St E'));
+  const beltline = await rows('99999 E Beltline Ave NE');
+  ok('and "E Beltline Ave NE" is not offered a second time as out of reach',
+     beltline.length > 0 && !beltline.some((r) => r.street === 'E Beltline Ave NE'));
+
+  const campus = await rows('99999 Kent Skills Center Dr NE');
+  ok('a township street with no address in the list is still offered, in its township',
+     campus.length === 1 && campus[0].where === 'Grand Rapids Township');
+  const campusText = await answer();
+  ok('and picking it does not say the township has no address index',
+     !/address index|does not cover/i.test(campusText));
+  ok('it says the street has no address in the list, and to use the pin',
+     /no address on it/i.test(campusText) && /pin button/i.test(campusText));
+
+  const away = await rows('99999 Barbreht Dr NW');
+  ok('a street in a township the tool does not cover is labelled with it',
+     away.length === 1 && away[0].where === 'Tallmadge Township');
+  const awayText = await answer();
+  ok('and picking it says the tool does not cover it, and where to look instead',
+     /does not cover/i.test(awayText) && /mvic\.sos\.state\.mi\.us/.test(awayText));
+  ok('no page errors while doing it', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 await browser.close();
 server.close();
 

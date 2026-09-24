@@ -13,6 +13,16 @@ jurisdiction the street is in and send them to the right place.
 
 Names only, no geometry and no address ranges: this exists to explain a miss,
 not to answer a lookup.
+
+That was written when the tool covered only the city. The main page now has
+every parcel address in the county, so fourteen of these fifteen
+jurisdictions are ones it CAN answer, and most of the names here are streets
+its address list already has under the county's spelling (E FULTON ST here,
+FULTON ST E there). The page filters this file through the address list when
+it loads (Precincts.unindexed in site/precinct.js) and offers only what is
+left: streets in Tallmadge Township, which is in Ottawa County, and streets
+in the other fourteen that have no address in the parcel file at all. /simple
+is still city-only and uses the file as it is.
 """
 import json
 import sys
@@ -116,9 +126,10 @@ def main():
             licence="Public record of the State of Michigan, redistributed as published.",
             made_by="refresh_neighbors.py",
             how_to_update="Run refresh_neighbors.py.",
-            why="Street names in the jurisdictions AROUND Grand Rapids, so an "
-                "address this tool cannot answer reads as out of area rather "
-                "than as a bug."),
+            why="Street names in the jurisdictions AROUND Grand Rapids, so a "
+                "street this tool cannot answer is named as such rather than "
+                "read as a bug: out of area on /simple, and on the main page "
+                "only where the county's address list has no address on it."),
         "streets": idx,
     }, separators=(",", ":")))
     print(f"wrote {len(idx)} street names -> {OUT} "

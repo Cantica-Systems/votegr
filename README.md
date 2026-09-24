@@ -72,7 +72,8 @@ site/data/sources.json       every upstream this site reads, by id, with licence
 site/data/landcover.json     water, parks and rail, so the map reads as a map
 site/data/boundary.json      the Grand Rapids city limits, which decide only whether
                              the City Clerk's own data applies
-site/data/neighbors.json     street names just outside the city, kept for /simple
+site/data/neighbors.json     street names around the city, in the state's spelling: /simple's
+                             out-of-city list, and the streets the address list cannot answer
 site/data/addresses.json     every city address and its precinct, kept for /simple
 site/data/graph.json         the city-only road network, kept for the router tests
 site/data/elections.json     election days and early voting
