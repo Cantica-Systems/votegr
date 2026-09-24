@@ -1,0 +1,160 @@
+# Keeps site/data/early-voting.json current from the Kent County clerk.
+#
+# The file went stale for the most ordinary reason there is: nothing ran the
+# script. refresh-cameras.yml was the only refresh job in the repository, and
+# every other refresh was a person remembering. On 2026-09-24 this file still
+# described the 2026-08-04 primary -- generated 2026-09-08, four days after
+# MCL 168.662 fixes early voting sites for the next election, and never run
+# again. Twenty days later the county had almost certainly published November
+# and nobody had looked.
+#
+# Weekly, not daily like the cameras. The county publishes this a few times a
+# year, in a burst once the 60-day deadline passes, so a daily run would be
+# thirty times the requests on someone else's server to learn nothing. A week
+# is well inside the gap between the county posting and a voter needing it.
+#
+# What this job does NOT do:
+#
+#   - It does not deploy. early-voting.json is not one of the files either
+#     page loads (app.js takes graph, precincts, addresses, polling, cameras,
+#     elections, landcover, neighbors, gr-clerk and sources; /simple takes
+#     five of those). Committing it changes the repository and not the site,
+#     so there is no pages.yml to ask for and no actions: write to grant.
+#
+#   - It does not geocode. The `located` coordinates beside each site come
+#     from geocode_places.py, not from this script. Putting the refresh on a
+#     schedule is what made that matter: an unattended weekly job that dropped
+#     all thirty coordinates on every change is worse than no job at all, so
+#     refresh_early_voting.py now carries them forward wherever the address
+#     text is unchanged. What it cannot carry is a genuinely NEW site, which
+#     has no coordinate to keep -- the count is reported below and named in
+#     the commit when it falls. Chaining the geocoder here would close that
+#     last gap and is deliberately not done: geocode_places.py also rewrites
+#     all thirty site/data/polling/*.json files, which would turn a small data
+#     refresh into a commit nobody can review. Run it by hand when sites move.
+name: Refresh early voting
+
+on:
+  schedule:
+    # 07:43 UTC on Tuesdays. Off the hour, and off the day and hour of the
+    # other two scheduled jobs (cameras 06:17 daily, link check 06:30 Monday),
+    # so a slow run never queues behind one of them.
+    - cron: '43 7 * * 2'
+  workflow_dispatch:
+
+# contents only. Nothing here asks another workflow to run, for the reason in
+# the header, so this job needs no actions: write.
+permissions:
+  contents: write
+
+# Never let two refreshes overlap, and never cancel one halfway: a killed run
+# between write and commit would leave the tree in a state nobody chose.
+concurrency:
+  group: refresh-early-voting
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      # The deploy key, not the default token, for the same reason as
+      # refresh-cameras.yml: the branch ruleset bypasses the key, and GitHub
+      # cannot grant the Actions app a bypass at all. The key is repository
+      # scoped rather than workflow scoped, so the camera job's key is the
+      # right one to reuse; its name is now narrower than its job and worth
+      # renaming to something like DATA_DEPLOY_KEY when convenient.
+      - uses: actions/checkout@v7
+        with:
+          ssh-key: ${{ secrets.CAMERAS_DEPLOY_KEY }}
+          persist-credentials: true
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      # No dependency install: refresh_early_voting.py and the archive helper
+      # it imports are standard library only, so this job has no supply chain
+      # of its own.
+
+      - name: Record what the committed file describes
+        id: before
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          d = json.load(open('site/data/early-voting.json'))
+          s = d.get('sites') or {}
+          print(f"election={d.get('election',{}).get('date','none')}")
+          print(f"window={d.get('early_voting',{}).get('from','?')}..{d.get('early_voting',{}).get('to','?')}")
+          print(f"sites={len(s)}")
+          print(f"located={sum(1 for v in s.values() if v.get('located'))}")
+          PY
+          cat "$GITHUB_OUTPUT"
+
+      - name: Read the county and city pages
+        # The script refuses rather than writing a partial or wrong result:
+        # no election heading, no window sentence, a window ending after the
+        # election it was inferred for, fewer sites than MIN_SITES, or a city
+        # page it can no longer parse. Any of those exits non-zero and stops
+        # the job before anything is committed, which is the intended outcome.
+        #
+        # It also prints the election and window it found, and says so plainly
+        # when that election has already passed -- which is the signal that
+        # would have caught this file being a month stale.
+        env:
+          # Optional. Without them archive.org declines most captures and the
+          # provenance records that honestly instead of claiming a snapshot it
+          # does not have. credentials() treats an unset or empty value as
+          # absent, so an unconfigured repository degrades rather than breaks.
+          ARCHIVE_S3_KEY: ${{ secrets.ARCHIVE_S3_KEY }}
+          ARCHIVE_S3_SECRET: ${{ secrets.ARCHIVE_S3_SECRET }}
+        run: python3 scripts/refresh_early_voting.py
+
+      - name: Report what changed
+        id: after
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          d = json.load(open('site/data/early-voting.json'))
+          s = d.get('sites') or {}
+          print(f"election={d.get('election',{}).get('date','none')}")
+          print(f"window={d.get('early_voting',{}).get('from','?')}..{d.get('early_voting',{}).get('to','?')}")
+          print(f"sites={len(s)}")
+          print(f"located={sum(1 for v in s.values() if v.get('located'))}")
+          PY
+          echo "before: ${{ steps.before.outputs.election }} ${{ steps.before.outputs.window }} ${{ steps.before.outputs.sites }} sites, ${{ steps.before.outputs.located }} geocoded"
+          cat "$GITHUB_OUTPUT"
+
+      - name: Commit if anything changed
+        run: |
+          if git diff --quiet -- site/data/early-voting.json; then
+            echo "The county page says what the committed file already says."
+            exit 0
+          fi
+          BEFORE_EL='${{ steps.before.outputs.election }}'
+          AFTER_EL='${{ steps.after.outputs.election }}'
+          BEFORE_GEO='${{ steps.before.outputs.located }}'
+          AFTER_GEO='${{ steps.after.outputs.located }}'
+          SUBJECT="Refresh early voting from Kent County"
+          if [ "$BEFORE_EL" != "$AFTER_EL" ]; then
+            SUBJECT="$SUBJECT ($BEFORE_EL -> $AFTER_EL)"
+          else
+            SUBJECT="$SUBJECT ($AFTER_EL)"
+          fi
+          # Say it in the commit, not just the log. Coordinates are carried
+          # forward for every site whose address text is unchanged, so a fall
+          # here means the county published somewhere NEW -- which is both the
+          # interesting case and the one wanting a human with the geocoder.
+          BODY="Window ${{ steps.after.outputs.window }}, ${{ steps.after.outputs.sites }} jurisdictions."
+          if [ "$AFTER_GEO" -lt "$BEFORE_GEO" ]; then
+            BODY="$BODY
+
+          Geocoded sites: $BEFORE_GEO -> $AFTER_GEO. Coordinates are carried
+          forward where the address text is unchanged, so this fall means new
+          or reworded locations. geocode_places.py fills them in; it is not
+          run here because it also rewrites every site/data/polling/*.json."
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data/early-voting.json
+          git commit -m "$SUBJECT" -m "$BODY"
+          git push

@@ -248,6 +248,38 @@ def main():
                                   "locations": places}
         i = j
 
+    # Carry the coordinates forward where the address text is unchanged.
+    #
+    # This script writes jurisdiction, hours and locations; the `located`
+    # block beside them, with a lat and lng per address, is put there
+    # afterwards by geocode_places.py. So a refresh used to drop all thirty,
+    # and that was tolerable while a person ran this and could run the
+    # geocoder after it. Under a schedule it is not: the job would delete
+    # every coordinate in the file on each run that found a change, weekly,
+    # unattended.
+    #
+    # A `located` entry is a geocode OF the locations text, so it stays valid
+    # exactly as long as that text does. Matching the whole list, in order,
+    # is deliberately strict -- a reordered or reworded list drops its
+    # coordinates rather than risk pairing an address with the geocode of a
+    # different one. What survives is the common case, the county republishing
+    # the same sites for the next election; what does not is a genuinely new
+    # site, which has no coordinate to keep and wants geocode_places.py.
+    if OUT.exists():
+        try:
+            held = (json.loads(OUT.read_text()).get("sites") or {})
+        except (json.JSONDecodeError, OSError):
+            held = {}
+        kept = 0
+        for mcd, site in sites.items():
+            was = held.get(mcd)
+            if was and was.get("located") and was.get("locations") == site["locations"]:
+                site["located"] = was["located"]
+                kept += 1
+        if kept:
+            print(f"kept geocodes for {kept} of {len(sites)} jurisdictions "
+                  f"whose locations are unchanged")
+
     if len(sites) < MIN_SITES:
         sys.exit(f"REFUSE: only {len(sites)} early voting sites parsed "
                  f"(expected at least {MIN_SITES}); unmatched: {unknown[:5]}")
