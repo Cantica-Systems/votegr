@@ -418,6 +418,74 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
   ok(`county: all ${couldFallBack.length} jurisdictions that can fall back to `
      + 'the clerk have an office with a coordinate', noOffice.length === 0,
      noOffice.map((j) => j.name).join(', '));
+
+  // --- two spellings of one street --------------------------------------
+  // The address list is the county's parcel file. Readers, and the state
+  // road layer neighbors.json is built from, spell the same street other
+  // ways: "E Fulton St" where the county writes FULTON ST E, "Saint" where
+  // it writes ST, HOLW where it writes HOLLOW. The plain match is tried
+  // first and the spelling-tolerant one only when it finds nothing, so an
+  // answer the page gives today cannot change. Street names only here: see
+  // the note on fixtures above.
+  const m = (s) => C.matchingStreets(s);
+  ok('canon: a leading direction finds the street the county writes it trailing on',
+     m('E FULTON ST')[0] === 'FULTON ST E');
+  ok('canon: and so does the start of one, as it is being typed',
+     m('E FULT')[0] === 'FULTON ST E');
+  ok('canon: Saint finds St', m('SAINT ANDREWS CT SE')[0] === 'ST ANDREWS CT SE');
+  ok('canon: an abbreviation finds the word spelled out',
+     m('CASCADE HILLS HOLW SE')[0] === 'CASCADE HILLS HOLLOW SE');
+  ok('canon: an address typed that way resolves on the county\'s street',
+     C.suggest('99999 E Fulton St', 8).length > 0 &&
+     C.suggest('99999 E Fulton St', 8).every((o) => o.street === 'FULTON ST E'));
+  // What the two sources genuinely disagree about is left alone. A court and
+  // a drive of the same name are two streets, and in Grand Rapids so are the
+  // same name in two quadrants.
+  ok('canon: a different street type is a different street', m('BALFOUR ST SE').length === 0);
+  ok('canon: a different quadrant is a different street',
+     m('CRAHEN AVE SE').length === 0 && m('CRAHEN AVE NE')[0] === 'CRAHEN AVE NE');
+  const lost = C.streetNames.filter((s) => m(s)[0] !== s);
+  ok(`canon: every street in the address list still finds itself first (${lost.length} do not)`,
+     lost.length === 0, lost.slice(0, 5).join(', '));
+
+  // --- streets the address list cannot answer ----------------------------
+  // neighbors.json dates from when this tool covered only the city: street
+  // names in the jurisdictions around it, so a miss read as "out of area".
+  // All but one of those jurisdictions are now in the address list, so a
+  // name from it may only be offered as a street the list cannot answer when
+  // it really cannot. Offering one the list has, under the state's spelling,
+  // is how a Grand Rapids Township address came to be told the township had
+  // no address index.
+  const nb = JSON.parse(fs.readFileSync('./site/data/neighbors.json', 'utf8')).streets;
+  const U = C.unindexed(nb);
+  ok('outside: the tool covers the townships it has addresses for',
+     C.coversJurisdiction('Grand Rapids Township') && C.coversJurisdiction('Walker'));
+  ok('outside: and not one it has none for', !C.coversJurisdiction('Tallmadge Township'));
+  ok('outside: a street the list has under another spelling is not offered',
+     !U['E FULTON ST'] && !U['E BELTLINE AVE NE']);
+  ok('outside: nor one the state writes without its quadrant', !U['ARBOR CHASE CT']);
+  ok('outside: nor one the county writes without its quadrant', !U['E FULTON ST SE']);
+  ok('outside: but a different quadrant is still a different street',
+     (U['CRAHEN AVE SE'] || []).join() === 'Grand Rapids Township');
+  ok('outside: a street with no address in the list is kept, in its township',
+     (U['KENT SKILLS CENTER DR NE'] || []).join() === 'Grand Rapids Township');
+  const tallmadge = Object.keys(nb).filter((k) => nb[k].join() === 'Tallmadge Township');
+  ok('outside: every street in a jurisdiction the tool does not cover is kept',
+     tallmadge.length > 100 && tallmadge.every((k) => U[k]));
+  ok('outside: a street the list has keeps only the jurisdiction it has no addresses for',
+     (U['LEONARD ST NW'] || []).join() === 'Tallmadge Township');
+  // The filter and the match must agree. A name dropped because the list has
+  // it is a name the reader will go on typing, and if the match cannot find
+  // it either, a pointer has become "no street matches that".
+  const dead = Object.keys(nb).filter((k) => C.covers(k) && !m(k).length);
+  ok(`canon: every name the list is said to have, it can find (${dead.length} it cannot)`,
+     dead.length === 0, dead.slice(0, 5).join(', '));
+  ok('canon: including a quadrant the county does not write',
+     m('E FULTON ST SE')[0] === 'FULTON ST E');
+  const mislabelled = Object.keys(U).filter((k) =>
+    C.covers(k) && U[k].some((j) => C.coversJurisdiction(j)));
+  ok(`outside: no street the list answers is offered in a jurisdiction it covers (${mislabelled.length})`,
+     mislabelled.length === 0, mislabelled.slice(0, 5).join(', '));
 }
 
 // --- the polls clock ------------------------------------------------------

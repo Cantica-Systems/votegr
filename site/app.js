@@ -1159,7 +1159,12 @@
       P = county.P;
       var precinctData = county.index;
       drawPollingPlaces();
-      neighbors = (neighborData && neighborData.streets) || null;
+      // Only the streets the address list cannot answer. neighbors.json is
+      // from when this page covered the city alone; most of what it names is
+      // now in the list, often under the county's spelling rather than the
+      // state's, and offering one of those as out of reach is wrong.
+      neighbors = (neighborData && neighborData.streets)
+        ? P.unindexed(neighborData.streets) : null;
       precincts = (precinctData && precinctData.precincts) || null;
       if (precincts) ownBase.setPrecincts(precincts);
       // The jurisdiction outlines ride in the same file, on the index that
@@ -1507,16 +1512,17 @@
     show(r);
   }
 
-  // A street in Wyoming or Kentwood is a real street that a person with a
-  // Grand Rapids mailing address may well live on, and typing it used to end
-  // in an error only once they pressed Enter. It is now offered in the list
-  // like any other street, labelled with the jurisdiction it is actually in,
-  // so the answer arrives at the moment of picking rather than after a
-  // rejection.
+  // A street the address list cannot answer is still a real street, and
+  // typing it used to end in an error only once Enter was pressed. It is
+  // offered in the list like any other, labelled with the jurisdiction it is
+  // in, so the explanation arrives at the moment of picking rather than
+  // after a rejection. There are two kinds: a street in a jurisdiction the
+  // tool does not cover, and a street in one it does that has no address in
+  // the county's parcel file (a campus addressed to the main road, a ramp).
   //
-  // These come last and only fill what the city's own suggestions leave. A
-  // city street is what this tool can answer, and one that matches should
-  // never be pushed down the list by a neighbour.
+  // These come last and only fill what the address list's own suggestions
+  // leave. A street it has is one this tool can answer, and one that matches
+  // should never be pushed down the list by one it cannot.
   var GR_CITY = 'Grand Rapids City';
   var GR_MCD = '34000';      // the state's MCD code for the City of Grand Rapids
 
@@ -1562,35 +1568,52 @@
     }).sort();
 
     for (var i = 0; i < names.length && out.length < limit; i++) {
-      var where = (neighbors[names[i]] || []).map(jurisdictionLabel);
+      var jurisdictions = neighbors[names[i]] || [];
       out.push({ street: names[i], number: typed.number, kind: 'outside',
-                 where: where });
+                 where: jurisdictions.map(jurisdictionLabel),
+                 jurisdictions: jurisdictions });
     }
     return out;
   }
 
   // Picking one of those is an answer, not a failure: it says which
-  // jurisdiction the street is in and who to ask there. The address stays in
-  // the box, because it is a real address and the reader typed it correctly.
+  // jurisdiction the street is in and what to do instead. The address stays
+  // in the box, because it is a real address and the reader typed it
+  // correctly.
   function chooseOutside(item) {
-    var where = item.where && item.where.length
-      ? (item.where.length === 1 ? esc(item.where[0])
-         : esc(item.where.slice(0, -1).join(', ')) + ' or ' +
-           esc(item.where[item.where.length - 1]))
-      : 'another jurisdiction';
     setHint('');
-    showError('That address is in ' + where + ', which this tool does not ' +
-      'have an address index for, so it cannot say where you vote. The ' +
-      'Michigan Voter Information Center at mvic.sos.state.mi.us will have ' +
-      'your polling place.');
+    showError(unansweredStreet(item.jurisdictions || []));
   }
 
-  // Most of the "Grand Rapids" postal area is not the City of Grand Rapids.
-  // More than half the road segments carrying a Grand Rapids ZIP sit in
-  // Wyoming, Kentwood, Walker, East Grand Rapids or Grand Rapids CHARTER
-  // TOWNSHIP, which shares the city's name and confuses everyone. Those
-  // residents vote somewhere this tool does not cover, and telling them "no
-  // street matches" reads as a broken tool rather than an honest limit.
+  // What to say about a street the address list cannot answer, by the
+  // jurisdictions it is in. It used to say "this tool does not have an
+  // address index for" every one of them, which stopped being true when the
+  // list grew from the city to the county, and told a Grand Rapids Township
+  // reader their township was not covered. Now it says so only of a
+  // jurisdiction the list really has no addresses for. For one it does, the
+  // street itself is what is missing, and a dropped pin answers from the
+  // precinct boundaries without needing an address at all.
+  function unansweredStreet(jurisdictions) {
+    var labels = jurisdictions.map(jurisdictionLabel);
+    var where = !labels.length ? 'another jurisdiction'
+      : labels.length === 1 ? esc(labels[0])
+      : esc(labels.slice(0, -1).join(', ')) + ' or ' + esc(labels[labels.length - 1]);
+    var covered = jurisdictions.some(function (j) { return P.coversJurisdiction(j); });
+    if (covered) {
+      return 'That street is in ' + where + ', but the address list this ' +
+        'tool uses has no address on it, so it cannot be looked up by ' +
+        'address. Use the pin button beside the search box and drop the ' +
+        'pin where you live, and it will find your precinct from there.';
+    }
+    return 'That address is in ' + where + ', which this tool does not ' +
+      'cover, so it cannot say where you vote. The Michigan Voter ' +
+      'Information Center at mvic.sos.state.mi.us will have your polling place.';
+  }
+
+  // Enter on text nothing in the list matches. A street the address list
+  // cannot answer gets the same explanation as picking it from the list;
+  // anything else is a spelling to check, and telling the reader which is
+  // the difference between an honest limit and a tool that looks broken.
   function missExplanation(typed) {
     // parseTyped already uppercases, collapses spaces and strips the house
     // number, which is exactly the form neighbors.json is keyed by.
@@ -1599,12 +1622,7 @@
       return 'Start with the house number, like 300 Monroe Ave NW.';
     }
     var hit = neighbors && street ? neighbors[street] : null;
-    if (hit && hit.length) {
-      var where = hit.length === 1 ? esc(hit[0])
-        : esc(hit.slice(0, -1).join(', ')) + ' or ' + esc(hit[hit.length - 1]);
-      return 'That street is in ' + where + ', which this tool does not have ' +
-        'an address index for. Your clerk is the one for ' + where + '.';
-    }
+    if (hit && hit.length) return unansweredStreet(hit);
     return 'No Kent County street matches that. Check the spelling and the ' +
       'direction, like 300 Monroe Ave NW. This tool covers Kent County, ' +
       'Michigan; an address in Ottawa, Allegan, Barry, Ionia, Montcalm or ' +
