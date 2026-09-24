@@ -35,6 +35,7 @@ import json
 import pathlib
 import re
 import sys
+import urllib.error
 import urllib.request
 import html as html_module
 
@@ -43,7 +44,26 @@ from archive import snapshot_or_note
 URL = "https://www.kentcountymi.gov/250/Drop-Box-Polling-Locations"
 CITY_URL = ("https://www.grandrapidsmi.gov/departments/clerks-office/"
             "elections/early-voting/")
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {
+    "User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)",
+    # Say what this client can read. urllib sends no Accept header at all,
+    # and the county's edge turned the first scheduled run away with a 403
+    # in 130 milliseconds -- before the request reached the page -- on the
+    # very URL check_links.mjs had read with a 200 out of the same runner
+    # pool five hours earlier. The two requests differed in their client and
+    # in this header; this is the half worth changing.
+    #
+    # It is not a disguise. The user agent above still names the project and
+    # links to it, which is what a server log needs to tell who was asking,
+    # and an Accept header states truthfully what the client can parse. The
+    # line this project does not cross is claiming to be a browser, and
+    # check_links.mjs says why: it is a lie told to someone else's server,
+    # and against these hosts it does not even work, because they fingerprint
+    # the TLS handshake. That fingerprint is the other half of the difference
+    # above, and if it turns out to be the operative one this header will not
+    # help -- in which case the run says so plainly rather than pretending.
+    "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+}
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PRECINCTS = ROOT / "site" / "data" / "precincts.json"
@@ -81,9 +101,33 @@ def iso(month_name, day, year):
 
 
 def fetch_lines(url):
+    """The page, as lines. Exits on a refusal rather than raising.
+
+    A REFUSE below means the page was read and no longer says what it used to.
+    This is the other thing, and it is worth telling apart: the page was never
+    read, because something in front of it declined to serve this client. The
+    data is not stale, the parser is not broken, and nobody needs to go
+    looking at the county's markup. Reported as a traceback the two are
+    indistinguishable to whoever opens the log.
+    """
     request = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(request, timeout=60) as response:
-        return lines_of(response.read().decode("utf-8", "replace"))
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return lines_of(response.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as err:
+        sys.exit(f"DECLINED: {url}\n"
+                 f"  answered {err.code} {err.reason} -- the page was not read "
+                 f"and nothing was written.\n"
+                 f"  This is a server declining to serve this client, not "
+                 f"evidence about the page.\n"
+                 f"  `node scripts/check_links.mjs` reaches the same URL from "
+                 f"the same kind of host; if it\n"
+                 f"  still does, the page is up and the refusal is about how "
+                 f"this script asks.")
+    except urllib.error.URLError as err:
+        sys.exit(f"DECLINED: {url}\n"
+                 f"  could not be reached ({err.reason}) -- the page was not "
+                 f"read and nothing was written.")
 
 
 def parse_city(lines):
@@ -164,9 +208,10 @@ LOOKS_LIKE_A_PLACE = re.compile(r"\d+\s+\w")
 
 
 def main():
-    request = urllib.request.Request(URL, headers=UA)
-    with urllib.request.urlopen(request, timeout=60) as response:
-        lines = lines_of(response.read().decode("utf-8", "replace"))
+    # Through fetch_lines, like the city page: the county is the fetch that
+    # actually failed, and a second spelling of the same request is a second
+    # place for the handling to be missing from.
+    lines = fetch_lines(URL)
 
     election = window = None
     for i, line in enumerate(lines):

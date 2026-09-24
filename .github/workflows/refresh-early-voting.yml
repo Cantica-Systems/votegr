@@ -100,6 +100,14 @@ jobs:
         # It also prints the election and window it found, and says so plainly
         # when that election has already passed -- which is the signal that
         # would have caught this file being a month stale.
+        #
+        # A DECLINED line is the other failure and means the opposite: the
+        # page was never read, because something in front of it turned this
+        # client away. Nothing is wrong with the data or the parser, and the
+        # county's markup does not want looking at. The first run of this
+        # job, on 2026-09-24, ended that way -- a 403 from the county's edge
+        # in 130ms, on a URL the link checker had read with a 200 out of the
+        # same runner pool five hours earlier.
         env:
           # Optional. Without them archive.org declines most captures and the
           # provenance records that honestly instead of claiming a snapshot it
