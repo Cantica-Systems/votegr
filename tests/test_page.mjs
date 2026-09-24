@@ -30,8 +30,17 @@ const TYPES = {
   '.geojson': 'application/json', '.png': 'image/png',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml',
 };
+// One block needs the calendar held still: see "one expander per card on a
+// phone" below, which is about which cards are shut and so cannot read a
+// moving date. It sets this to a map of path -> object and clears it after.
+// Null the rest of the time, so every other block reads the files that ship.
+let served = null;
 const server = createServer(async (req, res) => {
   const rel = normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
+  if (served && Object.prototype.hasOwnProperty.call(served, rel)) {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(served[rel])); return;
+  }
   const file = join(ROOT, rel === '/' ? 'index.html' : rel);
   if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
   try {
@@ -494,7 +503,60 @@ for (const w of WIDTHS) {
 // not open yet, and tapping the head opens it on the place and the detail.
 // It used to take two links under the dates -- "More" and "Show the nearest
 // drop box" -- neither of which said the section itself was shut.
+//
+// Which cards are shut is a function of TODAY, so this block serves its own
+// calendar. Dates are relative to today, the way test_early_voting_states.mjs
+// does it, so the fixture cannot rot into a fixed one. It has to pin two
+// files, not one: app.js takes the early voting window from gr-clerk.json
+// whenever that file names the active election (clerkForThisElection), and
+// falls back to elections.json only when it does not, so pinning the
+// calendar alone would leave the early card reading a real date.
+//
+// 60 days out is the number that matters. ABSENTEE_LEAD_DAYS is 40 in
+// app.js, so an election further out than that has not reached its absentee
+// window and the drop box card is reliably shut. Read from the live
+// calendar this block passed until 2026-09-24 and failed from then on: the
+// November election came within 40 days, the drop box card rendered
+// expanded, and the tap below closed it instead of opening it, which took
+// four assertions down at once.
+const iso = (d) => {
+  const x = new Date(); x.setDate(x.getDate() + d);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+};
+const shiftDate = (d, by) => {
+  const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + by);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+};
+const dayGap = (a, b) =>
+  Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
 {
+  const ELECTION_DAY = iso(60);
+  const realElections = JSON.parse(await readFile(join(ROOT, 'data/elections.json'), 'utf8'));
+  const realClerk = JSON.parse(await readFile(join(ROOT, 'data/gr-clerk.json'), 'utf8'));
+  // Every date in the clerk's file moves by the same amount, so the window,
+  // the per-day hours and the election it names stay consistent with each
+  // other rather than being three separately invented dates.
+  const by = dayGap(realClerk.election, ELECTION_DAY);
+  const clerk = JSON.parse(JSON.stringify(realClerk));
+  clerk.election = ELECTION_DAY;
+  clerk.early_voting.from = shiftDate(realClerk.early_voting.from, by);
+  clerk.early_voting.to = shiftDate(realClerk.early_voting.to, by);
+  clerk.early_voting.days = realClerk.early_voting.days.map(
+    (d) => ({ ...d, date: shiftDate(d.date, by) }));
+  // The real general election, moved, rather than an invented one: it keeps
+  // whatever sites and hours ship with it.
+  const general = realElections.elections[realElections.elections.length - 1];
+  served = {
+    '/data/elections.json': {
+      election_day_hours: realElections.election_day_hours,
+      elections: [{ ...general, date: ELECTION_DAY,
+                    early_voting_from: clerk.early_voting.from,
+                    early_voting_to: clerk.early_voting.to }],
+    },
+    '/data/gr-clerk.json': clerk,
+  };
   const ctx = await browser.newContext({ ...devices['Pixel 7'] });
   const page = await ctx.newPage();
   await page.goto(URL_, { waitUntil: 'networkidle' });
@@ -780,6 +842,7 @@ for (const w of WIDTHS) {
   });
   ok('an open card is not painted in the accent', !noBlue.paint.includes(noBlue.rgb));
   await ctx.close();
+  served = null;
 }
 
 // --- the About sheet closes with who made it ---
