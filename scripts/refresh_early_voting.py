@@ -47,21 +47,28 @@ CITY_URL = ("https://www.grandrapidsmi.gov/departments/clerks-office/"
 UA = {
     "User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)",
     # Say what this client can read. urllib sends no Accept header at all,
-    # and the county's edge turned the first scheduled run away with a 403
-    # in 130 milliseconds -- before the request reached the page -- on the
-    # very URL check_links.mjs had read with a 200 out of the same runner
-    # pool five hours earlier. The two requests differed in their client and
-    # in this header; this is the half worth changing.
+    # which is a gap worth closing on its own: a client asking for a document
+    # should state what it can parse, and every other client does.
     #
-    # It is not a disguise. The user agent above still names the project and
-    # links to it, which is what a server log needs to tell who was asking,
-    # and an Accept header states truthfully what the client can parse. The
-    # line this project does not cross is claiming to be a browser, and
-    # check_links.mjs says why: it is a lie told to someone else's server,
-    # and against these hosts it does not even work, because they fingerprint
-    # the TLS handshake. That fingerprint is the other half of the difference
-    # above, and if it turns out to be the operative one this header will not
-    # help -- in which case the run says so plainly rather than pretending.
+    # It was added for a worse reason, and the reason turned out to be wrong.
+    # The county's edge refused the first scheduled run with a 403 in 130
+    # milliseconds, on a URL check_links.mjs had read with a 200 five hours
+    # earlier, and the missing Accept header was the visible difference
+    # between the two requests. It was not the operative one. Adding it
+    # changed nothing -- 403 again -- and running the link checker again
+    # immediately afterwards found it now gets 403 from that host too, on
+    # both county URLs. Node and Python, with the header and without.
+    #
+    # So the county began refusing this project somewhere between 00:21 and
+    # 05:09 UTC on 2026-09-24, and none of it was ever about how this script
+    # asks. The mistake was comparing two requests five hours apart and
+    # treating the gap as immaterial; the server had changed underneath.
+    #
+    # The header stays because it is correct, not because it helps. What is
+    # NOT done, here or anywhere in this project, is claiming to be a browser
+    # to get past that refusal -- check_links.mjs states the reasoning, and a
+    # server that has decided it does not want scripted readers has decided
+    # it, whether or not a lie would work.
     "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
 }
 
@@ -120,10 +127,14 @@ def fetch_lines(url):
                  f"and nothing was written.\n"
                  f"  This is a server declining to serve this client, not "
                  f"evidence about the page.\n"
-                 f"  `node scripts/check_links.mjs` reaches the same URL from "
-                 f"the same kind of host; if it\n"
-                 f"  still does, the page is up and the refusal is about how "
-                 f"this script asks.")
+                 f"  `node scripts/check_links.mjs` reads the same URL from "
+                 f"the same kind of host, so it\n"
+                 f"  tells you which this is: a 200 there means the page is "
+                 f"up and the refusal is about\n"
+                 f"  how this script asks; a 403 there too means the host has "
+                 f"stopped answering us at all,\n"
+                 f"  which is where it stood on 2026-09-24 and is not "
+                 f"something this script can fix.")
     except urllib.error.URLError as err:
         sys.exit(f"DECLINED: {url}\n"
                  f"  could not be reached ({err.reason}) -- the page was not "

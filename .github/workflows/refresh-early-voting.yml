@@ -104,10 +104,26 @@ jobs:
         # A DECLINED line is the other failure and means the opposite: the
         # page was never read, because something in front of it turned this
         # client away. Nothing is wrong with the data or the parser, and the
-        # county's markup does not want looking at. The first run of this
-        # job, on 2026-09-24, ended that way -- a 403 from the county's edge
-        # in 130ms, on a URL the link checker had read with a 200 out of the
-        # same runner pool five hours earlier.
+        # county's markup does not want looking at.
+        #
+        # AS OF 2026-09-24 THIS JOB CANNOT SUCCEED, and the weekly run is
+        # expected to be red until that changes. The county's edge began
+        # answering 403 to this project somewhere between 00:21 and 05:09
+        # UTC that day, on both of the kentcountymi.gov URLs the project
+        # reads. Not a datacentre block that a different runner would dodge,
+        # not the user agent, not the request headers, and not Python: the
+        # link checker, which had read the page with a 200 that morning,
+        # gets the same 403 from the same pool minutes after the refresh
+        # does. Nothing here asks it differently; they stopped answering.
+        #
+        # Getting past that would mean pretending to be a browser, which
+        # this project does not do -- scripts/check_links.mjs sets out the
+        # reasoning. So the honest options are to ask the county for a
+        # feed or for their edge to let a named client through, to read the
+        # page from somewhere they do not refuse, or to let the weekly run
+        # keep saying DECLINED until one of those happens. A red run that
+        # names the reason is the point; a green one that quietly checked
+        # nothing is what this whole job exists to prevent.
         env:
           # Optional. Without them archive.org declines most captures and the
           # provenance records that honestly instead of claiming a snapshot it
