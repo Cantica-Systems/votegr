@@ -1399,14 +1399,28 @@ ol.steps .scam {
 }
 .modal-body h3:first-child { margin-top: 0; }
 /* The numbered reasons. Numerals rather than bullets because the list is an
-   argument in three parts, and being able to say "reason 2" is useful. */
+   argument in two parts, and being able to say "reason 2" is useful. */
 .why-list { margin: 0; padding-left: 22px; }
+/* Each reason leads with its claim and argues it underneath. The claim was
+   a bolded run-on at the head of the paragraph, which made a reader wade
+   into the argument to find out where the claim ended; as a heading it can
+   be read on its own, and the two reasons scan without being read. Full
+   ink and only a little larger than the prose, because these are whole
+   sentences rather than labels and a display size would wrap them badly. */
+.why-list h4 {
+  margin: 0 0 8px; font-size: 1.05rem; font-weight: 600; line-height: 1.4;
+  color: var(--fg);
+}
+.why-list p { margin: 0 0 10px; }
+.why-list p:last-child { margin-bottom: 0; }
 /* The state's own words, set apart as a quotation and not restyled into ours. */
 .why-list blockquote {
   margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--line);
   color: var(--dim); font-size: .92rem; line-height: 1.55;
 }
-.why-list li { margin-bottom: 10px; }
+/* Wider than the gap between paragraphs inside a reason, so the break
+   between the two reasons is the bigger one. */
+.why-list li { margin-bottom: 20px; }
 .why-list li:last-child { margin-bottom: 0; }
 /* Standfirst under the About header. Full-strength ink, not dim: it is the
    page's claim, not a caption. Its sibling rule restores the heading rhythm
