@@ -5,7 +5,7 @@ Live at [votegr.org](https://votegr.org).
 Type any address in Kent County Michigan (which includes the City of Grand Rapids), or drop a pin, and get your precinct, your ward
 (if applicable), where you vote, where to return an absentee ballot, and a driving route there that avoids the license plate readers we know about.
 
-It covers every city and township in the county: 30 jurisdictions, 202 precincts, and 234 known plate readers, all loaded once and held in the
+It covers every city and township in the county: 30 jurisdictions, 202 precincts, and 200+ known plate readers, all the data is loaded once and held in the
 browser, so a lookup or a route anywhere in the county needs nothing further from the network.
 
 **Nothing you type leaves your browser.** Everything is rendered on your device.
@@ -17,8 +17,9 @@ the State of Michigan. The Michigan Voter Information Center is still the offici
 
 Two reasons:
 
-1. **Finding out where you vote should not require identifying yourself.** The
-state's Michigan Voter Information Center is accurate and it is the official
+1. **Finding out where you vote should not require identifying yourself.**
+
+The state's Michigan Voter Information Center is accurate and it is the official
 source, but it asks for your name, your birth month and year, and your
 registration ZIP before it will tell you your ward and precinct, and every
 lookup runs on its servers. The notice you agree to on that form says, in
@@ -42,9 +43,7 @@ full:
    hands.
 
 2. **Driving to perform a constitutionally protected activity shouldn't be surveilled.**
-Kent County has automated license plate readers on traffic signals and utility poles, in Grand Rapids and well beyond it. They photograph
-every passing vehicle, perform OCR, and store it with the time and place, whether or not anyone suspects you of anything, and can alert officers in realtime of a flagged vehicle. The records are also searchable later, and many systems let agencies search across each other's networks. 
-
+   
 ## Inventory
 
 Copy the `site` folder to any web host and it works.
