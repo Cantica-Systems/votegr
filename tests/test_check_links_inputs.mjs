@@ -24,7 +24,7 @@
 // which is exactly the part that can run here, on the pull request that does
 // the renaming. The checker no longer dies on a path that moved -- it reports
 // it and carries on -- but reporting it weekly is still a week late.
-import { TEXT_FILES, DATA_FILES, collect } from '../scripts/check_links.mjs';
+import { TEXT_FILES, DATA_FILES, collect, isSource } from '../scripts/check_links.mjs';
 
 let fails = 0;
 const ok = (n, c, d = '') => { console.log((c ? '  ok   ' : '  FAIL ') + n + (c ? '' : '  ' + d)); if (!c) fails++; };
@@ -45,6 +45,36 @@ ok(`the checker can read all ${TEXT_FILES.length + DATA_FILES.length} files it n
 // same silent no-op the missing file caused, arrived at from the other side.
 ok('and found links in them', foundIn.size > 0,
    'every file read, and not one URL came out');
+
+// --- the split the run reports by --------------------------------------
+// Sources and page links are reported apart because they fail differently:
+// a page link that rots is a reader hitting a 404, a source that rots is the
+// provenance of the data no longer resolving. The split is only worth having
+// if every link lands on the right side of it.
+//
+// site/data/sources.json is the one file easy to get wrong. It lives in
+// TEXT_FILES, beside the pages, and nothing but isSource() says it is
+// provenance -- so it is spelled out here in full rather than read from the
+// constant, which is the point: if the name in the list and the name the
+// classifier knows ever drift apart, the registry's links quietly become
+// page links and the split stops meaning anything.
+ok('the registry counts as a source', isSource('site/data/sources.json'));
+ok('and so does every data file', DATA_FILES.every(isSource),
+   DATA_FILES.filter(f => !isSource(f)).join(', '));
+const PAGES = TEXT_FILES.filter(f => f !== 'site/data/sources.json');
+ok('while the docs and pages do not', !PAGES.some(isSource),
+   PAGES.filter(isSource).join(', '));
+
+const all = [...foundIn.keys()];
+const src = all.filter(u => foundIn.get(u).some(isSource));
+const page = all.filter(u => !foundIn.get(u).some(isSource));
+ok('every link is a source or a page link, never both and never neither',
+   src.length + page.length === all.length &&
+   new Set([...src, ...page]).size === all.length);
+// A classifier that answered the same way every time would pass the line
+// above and report one empty heading every week.
+ok('and neither group is empty', src.length > 0 && page.length > 0,
+   `sources=${src.length} pages=${page.length}`);
 
 console.log(`\n${fails === 0 ? 'check_links inputs: all passed' : fails + ' FAILED'}`);
 process.exit(fails ? 1 : 0);

@@ -23,6 +23,11 @@ import { join } from 'path';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
+// The registry of every source the site reads. Named here because both the
+// scan list below and isSource() need it, and a second spelling of it is a
+// second thing to leave stale.
+const SOURCES_REGISTRY = 'site/data/sources.json';
+
 // Text files scanned for anything that looks like a URL. The Python scripts
 // are left out on purpose: they assemble their endpoint URLs from fragments
 // across several lines, and the data files' provenance blocks carry the
@@ -41,8 +46,17 @@ export const TEXT_FILES = [
   // when the live page rots and so is worth knowing about. Moving this name
   // into DATA_FILES would silently stop checking all of them, because that
   // loop reads one block and this file has no such block.
-  'site/data/sources.json',
+  SOURCES_REGISTRY,
 ];
+
+// Which files make a URL a SOURCE rather than a page link: the registry and
+// every data file's provenance block. The two answer different questions, so
+// the run reports them apart. A page link that rots is a reader clicking
+// through to a 404. A source that rots is the provenance of the data itself
+// no longer resolving -- the endpoint a refresh script pulls from, or the
+// citation for a row on screen -- which is the more serious of the two and
+// was, until now, buried in one alphabetical list with the rest.
+export const isSource = f => f === SOURCES_REGISTRY || DATA_FILES.includes(f);
 
 // Data files whose provenance block names where the data came from. Only
 // that block is read; the rest is coordinates and house numbers. Every
@@ -177,9 +191,21 @@ async function check(url) {
 // stops being checked, and only a red run gets that fixed. So it is counted
 // and it sets the exit code, at the end, after the links have been reported.
 export async function collect() {
-  const foundIn = new Map();   // url -> the first file it was seen in
+  // url -> every file it was seen in, in scan order. Every, not the first:
+  // a URL can be both a page link and a source -- mvic.sos.state.mi.us is
+  // linked from index.html AND cited in the registry -- and first-seen alone
+  // would file it under whichever list happened to be scanned first. It also
+  // means a GONE line can name every place the dead link has to be fixed
+  // rather than one of them.
+  const foundIn = new Map();   // url -> [file, ...]
   const unreadable = [];       // [file, why], for the ones that are gone or broken
-  const note = (list, file) => { for (const u of list) if (!foundIn.has(u)) foundIn.set(u, file); };
+  const note = (list, file) => {
+    for (const u of list) {
+      if (!foundIn.has(u)) foundIn.set(u, []);
+      const seen = foundIn.get(u);
+      if (seen[seen.length - 1] !== file) seen.push(file);
+    }
+  };
   // A missing file is the case worth naming plainly. A data file whose JSON
   // no longer parses lands here too, from JSON.parse rather than readFile,
   // and it is the same problem: this script can no longer read something it
@@ -204,6 +230,16 @@ async function main() {
   const { foundIn, unreadable } = await collect();
   const urls = [...foundIn.keys()].sort();
   const lost = unreadable.length;
+  // Two groups, reported apart, because they fail differently. A URL cited
+  // as provenance anywhere counts as a source even when a page links it too:
+  // of the two ways it can matter, that is the one worth reading first.
+  const where = u => foundIn.get(u).join(', ');
+  const GROUPS = [
+    ['Sources -- where the data came from',
+     urls.filter(u => foundIn.get(u).some(isSource))],
+    ['Page links -- what the docs and pages point at',
+     urls.filter(u => !foundIn.get(u).some(isSource))],
+  ];
   const alsoLost = lost ? `, and ${lost} file${lost === 1 ? '' : 's'} it could not read` : '';
 
   // Printed before anything else, because it says the set below is short.
@@ -211,8 +247,12 @@ async function main() {
   if (lost) console.log('');
 
   if (process.argv.includes('--list')) {
-    for (const u of urls) console.log(`${u}  (${foundIn.get(u)})`);
-    console.log(`\n${urls.length} links${alsoLost}`);
+    for (const [heading, group] of GROUPS) {
+      console.log(`${heading}  (${group.length})`);
+      for (const u of group) console.log(`  ${u}  (${where(u)})`);
+      console.log('');
+    }
+    console.log(`${urls.length} links${alsoLost}`);
     return lost ? 1 : 0;
   }
 
@@ -221,25 +261,39 @@ async function main() {
   // not a failure, but the destination is printed, because a page that now
   // bounces to a generic front door has rotted just as surely as a 404, and
   // that is a judgement for a person reading the run.
+  // Sources first, and each group's results printed as they arrive rather
+  // than collected and sorted at the end: a run that dies halfway should
+  // still have said what it learned.
   const counts = { ok: 0, unverifiable: 0, rotted: 0 };
-  for (const u of urls) {
-    const r = await check(u);
-    const bucket = classify(r);
-    counts[bucket]++;
-    const what = r.status || r.error;
-    if (bucket === 'ok') {
-      const moved = r.finalUrl && noSlash(r.finalUrl) !== noSlash(u) ? `  -> ${r.finalUrl}` : '';
-      console.log(`  ok   ${what}  ${u}${moved}`);
-    } else if (bucket === 'unverifiable') {
-      console.log(`  ??   ${what}  ${u}  (answered, page not verifiable)`);
-    } else {
-      console.log(`  GONE ${what}  ${u}  (${foundIn.get(u)})`);
+  const tallies = [];
+  for (const [heading, group] of GROUPS) {
+    const sub = { ok: 0, unverifiable: 0, rotted: 0 };
+    console.log(`${heading}  (${group.length})`);
+    for (const u of group) {
+      const r = await check(u);
+      const bucket = classify(r);
+      counts[bucket]++; sub[bucket]++;
+      const what = r.status || r.error;
+      if (bucket === 'ok') {
+        const moved = r.finalUrl && noSlash(r.finalUrl) !== noSlash(u) ? `  -> ${r.finalUrl}` : '';
+        console.log(`  ok   ${what}  ${u}${moved}`);
+      } else if (bucket === 'unverifiable') {
+        console.log(`  ??   ${what}  ${u}  (answered, page not verifiable)`);
+      } else {
+        console.log(`  GONE ${what}  ${u}  (${where(u)})`);
+      }
+      await sleep(SPACING_MS);
     }
-    await sleep(SPACING_MS);
+    tallies.push([heading.split(' -- ')[0], group.length, sub]);
+    console.log('');
   }
 
-  console.log(`\n${urls.length} links: ${counts.ok} ok, ` +
+  console.log(`${urls.length} links: ${counts.ok} ok, ` +
               `${counts.unverifiable} unverifiable, ${counts.rotted} gone${alsoLost}`);
+  for (const [name, n, sub] of tallies) {
+    console.log(`  ${(name + ':').padEnd(13)}${String(n).padStart(3)} links: ` +
+                `${sub.ok} ok, ${sub.unverifiable} unverifiable, ${sub.rotted} gone`);
+  }
   if (counts.unverifiable && !counts.rotted && !lost) {
     console.log('Unverifiable is not a failure. Those servers declined to answer a ' +
                 'non-browser client; the pages are worth an eye, not a red run.');
