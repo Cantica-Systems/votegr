@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Released into the public domain under the Unlicense, see UNLICENSE.
 """Regenerate site/data/precincts.geojson from the State of Michigan layer.
 

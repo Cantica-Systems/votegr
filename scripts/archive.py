@@ -28,6 +28,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import date
 
 from useragent import USER_AGENT
 
@@ -133,7 +134,6 @@ def existing(url):
 def _age_days(timestamp, today):
     """Days between a Wayback timestamp (YYYYMMDDhhmmss) and a date."""
     try:
-        from datetime import date
         stamp = date(int(timestamp[0:4]), int(timestamp[4:6]), int(timestamp[6:8]))
     except Exception:
         return None
@@ -148,7 +148,6 @@ def snapshot(url):
     reading a log: a run that archived nothing is a run whose sources had all
     been captured this week already.
     """
-    from datetime import date
     today = date.today()
 
     # One lookup serves both questions: is there a recent enough capture to
@@ -202,7 +201,6 @@ def cite(url):
     uselessness. So a bulk caller cites what exists and leaves the asking to
     the one-page sources.
     """
-    from datetime import date
     # With keys, bulk stops being a reason to hold back: SPN2's own
     # if_not_archived_within does the deduplicating server-side, so thirty
     # pages cost thirty cheap no-ops on a run where nothing has changed.
@@ -233,7 +231,6 @@ def snapshot_or_note(url):
     shows what we read, when it shows a different version of the page. The
     timestamp is always written down, and a stale one says so.
     """
-    from datetime import date
     result = snapshot(url)
     if not result:
         return {"archived": None,

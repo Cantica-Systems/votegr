@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Released into the public domain under the Unlicense, see UNLICENSE.
 """Regenerate the per-jurisdiction address chunks under site/data/addresses/.
 

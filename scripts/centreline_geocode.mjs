@@ -14,10 +14,14 @@
 // Writes {key: {lat, lng, street}} on stdout, omitting anything it cannot place.
 import { readFileSync, existsSync } from 'fs';
 import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
 
+// Paths from the repository root, found from this file's own location like
+// the other node tools here, so it does not matter where it is started.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const require = createRequire(import.meta.url);
-const R = require(process.cwd() + '/site/router.js');
-const CHUNKS = process.cwd() + '/site/data/graph';
+const R = require(ROOT + 'site/router.js');
+const CHUNKS = ROOT + 'site/data/graph';
 
 const wanted = JSON.parse(readFileSync(0, 'utf8'));
 
