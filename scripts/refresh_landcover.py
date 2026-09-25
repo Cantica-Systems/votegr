@@ -51,8 +51,14 @@ def query(ql):
                 "Content-Type": "application/x-www-form-urlencoded"})
             with urllib.request.urlopen(req, timeout=240) as r:
                 j = json.loads(r.read().decode())
-            if "remark" in j and "timed out" in j["remark"].lower():
-                time.sleep(3); continue
+            # A partial answer still arrives as HTTP 200, with a 'remark': a
+            # timeout, a truncation, or another runtime error such as running
+            # out of memory. Any of them means the elements are incomplete.
+            remark = str(j.get("remark") or "").lower()
+            if any(s in remark for s in ("runtime error", "timed out", "truncated")):
+                print(f"    incomplete: {j['remark']!r}")
+                time.sleep(3)
+                continue
             return j
         except Exception as e:  # noqa: BLE001
             print(f"    failed: {e}")

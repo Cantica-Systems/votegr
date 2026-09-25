@@ -152,8 +152,11 @@ def fetch_result():
                     print(f"  429: waiting the {told}s it asked for")
                 time.sleep(told if told else ENDPOINT_PAUSE_S)
                 continue
-            if "remark" in j and ("timed out" in j["remark"].lower()
-                                  or "truncated" in j["remark"].lower()):
+            # A partial answer still arrives as HTTP 200, with a 'remark': a
+            # timeout, a truncation, or another runtime error such as running
+            # out of memory. Any of them means the elements are incomplete.
+            remark = str(j.get("remark") or "").lower()
+            if any(s in remark for s in ("runtime error", "timed out", "truncated")):
                 print(f"  REMARK signals truncation: {j['remark']!r}; next endpoint")
                 time.sleep(ENDPOINT_PAUSE_S)
                 continue

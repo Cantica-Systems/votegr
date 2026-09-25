@@ -53,10 +53,21 @@ def query(ql):
             request = urllib.request.Request(
                 endpoint, data=data, headers={"User-Agent": UA})
             with urllib.request.urlopen(request, timeout=180) as response:
-                return json.loads(response.read().decode("utf-8"))
+                answer = json.loads(response.read().decode("utf-8"))
         except Exception as exc:                     # try the next mirror
             last = exc
             print(f"    failed: {exc}", flush=True)
+            continue
+        # A partial answer still arrives as HTTP 200, with a 'remark': a
+        # timeout, a truncation, or another runtime error such as running out
+        # of memory. Any of them means some nodes are missing, and the batch
+        # would quietly lose their restrictions, so try the next mirror.
+        remark = str(answer.get("remark") or "").lower()
+        if any(s in remark for s in ("runtime error", "timed out", "truncated")):
+            last = f"remark {answer['remark']!r}"
+            print(f"    incomplete: {answer['remark']!r}", flush=True)
+            continue
+        return answer
     raise SystemExit(f"every Overpass endpoint failed, last: {last}")
 
 
