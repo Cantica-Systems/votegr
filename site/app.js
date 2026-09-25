@@ -34,9 +34,10 @@
   // party on every pan, which is the one thing that stopped this page being
   // able to say nothing leaves your browser. The basemap is drawn from files
   // the page already holds; see basemap.js.
-  // Kept to one line: the map is now a card rather than the whole screen, and
-  // a two-line attribution ate the bottom of it. Both sources are still named.
-  var ATTR = 'Roads: City of Grand Rapids · ' +
+  // The roads are the REGIS/Kent County street centerlines, whichever
+  // server happens to host them. Kept to one line: on a card-sized map a
+  // two-line attribution eats the bottom of it.
+  var ATTR = 'Roads: Kent County (REGIS) · ' +
              '\u00a9 OpenStreetMap contributors (ODbL)';
 
   function $(id) { return document.getElementById(id); }
