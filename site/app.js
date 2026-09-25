@@ -110,14 +110,19 @@
   }
 
   // ---- about modal -----------------------------------------------------
+
+  // Show a sheet with focus on its close button, so a keyboard lands inside
+  // it rather than behind it. Shared by the About panel and the place list.
+  function openModal(wrap) {
+    wrap.hidden = false;
+    var x = wrap.querySelector('.modal-x');
+    if (x) x.focus();
+  }
+
   function initAbout() {
     var wrap = $('aboutModal');
     if (!wrap) return;
-    function open() {
-      wrap.hidden = false;
-      var x = wrap.querySelector('.modal-x');
-      if (x) x.focus();
-    }
+    function open() { openModal(wrap); }
     function close() { wrap.hidden = true; }
 
     // The footer About is the only opener now; the header carries just the
@@ -310,10 +315,12 @@
     return ward + d.precinct;
   }
 
+  // Plain text: the status bar sets it as textContent, and the detail card
+  // escapes it like any other title.
   function placeLine(pr) {
-    return (pr.jurisdiction ? esc(pr.jurisdiction) + ' \u00b7 ' : '') +
-      (pr.ward != null && pr.ward !== '' ? 'Ward ' + esc(pr.ward) + ' \u00b7 ' : '') +
-      'Precinct ' + esc(pr.precinct);
+    return (pr.jurisdiction ? pr.jurisdiction + ' \u00b7 ' : '') +
+      (pr.ward != null && pr.ward !== '' ? 'Ward ' + pr.ward + ' \u00b7 ' : '') +
+      'Precinct ' + pr.precinct;
   }
 
   // One builder for "what precinct is this", fed by both input worlds:
@@ -362,9 +369,7 @@
       btn.onclick = function () {
         title.textContent = listTitle(kind);
         body.innerHTML = placeListHtml(kind, opt);
-        wrap.hidden = false;
-        var x = wrap.querySelector('.modal-x');
-        if (x) x.focus();
+        openModal(wrap);
       };
     });
 
@@ -402,18 +407,7 @@
         (b.entrance_note || b.note
           ? '<span class="bx-where"><span class="pp-loc-l">Location:</span> ' +
             esc(sentenceCase(b.entrance_note || b.note)) + '</span>' : '') +
-        // "Open 24/7" is a whole sentence; a bare "Mon-Fri, 8am to 5pm" is not,
-        // and next to an address it can be read as the hours of the building
-        // rather than of the box. The label says which.
-        (b.office
-          ? '<span class="bx-hours-odd">' + officeHours() + '</span>' +
-            (b.phone ? '<span class="bx-addr">' + esc(b.phone) + '</span>' : '')
-          : b.hours
-          ? '<span class="' + (ALWAYS_OPEN.test(b.hours) ? 'bx-hours' : 'bx-hours-odd') +
-            '">' + (ALWAYS_OPEN.test(b.hours) ? 'Open 24/7'
-                                              : 'Open hours: ' + esc(b.hours)) + '</span>'
-          : '') +
-
+        boxHoursHtml(b, 'span', { open: 'bx-hours', phone: 'bx-addr' }) +
         '</li>';
     });
     // The City Hall boxes are real and cannot be driven to as an address, so
@@ -513,21 +507,15 @@
     return { head: head, fold: fold };
   }
 
-  // A drop box is only useful once there is a ballot to put in it, and the
-  // dates for that are statute, not something a clerk publishes per box.
-  // Michigan sends absentee ballots to voters 40 days before an election, and
-  // a returned ballot must be in hand by the time the polls close. So a box
-  // standing open in September accepts nothing, and the page should say that
-  // rather than list an address as though it were ready.
-  var ABSENTEE_LEAD_DAYS = 40;
-
+  // A drop box is only useful once there is a ballot to put in it, and a
+  // returned ballot must be in hand by the time the polls close. Both ends
+  // are statute (Elections.absenteeFrom has the first), not something a
+  // clerk publishes per box. So a box standing open in September accepts
+  // nothing, and the page should say that rather than list an address as
+  // though it were ready.
   function absenteeState() {
     if (!activeEl) return { label: 'Ballot drop box', status: 'No election scheduled' };
-    var start = Elections.dayStart(activeEl.date);
-    start.setDate(start.getDate() - ABSENTEE_LEAD_DAYS);
-    var from = start.getFullYear() + '-' +
-      String(start.getMonth() + 1).padStart(2, '0') + '-' +
-      String(start.getDate()).padStart(2, '0');
+    var from = Elections.absenteeFrom(activeEl);
     var range = Elections.dayMonth(from) + ' to ' + Elections.dayMonth(activeEl.date);
     var today = Elections.todayISO();
     if (today < from) {
@@ -674,15 +662,24 @@
     return displayCase(String(a || '').replace(/,\s*\d{5}(-\d{4})?\s*$/, ''));
   }
 
+  // The detail a place opens, in a popup or in the card under the map: what
+  // it is, its name, its address and the entrance note, then whatever the
+  // caller adds. One builder for every kind of place, so they read alike.
+  function placePopup(title, name, p, extra) {
+    return '<div class="destpop">' +
+      '<div class="dt">' + esc(title) + '</div>' +
+      '<div class="dn">' + esc(name) + '</div>' +
+      '<div class="da">' + esc(addressForDisplay(p.address)) + '</div>' +
+      (p.entrance_note ? '<div class="de">' + esc(p.entrance_note) + '</div>' : '') +
+      (extra || '') + '</div>';
+  }
+
   function precinctInfoHtml(pr) {
     var place = P && P.pollingPlace(P.idOf(pr));
-    return '<div class="destpop">' +
-      '<div class="dt">' + placeLine(pr) + '</div>' +
-      (place ? '<div class="dn">' + esc(displayCase(place.name)) + '</div>' +
-               '<div class="da">' + esc(addressForDisplay(place.address)) + '</div>' +
-               (place.entrance_note ? '<div class="de">' + esc(place.entrance_note) + '</div>' : '')
-             : '<div class="da">No polling place on file.</div>') +
-      '</div>';
+    return place
+      ? placePopup(placeLine(pr), displayCase(place.name), place)
+      : '<div class="destpop"><div class="dt">' + esc(placeLine(pr)) + '</div>' +
+        '<div class="da">No polling place on file.</div></div>';
   }
 
   // Marker detail opens AT the marker on hover-capable devices, and in the
@@ -1100,7 +1097,7 @@
       out.geocode = { street: hit.street, exact: hit.exact, edge: hit.edge };
       out.how = hit.exact ? 'centreline, exact range' : 'centreline, interpolated';
     }
-    var pr = P.precinctAt(out.lat, out.lng, precincts);
+    var pr = precinctAt(out.lat, out.lng);
     out.precinct = pr ? { code: pr.code, jurisdiction: pr.jurisdiction, ward: pr.ward,
                           precinct: pr.precinct } : null;
     var snap = graph.snapToRoad(out.lat, out.lng);
@@ -1310,12 +1307,8 @@
         zIndexOffset: isActive ? 500 : 300, keyboard: false, riseOnHover: true
       }).addTo(pollLayer);
       bindDetail(m, function () {
-        return '<div class="destpop">' +
-          '<div class="dt">Polling place</div>' +
-          '<div class="dn">' + esc(displayCase(pl.name)) + '</div>' +
-          '<div class="da">' + esc(addressForDisplay(pl.address)) + '</div>' +
-          (pl.entrance_note ? '<div class="de">' + esc(pl.entrance_note) + '</div>' : '') +
-          precinctLines(atThisSpot) + '</div>';
+        return placePopup('Polling place', displayCase(pl.name), pl,
+                          precinctLines(atThisSpot));
       }, 280);
     });
   }
@@ -1340,14 +1333,10 @@
           icon: siteIcon(opt.kind, isPick),
           zIndexOffset: isPick ? 450 : 250, keyboard: false, riseOnHover: true
         }).addTo(siteLayer);
-        bindDetail(m, '<div class="destpop">' +
-          '<div class="dt">' + (opt.kind === 'early' ? 'Early voting site'
-                                                     : 'Absentee ballot drop box') + '</div>' +
-          '<div class="dn">' + esc(boxLabel(place)) + '</div>' +
-          '<div class="da">' + esc(addressForDisplay(place.address)) + '</div>' +
-          (place.entrance_note ? '<div class="de">' + esc(place.entrance_note) + '</div>' : '') +
-          (place.hours ? '<div class="dw">' + esc(place.hours) + '</div>' : '') +
-          '</div>', 280);
+        bindDetail(m, placePopup(
+          opt.kind === 'early' ? 'Early voting site' : 'Absentee ballot drop box',
+          boxLabel(place), place,
+          place.hours ? '<div class="dw">' + esc(place.hours) + '</div>' : ''), 280);
       });
     });
   }
@@ -1767,17 +1756,7 @@
       '<div class="pp-addr">' +
       (box.place.address ? esc(addressForDisplay(box.place.address)) : '') +
       '</div>' +
-      metaBlock([
-        locLine(box.place.note),
-        box.place.office
-          ? '<div class="bx-hours-odd">' + officeHours() + '</div>' +
-            (box.place.phone ? '<div>' + esc(box.place.phone) + '</div>' : '')
-          : box.place.hours
-          ? (ALWAYS_OPEN.test(box.place.hours)
-              ? '<div>Open 24/7</div>'
-              : '<div class="bx-hours-odd">Open hours: ' + esc(box.place.hours) + '</div>')
-          : ''
-      ]) +
+      metaBlock([locLine(box.place.note), boxHoursHtml(box.place, 'div', {})]) +
       // One office is not a list to show all of.
       actionRow('dropbox', box.place.office ? '' :
         '<button type="button" class="box-open" id="boxListBtn">' +
@@ -2325,14 +2304,8 @@
     }
 
     if (label) label.textContent = 'Election Day is In:';
-    var s = Math.floor(left / 1000);
-    var days = Math.floor(s / 86400); s -= days * 86400;
-    var hrs = Math.floor(s / 3600); s -= hrs * 3600;
-    var mins = Math.floor(s / 60); s -= mins * 60;
-
-    clock.innerHTML =
-      unit(days, 'Days', false) + unit(hrs, 'Hours', true) +
-      unit(mins, 'Minutes', true) + unit(s, 'Seconds', true);
+    var days = Math.floor(left / 86400000);
+    clock.innerHTML = unit(days, 'Days', false) + hms(left - days * 86400000);
 
     if (note) note.innerHTML = noteLine();
     if (said) said.textContent = days + (days === 1 ? ' day' : ' days') +
@@ -2428,13 +2401,27 @@
     }];
   }
 
-  // The county publishes no office hours for any clerk, so this can only
-  // say that there are some. The phone number goes on a line of its own,
-  // below, with nothing explaining it: a phone number is its own
-  // explanation, and "call to check" was telling the reader what to do
-  // with it.
-  function officeHours() {
-    return 'Open during office hours';
+  // A drop box's hours, in the full list and on the card alike, each in the
+  // tag and classes its surroundings use. "Open 24/7" is a whole sentence; a
+  // bare "Mon-Fri, 8am to 5pm" is not, and next to an address it can be read
+  // as the hours of the building rather than of the box, so the label says
+  // which, and in amber as the exception.
+  //
+  // The county publishes no office hours for any clerk, so an office can
+  // only say that it keeps some. Its phone number goes on a line of its own
+  // with nothing explaining it: a phone number is its own explanation, and
+  // "call to check" was telling the reader what to do with it.
+  function boxHoursHtml(b, tag, cls) {
+    function line(c, text) {
+      return '<' + tag + (c ? ' class="' + c + '"' : '') + '>' + text + '</' + tag + '>';
+    }
+    if (b.office) {
+      return line('bx-hours-odd', 'Open during office hours') +
+        (b.phone ? line(cls.phone, esc(b.phone)) : '');
+    }
+    if (!b.hours) return '';
+    return ALWAYS_OPEN.test(b.hours) ? line(cls.open, 'Open 24/7')
+                                     : line('bx-hours-odd', 'Open hours: ' + esc(b.hours));
   }
 
   // The drop-off list is the clerk's office rather than any box.
@@ -2678,16 +2665,9 @@
         'Pick another destination above for directions.</div></div>';
       $('steps').innerHTML = ''; $('unavoid').innerHTML = '';
       renderRouteKey();
-      var hereM = marker([routes.place.lat, routes.place.lng], 'dest');
-      var hp = routes.place;
-      bindDetail(hereM,
-        '<div class="destpop">' +
-        '<div class="dt">You are here</div>' +
-        '<div class="dn">' + esc(displayCase(hp.name)) + '</div>' +
-        '<div class="da">' + esc(addressForDisplay(hp.address)) + '</div>' +
-        (hp.entrance_note ? '<div class="de">' + esc(hp.entrance_note) + '</div>' : '') +
-        '<div class="dw">' + esc(routes.destSub) + '</div>' +
-        '</div>', 280);
+      bindDetail(marker([routes.place.lat, routes.place.lng], 'dest'),
+        placePopup('You are here', displayCase(routes.place.name), routes.place,
+                   '<div class="dw">' + esc(routes.destSub) + '</div>'), 280);
       if (fit) map.setView([routes.place.lat, routes.place.lng], 17, { animate: false });
       return;
     }
@@ -2711,16 +2691,9 @@
     // The flag stands alone on the map; the detail is a click away. A
     // permanent card beside it covered the streets around the destination,
     // which is exactly where a reader is trying to look.
-    var destM = marker([routes.place.lat, routes.place.lng], 'dest');
-    var p = routes.place;
-    bindDetail(destM,
-      '<div class="destpop">' +
-      '<div class="dt">Finish</div>' +
-      '<div class="dn">' + esc(displayCase(p.name)) + '</div>' +
-      '<div class="da">' + esc(addressForDisplay(p.address)) + '</div>' +
-      (p.entrance_note ? '<div class="de">' + esc(p.entrance_note) + '</div>' : '') +
-      '<div class="dw">' + esc(routes.destSub) + '</div>' +
-      '</div>', 280);
+    bindDetail(marker([routes.place.lat, routes.place.lng], 'dest'),
+      placePopup('Finish', displayCase(routes.place.name), routes.place,
+                 '<div class="dw">' + esc(routes.destSub) + '</div>'), 280);
 
     // With mid-block splitting the route normally begins at the address
     // itself, so these draw nothing. They stay for the fallback case where a

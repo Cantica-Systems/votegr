@@ -31,11 +31,13 @@
 
   var ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-  function todayISO() {
-    var d = new Date();
+  // A Date's own local day, as a Y-M-D string.
+  function isoOf(d) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
       '-' + String(d.getDate()).padStart(2, '0');
   }
+
+  function todayISO() { return isoOf(new Date()); }
 
   // Today's weekday abbreviation, for picking today's row out of the hours.
   function todayAbbr() { return DAY_ABBR[new Date().getDay()]; }
@@ -80,6 +82,19 @@
   }
 
   function sites(e) { return (e && e.early_voting_sites) || []; }
+
+  // The first day an absentee ballot can go back for this election, or null
+  // if it has no readable date. Michigan mails absentee ballots 40 days out,
+  // so a drop box standing open before then has nothing to accept. Statute,
+  // not something a clerk publishes, which is why it is one number here and
+  // not a field in the calendar.
+  var ABSENTEE_LEAD_DAYS = 40;
+  function absenteeFrom(e) {
+    var d = dayStart(e && e.date);
+    if (!d) return null;
+    d.setDate(d.getDate() - ABSENTEE_LEAD_DAYS);
+    return isoOf(d);
+  }
 
   // "7:00 AM" / "8:00 PM" -> the instant on that date, local time. The
   // statutory hours are written the way the Secretary of State writes them,
@@ -132,7 +147,7 @@
     todayISO: todayISO, todayAbbr: todayAbbr, dayStart: dayStart,
     monthDay: monthDay, withWeekday: withWeekday, dayMonth: dayMonth,
     shortTime: shortTime, next: next, sites: sites,
-    windowState: windowState
+    absenteeFrom: absenteeFrom, windowState: windowState
   };
 
   root.Elections = Elections;
