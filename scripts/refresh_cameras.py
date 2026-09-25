@@ -26,6 +26,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from provenance import provenance
+from useragent import USER_AGENT as UA
 
 # Kent County with ~2km margin (S, W, N, E) for Overpass. The county's own
 # precinct polygons span 42.768..43.294 N, -85.791..-85.310 W.
@@ -43,7 +44,6 @@ ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 
 # Overpass answers 504 when it is busy, and the three public mirrors get busy
 # at the same times of day, so one pass over them all can come back empty for

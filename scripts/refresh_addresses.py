@@ -42,10 +42,12 @@ from shapely.geometry import shape, Point
 from shapely.ops import transform
 from shapely.strtree import STRtree
 
+from useragent import USER_AGENT
+
 PARCELS = ("https://gis.kentcountymi.gov/agisprod/rest/services/"
            "ParcelsWithCondos/FeatureServer/0/query")
 WHERE = "PROPERTYADDRESS IS NOT NULL"
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {"User-Agent": USER_AGENT}
 PAGE = 1000                    # the layer's own maxRecordCount; asking more is clamped
 DELAY_SECONDS = 1.5            # be a polite guest on someone else's server
 

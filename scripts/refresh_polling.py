@@ -42,9 +42,10 @@ import urllib.request
 from collections import defaultdict
 
 from archive import cite
+from useragent import USER_AGENT
 
 BASE = "https://www.kentcountymi.gov"
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {"User-Agent": USER_AGENT}
 DELAY_SECONDS = 2.0            # be a polite guest: 30 pages, one at a time
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent

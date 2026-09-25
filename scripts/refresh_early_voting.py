@@ -39,12 +39,13 @@ import urllib.request
 import html as html_module
 
 from archive import snapshot_or_note
+from useragent import USER_AGENT
 
 URL = "https://www.kentcountymi.gov/250/Drop-Box-Polling-Locations"
 CITY_URL = ("https://www.grandrapidsmi.gov/departments/clerks-office/"
             "elections/early-voting/")
 UA = {
-    "User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)",
+    "User-Agent": USER_AGENT,
     # Say what this client can read. urllib sends no Accept header at all,
     # which is a gap worth closing on its own: a client asking for a document
     # should state what it can parse, and every other client does.

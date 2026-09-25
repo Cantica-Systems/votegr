@@ -30,6 +30,7 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from useragent import USER_AGENT as UA
 
 LAYER = ("https://services2.arcgis.com/L81TiOwAPO1ZvU9b/arcgis/rest/services/"
          "Transport_Street_Centerlines/FeatureServer/6/query")
@@ -43,7 +44,6 @@ OUT_FIELDS = [
 ]
 PAGE = 2000
 DELAY_S = 2.0
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 # Build input, NOT a browser asset: it lives outside site/ so the deployed
 # tree does not ship 6 MB nobody downloads.
 OUT = Path(__file__).resolve().parent.parent / "build" / "centerlines.json"

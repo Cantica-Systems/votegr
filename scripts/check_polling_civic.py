@@ -43,9 +43,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from useragent import USER_AGENT as UA
 
 API = "https://www.googleapis.com/civicinfo/v2"
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 DATA = Path(__file__).resolve().parent.parent / "site" / "data"
 CITY = "Grand Rapids"
 STATE = "MI"

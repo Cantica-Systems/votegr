@@ -41,7 +41,7 @@ graph.assignCameras([]);
 const cityRings = JSON.parse(fs.readFileSync('site/data/boundary.json'))
   .rings.map(ring => ring.map(p => [p[1], p[0]]));
 const inside = (lat, lng) => pointInRings(lat, lng, cityRings);
-const UA = 'vote-gr/1.0 (+https://github.com/DT616/votegr)';
+const UA = 'vote-gr/1.0 (+https://github.com/Cantica-Systems/votegr)';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function osrm(a, b) {

@@ -29,11 +29,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from useragent import USER_AGENT
+
 AVAILABILITY = "https://archive.org/wayback/available"
 SAVE = "https://web.archive.org/save/"          # legacy, anonymous, rate limited
 SAVE_API = "https://web.archive.org/save"       # SPN2, requires a key
 STATUS = "https://web.archive.org/save/status/"
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {"User-Agent": USER_AGENT}
 MAX_AGE_DAYS = 7
 TIMEOUT_LOOKUP = 45
 TIMEOUT_SAVE = 120

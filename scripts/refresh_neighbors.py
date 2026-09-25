@@ -31,10 +31,10 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from provenance import provenance
+from useragent import USER_AGENT as UA
 
 LAYER = ("https://gisagocss.state.mi.us/arcgis/rest/services/OpenData/"
          "michigan_geographic_framework/MapServer/20/query")
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 OUT = Path(__file__).resolve().parent.parent / "site" / "data" / "neighbors.json"
 DELAY = 2.0
 PAGE = 1000          # the layer caps maxRecordCount at 1000

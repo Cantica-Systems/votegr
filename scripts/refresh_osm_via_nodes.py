@@ -20,6 +20,7 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from useragent import USER_AGENT as UA
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "build" / "osm_roads.json"
@@ -30,7 +31,6 @@ ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 BATCH = 500               # node ids per query; keeps each URL sane
 DELAY_S = 2.0
 

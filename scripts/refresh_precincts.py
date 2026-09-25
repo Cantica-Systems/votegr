@@ -35,10 +35,12 @@ import requests
 from shapely.geometry import mapping, shape
 from shapely.strtree import STRtree
 
+from useragent import USER_AGENT
+
 LAYER = ("https://services3.arcgis.com/dxRQUfTDNtfqZ301/arcgis/rest/services/"
          "VotingPrecinct/FeatureServer/0")
 COUNTY_WHERE = "CountyFIPS='081'"          # Kent County
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {"User-Agent": USER_AGENT}
 
 OUT = pathlib.Path(__file__).resolve().parent.parent / "site" / "data" / "precincts.geojson"
 

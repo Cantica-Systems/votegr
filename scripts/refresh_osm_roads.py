@@ -16,6 +16,7 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from useragent import USER_AGENT as UA
 
 # Paths are anchored to the repository root, one level up from this
 # file, since these scripts live in scripts/ and write into site/data.
@@ -29,7 +30,6 @@ ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 
 # Everything a car may legally drive on. `service` is included because
 # driveways and parking aisles connect real addresses to the street, but it is

@@ -76,7 +76,7 @@ ok('no per-host exemption list',
 ok('no browser-spoofing user agent', !/Mozilla\/|AppleWebKit|Chrome\/\d/.test(src),
    'the checker identifies itself honestly; it does not evade bot management');
 ok('the checker names itself and the project', /votegr-link-check/.test(src) &&
-   /github\.com\/DT616\/votegr/.test(src), 'a server log should be able to tell who asked');
+   /github\.com\/Cantica-Systems\/votegr/.test(src), 'a server log should be able to tell who asked');
 
 console.log(`\n${fails === 0 ? 'check_links: all passed' : fails + ' FAILED'}`);
 process.exit(fails ? 1 : 0);

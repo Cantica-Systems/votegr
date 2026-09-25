@@ -36,6 +36,8 @@ import sys
 import time
 from collections import defaultdict
 
+from useragent import USER_AGENT
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 POLLING_DIR = ROOT / "site" / "data" / "polling"
 EARLY_VOTING = ROOT / "site" / "data" / "early-voting.json"
@@ -182,7 +184,7 @@ def split_address(text):
 
 PARCELS = ("https://gis.kentcountymi.gov/agisprod/rest/services/"
            "ParcelsWithCondos/FeatureServer/0/query")
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {"User-Agent": USER_AGENT}
 PAGE = 1000            # the layer's own maxRecordCount; asking for more is clamped
 DELAY_SECONDS = 1.0    # be a polite guest on someone else's server
 

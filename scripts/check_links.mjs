@@ -89,7 +89,7 @@ const SKIP = [
 // classify() below says so: the alternative is claiming to be Chrome, which
 // is both a lie to someone else's server and, measured against these exact
 // hosts, does not work anyway, because they fingerprint the TLS handshake.
-const UA = 'votegr-link-check/1.0 (+https://github.com/DT616/votegr)';
+const UA = 'votegr-link-check/1.0 (+https://github.com/Cantica-Systems/votegr)';
 const TIMEOUT_MS = 20000;
 const RETRY_WAIT_MS = 4000;
 const SPACING_MS = 300;
