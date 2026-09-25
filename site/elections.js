@@ -1,15 +1,13 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
 // The election calendar, shared by both pages.
 //
-// This module exists because the same calendar was being read twice, in
-// app.js and in simple/lookup.js, and the two readings drifted. Both files
-// carried their own month table, their own "today", their own next-election
-// search, and their own three-way branch over the early voting window -- and
-// both used the name prettyDate for a DIFFERENT format, one with the weekday
-// and one without. That is how the /simple page came to say early voting was
-// still available on a day the main page already called it closed.
+// Both pages read the calendar through this module, because two readings of
+// it drift apart: two copies of "today", of the next election and of the
+// early voting window will sooner or later disagree, and a page that calls
+// early voting open on a day the other calls it closed sends someone to a
+// locked door.
 //
-// So the formats are named for what they produce rather than for how pretty
+// The formats are named for what they produce rather than for how pretty
 // they are, and the window's state is decided in ONE place, windowState(),
 // which both pages ask. Wording stays with each page: the two surfaces say
 // different things on purpose, and only the calendar underneath has to agree.
