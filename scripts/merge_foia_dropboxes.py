@@ -3,15 +3,15 @@
 """Fill in the drop boxes Kent County's own pages do not publish, from the
 state's list.
 
-refresh_polling.py reads thirty county pages and gets 24 drop boxes out of
-six jurisdictions. The other twenty-four publish none, and for those the page
+refresh_polling.py reads thirty county pages and gets 23 drop boxes out of
+six jurisdictions, as the committed scrape has it. The other twenty-four publish none, and for those the page
 falls back to the clerk's office, because an absentee ballot has to reach the
 voter's own clerk under MCL 168.764a and the office is somewhere it can go.
 
 That fallback was right when there was nothing better. There is now: the
 Bureau of Elections maintains a statewide drop box report, released under
 FOIA on 2026-09-21, and it carries 53 boxes for Kent County against the
-county's 24 -- a box in all thirty jurisdictions, with the clerk's name and
+county's 23: a box in all thirty jurisdictions, with the clerk's name and
 per-day hours. Twenty-four jurisdictions that the page tells to drive to an
 office during business hours in fact have a box, most of them open all hours.
 
