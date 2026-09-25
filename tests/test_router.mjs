@@ -1,5 +1,5 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
-// Plain-assert tests for the router core. Run: node test_router.mjs
+// Plain-assert tests for the router core. Run: node tests/test_router.mjs
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -7,7 +7,12 @@ process.chdir(fileURLToPath(new URL('..', import.meta.url)));   // paths below a
 const R = require('../site/router.js');
 
 let pass = 0, fail = 0;
-function ok(name, cond) { cond ? (pass++, console.log('  ok  ' + name)) : (fail++, console.log('  FAIL ' + name)); }
+// The detail, when a check passes one, is printed only on failure: it is what
+// went wrong (which jurisdictions, which streets), and nothing on success.
+function ok(name, cond, detail = '') {
+  cond ? (pass++, console.log('  ok  ' + name))
+       : (fail++, console.log('  FAIL ' + name + (detail ? '  ' + detail : '')));
+}
 
 // --- Tiny hand-built graph -------------------------------------------
 // Nodes: 0 --edge0(fast,2 cam)--> 1 ;  0 --e1--> 2 --e2--> 1 (slow, 0 cam)
@@ -253,7 +258,6 @@ for (let i = 0; i < 50; i++) {
 }
 ok('splitAt: no node leak over 50 cycles', g.nodeCount() === base.n);
 ok('splitAt: no edge leak over 50 cycles', g.edgeCount() === base.e);
-ok('splitAt: no adjacency leak over 50 cycles', degrees(g).split(',').length === base.n);
 ok('splitAt: no camera-array leak over 50 cycles', g._edgeCams.length === base.c);
 ok('splitAt: adjacency degrees unchanged', degrees(g) === base.deg);
 ok('splitAt: graph still routes normally afterwards', g.route(0, 2) !== null);
@@ -358,34 +362,29 @@ ok('suggest: does not list unrelated numbers alongside it',
 sg = P.suggest('99999 Burton St SE', 8);
 ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind === 'near');
 
-// --- movement classification (used to read turn signs) ------------------
-// A no-left-turn sign is only useful if "left" is identified correctly from
-// the bearings; getting it backwards would ban the opposite movement.
+// The graph the page loads carries turn restrictions, and every one names
+// edges and a node that exist somewhere in the county. The chunks, not
+// graph.json: that is the frozen city-only network, which still holds the
+// Grand Rapids sign inventory's restrictions. OpenStreetMap is the only
+// source now, the same for every jurisdiction, which the sign layer could
+// never be; BUILD.md says why it went.
 {
-  const g2 = new R.Graph({ nodes: [[42.96,-85.67]], edges: [], meta: {} });
-  // bearings: arriving northbound (0), leaving east (90) is a RIGHT turn
-  const mv = (a, b) => {
-    const d = ((b - a + 540) % 360) - 180, x = Math.abs(d);
-    return x < 35 ? 'through' : x > 150 ? 'uturn' : (d > 0 ? 'right' : 'left');
-  };
-  ok('movement: north then east is a right', mv(0, 90) === 'right');
-  ok('movement: north then west is a left', mv(0, 270) === 'left');
-  ok('movement: north then north is through', mv(0, 5) === 'through');
-  ok('movement: north then south is a u-turn', mv(0, 180) === 'uturn');
-  ok('movement: wraps correctly past 0', mv(350, 80) === 'right');
-}
-
-// The shipped graph must carry restrictions from both sources, and every one
-// must reference edges that exist.
-{
-  const gr = JSON.parse(fs.readFileSync('./site/data/graph.json'));
-  const rs = gr.restrictions || [];
-  ok('graph ships turn restrictions', rs.length > 60);
-  ok('restrictions come from both sources',
-     rs.some(r => r.src === 'sign') && rs.some(r => !r.src || r.src === 'osm'));
-  ok('every restriction references real edges',
-     rs.every(r => gr.edges[r.f] && gr.edges[r.t] && gr.nodes[r.v]));
-  ok('no restriction bans a turn onto itself', rs.every(r => r.f !== r.t));
+  const index = JSON.parse(fs.readFileSync('./site/data/graph/index.json', 'utf8'));
+  const nodes = new Set(), edges = new Set(), rs = new Map();
+  for (const c of index.chunks) {
+    const ch = JSON.parse(fs.readFileSync(`./site/data/graph/${c.mcd}.json`, 'utf8'));
+    for (const k of Object.keys(ch.nodes)) nodes.add(Number(k));
+    for (const k of Object.keys(ch.edges)) edges.add(Number(k));
+    // The border ring puts some restrictions in two chunks.
+    for (const r of ch.restrictions || []) rs.set(JSON.stringify(r), r);
+  }
+  const all = [...rs.values()];
+  ok(`the county graph carries turn restrictions (${all.length})`, all.length > 200);
+  ok('OpenStreetMap is their only source', all.every(r => !r.src || r.src === 'osm'),
+     [...new Set(all.map(r => r.src).filter(s => s && s !== 'osm'))].join(', '));
+  ok('every restriction references real edges and a real node',
+     all.every(r => edges.has(r.f) && edges.has(r.t) && nodes.has(r.v)));
+  ok('no restriction bans a turn onto itself', all.every(r => r.f !== r.t));
 }
 
 // --- the county index --------------------------------------------------
@@ -437,10 +436,9 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
 
   ok('county: drop boxes come per jurisdiction',
      C.dropBoxes('42820').length === 3 && C.dropBoxes('34000').length === 10);
-  // This used to read "24 jurisdictions publish no box", because the county's
-  // pages list one for only six of the thirty. The state's own report, which
-  // covers all thirty, now fills the other twenty-four, so every jurisdiction
-  // in the county has one and the count is zero.
+  // The county's pages list a box for only six of the thirty; the state's own
+  // report covers all thirty, so every jurisdiction has one and the count is
+  // zero.
   const noBox = index.jurisdictions.filter((j) => C.dropBoxes(j.mcd).length === 0);
   ok(`county: every jurisdiction publishes a drop box (${noBox.length} without)`,
      noBox.length === 0, noBox.map((j) => j.name).join(', '));
@@ -669,10 +667,9 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
 // runs down Ionia, so inferring from neighbors puts it in precinct 6 when the
 // polygon says 15.
 //
-// This exercises the SHIPPED refineWithPolygon, not a copy of it. An earlier
-// version of this block reimplemented point-in-polygon inline and asserted
-// facts about the data files, so it passed for weeks while the page itself
-// applied no refinement at all and kept answering 6.
+// This exercises the SHIPPED refineWithPolygon, not a copy of it: a copy of
+// point-in-polygon in the test passes while the page itself applies no
+// refinement at all and keeps answering 6.
 {
   const polys = JSON.parse(fs.readFileSync('./site/data/precincts.json')).precincts;
   const gr = new R.Graph(JSON.parse(fs.readFileSync('./site/data/graph.json')));
@@ -724,7 +721,6 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
 // it exists for: two adjacent chunks overlap in a 150m ring, and a merged
 // pair has to be ONE connected graph, not two graphs in one object.
 {
-  const fs = await import('fs');
   const chunk = (mcd) =>
     JSON.parse(fs.readFileSync(`./site/data/graph/${mcd}.json`, 'utf8'));
 
@@ -851,12 +847,15 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
   } catch (e) { overflowed = /reserved/.test(e.message); }
   ok('an index that understates the sizes is refused', overflowed);
 
-  // The snap grid. snapToRoad used to walk every edge in the graph, which
-  // at county size is 14ms per call and happens twice per lookup; it now
-  // consults a cell index. An index that ever returned a DIFFERENT edge
-  // than the full scan would put the start of a route on the wrong street,
-  // so the two are compared directly, on random points spread over both
-  // jurisdictions and a few deliberately out in the middle of nowhere.
+  // The snap grid. snapToRoad consults a cell index rather than walking
+  // every edge, which at county size is 14ms per call and happens twice per
+  // lookup. An index that ever returned a DIFFERENT edge than the full scan
+  // would put the start of a route on the wrong street, so the two are
+  // compared directly, on random points spread over both jurisdictions and a
+  // few deliberately out in the middle of nowhere.
+  //
+  // Seeded, as audit_routes.mjs is, so a miss can be reproduced and looked at
+  // rather than re-rolled away on the next run.
   const brute = (g, lat, lng) => {
     let bestEdge = -1, bestD = Infinity;
     for (let i = 0; i < g.edgeCount(); i++) {
@@ -869,8 +868,16 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
   };
   let snapAgree = 0, snapWorse = 0;
   const TRIALS = 120;
+  let seed = 20260925;
+  const random = () => {                                 // mulberry32
+    seed = (seed + 0x6D2B79F5) >>> 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
   for (let t = 0; t < TRIALS; t++) {
-    const lat = 42.84 + Math.random() * 0.17, lng = -85.75 + Math.random() * 0.2;
+    const lat = 42.84 + random() * 0.17, lng = -85.75 + random() * 0.2;
     const a = both.snapToRoad(lat, lng), b = brute(both, lat, lng);
     if (a.edge === b.edge) snapAgree++;
     else if (a.meters > b.meters + 0.01) snapWorse++;   // a tie is not a miss
