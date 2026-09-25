@@ -1,5 +1,5 @@
-/* Client-side ALPR-aware route planner core.
- * Released into the public domain under the Unlicense, see UNLICENSE.
+/* Released into the public domain under the Unlicense, see UNLICENSE.
+ * Client-side ALPR-aware route planner core.
  *
  * No network, no framework. Loaded by index.html; also runnable under node
  * for tests (module.exports at the bottom).
@@ -16,11 +16,12 @@
   var CAMERA_PENALTY = 1e9;      // seconds-equivalent per camera passed
   var UTURN_PENALTY = 90;        // seconds; discourages, does not forbid
   var STANDOFF_M = 50;           // a camera "watches" edges within this radius
+  var MAX_SPEED = 31.3;          // ~70mph in m/s, the A* heuristic's bound
 
-  // Turn costs, in seconds. Added after a differential test against OSRM
-  // showed our routes zigzagging between fast streets that OSRM would not:
-  // with no cost on turning, a grid city rewards constant lane-hopping. A
-  // left costs more than a right because it waits to cross oncoming traffic.
+  // Turn costs, in seconds. With no cost on turning, a grid city rewards
+  // constant lane-hopping: a differential test against OSRM showed our
+  // routes zigzagging between fast streets where OSRM held one. A left
+  // costs more than a right because it waits to cross oncoming traffic.
   var TURN_STRAIGHT_DEG = 25;
   var TURN_COST_RIGHT = 6;
   var TURN_COST_LEFT = 12;
@@ -64,7 +65,6 @@
   // slower and touch every method. So the ids are compacted ONCE, here, and
   // the rest of the file never learns that chunks exist.
   function Graph(data) {
-    this._maxSpeed = 31.3;            // ~70mph m/s, for the heuristic
     var docs = Array.isArray(data) ? data : [data];
     if (!docs.length) throw new Error('Graph: nothing to build from');
 
@@ -80,9 +80,6 @@
     if (docs.length > 1) throw new Error('Graph: only chunks can be merged');
     var doc = docs[0];
     this._pack(doc.nodes, doc.edges);
-    // After _pack, which writes a synthetic meta of its own: the document's
-    // is the one with the build and provenance in it.
-    this.meta = doc.meta || {};
     this._buildAdjacency();
     this._indexRestrictions(doc.restrictions || []);
   }
@@ -112,13 +109,13 @@
   // that copy.
   Graph.streaming = function (index) {
     var g = Object.create(Graph.prototype);
-    g._maxSpeed = 31.3;
     g._beginPack(totalsOf(index));
     return g;
   };
 
   // Totals from either the index file or a list of chunk documents; both
-  // carry the same three numbers per chunk.
+  // carry the same three numbers per chunk. A count that is missing reads
+  // as zero and fails loudly in addChunk, rather than being guessed at.
   function totalsOf(source) {
     var list = source && source.chunks ? source.chunks
              : (Array.isArray(source) ? source : [source]);
@@ -127,24 +124,11 @@
       var m = list[i].meta || list[i];
       t.nodes += m.nodes || 0;
       t.edges += m.edges || 0;
-      // A chunk written before meta.points existed: fall back to counting
-      // its own geometry rather than under-allocating and overflowing.
-      t.points += (m.points != null) ? m.points : countPoints(list[i]);
-      if (t.build === null) t.build = m.build || (source && source.build) || null;
+      t.points += m.points || 0;
+      if (t.build === null) t.build = m.build || null;
     }
     if (source && source.build) t.build = source.build;
     return t;
-  }
-
-  function countPoints(doc) {
-    var n = 0;
-    if (!doc || !doc.edges) return 0;
-    for (var k in doc.edges) {
-      if (Object.prototype.hasOwnProperty.call(doc.edges, k)) {
-        n += doc.edges[k].p.length;
-      }
-    }
-    return n;
   }
 
   // ---- storage ---------------------------------------------------------
@@ -153,19 +137,18 @@
   // points, and it has to sit in a phone's memory all at once so that a
   // lookup anywhere in Kent County needs no second fetch.
   //
-  // As ordinary objects that costs 102 MiB, and almost none of it is the
-  // data. A point written [lat, lng] is a JS array: two numbers behind about
-  // seventy bytes of object header, half a million times over. The
-  // coordinates themselves are 4.4 MiB; the wrappers are ninety.
+  // As ordinary objects that costs about 70 MiB, and almost none of it is
+  // the data. A point written [lat, lng] is a JS array: two numbers behind
+  // about seventy bytes of object header, half a million times over. The
+  // coordinates themselves are 4.4 MiB; the wrappers are most of the rest.
   //
-  // So the graph is stored as flat typed arrays -- one Int32Array of
+  // So the graph is stored as flat typed arrays: one Int32Array of
   // microdegrees for every coordinate in the county, one Uint32Array saying
   // where each edge's points begin. Measured as heap plus ArrayBuffers, fully
-  // initialised: the county as objects was 69.7 MiB, packed it is 12.9 MiB,
-  // and Grand Rapids alone used to be 11.8 MiB. The whole county now costs
-  // about what the city did.
+  // initialised: the county as objects is 69.7 MiB and packed it is 12.9 MiB,
+  // about what Grand Rapids alone cost as objects (11.8 MiB).
   //
-  // 1e-6 degrees is about 11cm. Road centrelines are not surveyed to
+  // 1e-6 degrees is about 11cm. Road centerlines are not surveyed to
   // anything like that, so nothing is lost by leaving floating point behind.
   var MICRO = 1e6;
 
@@ -190,16 +173,14 @@
     this._eRange = new Int32Array(edges * 4);
     this._pOff = new Uint32Array(edges + 1);
     this._pXY = new Int32Array(points * 2);
-    // Global id -> local index, kept because a caller holding an id from the
-    // wire (a chunk's own bbox query, a saved route) has no other way back,
-    // and because the ring means the same id arrives in two chunks.
+    // Global id -> local index. Needed while chunks arrive, because the ring
+    // means the same id arrives in two chunks and restrictions name their
+    // legs by id until finish() resolves them. Kept afterwards so a wire id
+    // can still be mapped back to a point, which the tests do.
     this.nodeId = {};
     this.edgeId = {};
     this._pendingRestrictions = [];
-    this._chunkMetas = [];
     this._build = totals.build || null;
-    this.meta = { build: this._build, chunks: this._chunkMetas,
-                  mcds: [], nodes: 0, edges: 0 };
     // splitAt inserts a temporary node and two temporary half-edges for the
     // duration of one lookup. Typed arrays do not grow, and reallocating the
     // county's worth of them per lookup would be absurd, so the handful of
@@ -226,8 +207,6 @@
       throw new Error('Graph: chunk ' + (meta.mcd || '?') + ' is from build ' +
                       meta.build + ', expected ' + this._build);
     }
-    this._chunkMetas.push(meta);
-    if (meta.mcd) this.meta.mcds.push(meta.mcd);
 
     for (id in doc.nodes) {
       if (!Object.prototype.hasOwnProperty.call(doc.nodes, id)) continue;
@@ -257,23 +236,7 @@
         throw new Error('Graph: more edges than the index reserved');
       }
       this.edgeId[id] = ei;
-      this._eA[ei] = a; this._eB[ei] = b;
-      this._eLen[ei] = e.l; this._eSec[ei] = e.t;
-      this._eDir[ei] = e.d; this._eCls[ei] = e.c || 5;
-      this._eName[ei] = e.n || '';
-      var r = e.r || [];
-      for (j = 0; j < 4; j++) {
-        this._eRange[ei * 4 + j] = (r[j] == null) ? -1 : r[j];
-      }
-      this._pOff[ei] = this._pointAt;
-      for (j = 0; j < e.p.length; j++) {
-        if (this._pointAt * 2 + 1 >= this._pXY.length) {
-          throw new Error('Graph: more polyline points than the index reserved');
-        }
-        this._pXY[this._pointAt * 2] = Math.round(e.p[j][0] * MICRO);
-        this._pXY[this._pointAt * 2 + 1] = Math.round(e.p[j][1] * MICRO);
-        this._pointAt++;
-      }
+      this._putEdge(ei, a, b, e);
     }
 
     // Held rather than resolved: a restriction in this chunk can name an
@@ -287,8 +250,6 @@
   // whose legs are now all resolvable, and the adjacency.
   Graph.prototype.finish = function () {
     this._pOff[this._edgeCount] = this._pointAt;
-    this.meta.nodes = this._nodeCount;
-    this.meta.edges = this._edgeCount;
 
     var resolved = [];
     for (var i = 0; i < this._pendingRestrictions.length; i++) {
@@ -308,7 +269,7 @@
   // global ids to reconcile. Kept because graph.json still ships in that
   // shape and the tests build small graphs by hand.
   Graph.prototype._pack = function (nodes, edges) {
-    var i, j, points = 0;
+    var i, points = 0;
     for (i = 0; i < edges.length; i++) points += edges[i].p.length;
     this._beginPack({ nodes: nodes.length, edges: edges.length,
                       points: points, build: null });
@@ -322,26 +283,33 @@
       this._nodeXY[i * 2 + 1] = Math.round(nodes[i][1] * MICRO);
     }
     this._nodeCount = nodes.length;
-    for (i = 0; i < edges.length; i++) {
-      var e = edges[i];
-      this._eA[i] = e.a; this._eB[i] = e.b;
-      this._eLen[i] = e.l; this._eSec[i] = e.t;
-      this._eDir[i] = e.d; this._eCls[i] = e.c || 5;
-      this._eName[i] = e.n || '';
-      var r = e.r || [];
-      for (j = 0; j < 4; j++) {
-        this._eRange[i * 4 + j] = (r[j] == null) ? -1 : r[j];
-      }
-      this._pOff[i] = this._pointAt;
-      for (j = 0; j < e.p.length; j++) {
-        this._pXY[this._pointAt * 2] = Math.round(e.p[j][0] * MICRO);
-        this._pXY[this._pointAt * 2 + 1] = Math.round(e.p[j][1] * MICRO);
-        this._pointAt++;
-      }
-    }
+    for (i = 0; i < edges.length; i++) this._putEdge(i, edges[i].a, edges[i].b, edges[i]);
     this._edgeCount = edges.length;
     this._pOff[this._edgeCount] = this._pointAt;
     this._pendingRestrictions = null;
+  };
+
+  // One edge's fields and polyline into packed slot `ei`, with its ends
+  // already resolved to local node indexes. Both packing paths come through
+  // here, so the two cannot disagree about how an edge is stored.
+  Graph.prototype._putEdge = function (ei, a, b, e) {
+    var j, r = e.r || [];
+    this._eA[ei] = a; this._eB[ei] = b;
+    this._eLen[ei] = e.l; this._eSec[ei] = e.t;
+    this._eDir[ei] = e.d; this._eCls[ei] = e.c || 5;
+    this._eName[ei] = e.n || '';
+    for (j = 0; j < 4; j++) {
+      this._eRange[ei * 4 + j] = (r[j] == null) ? -1 : r[j];
+    }
+    this._pOff[ei] = this._pointAt;
+    for (j = 0; j < e.p.length; j++) {
+      if (this._pointAt * 2 + 1 >= this._pXY.length) {
+        throw new Error('Graph: more polyline points than the index reserved');
+      }
+      this._pXY[this._pointAt * 2] = Math.round(e.p[j][0] * MICRO);
+      this._pXY[this._pointAt * 2 + 1] = Math.round(e.p[j][1] * MICRO);
+      this._pointAt++;
+    }
   };
 
   // ---- accessors -------------------------------------------------------
@@ -598,7 +566,8 @@
     for (var z = 0; z < edgeTotal; z++) this._edgeCams.push(null);
     // Display positions are worked out here too. This loop already walks the
     // edges near each camera, so finding the nearest point on the road costs
-    // almost nothing; doing it separately meant a full-graph scan per camera.
+    // almost nothing; doing it separately would mean a full-graph scan per
+    // camera.
     this._camSnap = {};
 
     for (var ci = 0; ci < cameras.length; ci++) {
@@ -614,9 +583,8 @@
         }
       }
       // One pass per candidate edge: the closest point is what decides both
-      // whether the camera watches this edge and where to draw it. Walking
-      // the segments twice, once for distance and once for the point, cost
-      // more than the separate full scan it replaced.
+      // whether the camera watches this edge and where to draw it.
+      //
       // Watch membership (routing) stays purely distance-based. The DISPLAY
       // snap does not: at a four-camera intersection every corner pole's
       // nearest road point is the same crossing, and the markers collapsed
@@ -624,6 +592,10 @@
       // that declares a facing prefers the road ALIGNED with that facing,
       // and its marker is seated a few metres along that approach, so the
       // group fans out onto the legs each camera actually reads.
+      //
+      // The facing is read exactly as cameras.js bearing() reads it for the
+      // marker's cone. Change one and change the other, or a marker's cone
+      // points down a road its snap did not seat it on.
       var faceRaw = cam.f && (cam.f.direction != null ? cam.f.direction : cam.f['camera:direction']);
       var face = (faceRaw != null && faceRaw !== '' && !isNaN(parseFloat(faceRaw)))
         ? parseFloat(faceRaw) : null;
@@ -745,7 +717,7 @@
     var dstLat = this.nodeLat(dstId), dstLng = this.nodeLng(dstId);
     var h = function (nid) {
       return haversine(self.nodeLat(nid), self.nodeLng(nid), dstLat, dstLng) /
-             self._maxSpeed;
+             MAX_SPEED;
     };
     var scratch = [];
     var g = {}, cam = {}, prev = {}, closed = {};
@@ -946,29 +918,22 @@
     };
   }
 
-  // Snap a point to somewhere a car can actually start. Nearest NODE alone
-  // lands you at whatever intersection happens to be closest, which can be an
-  // alley mouth; nearest EDGE finds the street the address is actually on, and
-  // then the closer of its two ends is where the route begins.
-  //
-  // Alleys are deprioritized rather than excluded: some addresses genuinely
-  // only touch one, so they stay available at a penalty.
   // A grid over the edges, so snapping an address does not walk the county.
   //
-  // Scanning every edge cost 1.9ms against Grand Rapids and 14.2ms against
-  // all thirty jurisdictions, and it happens twice per lookup -- once for
-  // where you are and once for where you are going. Rural chunks make it
-  // worse than the edge count suggests, because their segments are long and
-  // carry many vertices each.
+  // Scanning every edge costs 14.2ms against all thirty jurisdictions, and
+  // it happens twice per lookup: once for where you are and once for where
+  // you are going. Rural chunks make it worse than the edge count suggests,
+  // because their segments are long and carry many vertices each.
   //
   // Built once, lazily, and in the same compressed sparse row shape as the
   // adjacency: a cell index for the lookup, then one flat Int32Array of edge
   // ids. An object of arrays would have cost several MiB, which is most of
   // what packing the graph just saved.
-  // ~550m in latitude. Measured on the county: 0.01 gave 2.8ms per snap
-  // inside the city, 0.005 gives 0.75ms, 0.0025 gives 0.24ms but costs
-  // 340ms to build and 72k entries. The middle one: four times faster per
-  // lookup for 126ms more at load, once.
+  //
+  // The cell is ~550m in latitude. Measured on the county: 0.01 gave 2.8ms
+  // per snap inside the city, 0.005 gives 0.75ms, 0.0025 gives 0.24ms but
+  // costs 340ms to build and 72k entries. The middle one: four times faster
+  // per lookup for 126ms more at load, once.
   var SNAP_CELL = 0.005;
 
   Graph.prototype._snapGrid = function () {
@@ -1045,6 +1010,15 @@
     return this;
   };
 
+  // Snap a point to somewhere a car can actually start. Nearest NODE alone
+  // lands you at whatever intersection happens to be closest, which can be an
+  // alley mouth; nearest EDGE finds the street the address is actually on, and
+  // then the closer of its two ends is where the route begins.
+  //
+  // Alleys are deprioritized rather than excluded: some addresses genuinely
+  // only touch one, so they stay available at a penalty.
+  var ALLEY = /\bALY\b|\bALLEY\b/;
+
   Graph.prototype.snapToRoad = function (lat, lng) {
     var bestEdge = -1, bestD = Infinity, i, d;
     var grid = this._snapGrid();
@@ -1102,8 +1076,6 @@
     return { node: node, meters: bestD, edge: bestEdge };
   };
 
-  var ALLEY = /\bALY\b|\bALLEY\b/;
-
   // Where a camera should be DRAWN: on the road it watches, not at the pole
   // beside it. Computed during assignCameras.
   Graph.prototype.cameraPos = function (id, lat, lng) {
@@ -1123,11 +1095,12 @@
 
   // ---- Address -> coordinate, against the graph's own address ranges ----
   //
-  // The road graph doubles as the geocoder: MGF/city centerlines carry the
-  // house-number range for each side of every segment, so a typed address is
-  // resolved by interpolating along the segment that contains its number.
-  // No geocoder, no network call, and the result is a point on the street
-  // centerline -- block-granular by construction, never a rooftop.
+  // The road graph doubles as the geocoder: the county's centerlines (the
+  // REGIS layer refresh_centerlines.py pulls) carry the house-number range
+  // for each side of every segment, so a typed address is resolved by
+  // interpolating along the segment that contains its number. No geocoder,
+  // no network call, and the result is a point on the street centerline:
+  // block-granular by construction, never a rooftop.
 
   // ONE canonicalizer at the comparison boundary. The precinct index and the
   // road graph come from different publishers that disagree about street type
@@ -1291,10 +1264,10 @@
   // honored by the router, so a step never sends you the wrong way down a
   // one-way street or through a banned turn it knows about.
   //
-  // What the data does NOT carry is every restriction on the ground: signs
-  // the inventory missed, median divides, signal-only turns. So these are
-  // directions to follow along with rather than obey blindly, and the page
-  // says so.
+  // What the data does NOT carry is every restriction on the ground: turns
+  // OpenStreetMap has not mapped, median divides, signal-only turns. So
+  // these are directions to follow along with rather than obey blindly, and
+  // the page says so.
 
   function bearing(a, b) {
     var toR = Math.PI / 180;
@@ -1368,14 +1341,10 @@
                (leg.name ? ' on ' + leg.name : '');
       } else {
         var delta = legBearing(leg.points, true) - legBearing(legs[i - 1].points, false);
-        var word = turnWord(delta);
-        text = word === 'Continue'
-          ? 'Continue' + (leg.name ? ' onto ' + leg.name : '')
-          : word + (leg.name ? ' onto ' + leg.name : '');
+        text = turnWord(delta) + (leg.name ? ' onto ' + leg.name : '');
       }
       // The leg's own geometry rides along so a step in the list can be
-      // shown on the map. Additive: nothing that consumed steps before
-      // this field existed has to care.
+      // shown on the map.
       out.push({ text: text, street: leg.name, meters: leg.meters,
                  cameras: leg.cameras, points: leg.points });
     }
