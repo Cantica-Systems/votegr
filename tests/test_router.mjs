@@ -258,6 +258,50 @@ ok('splitAt: no camera-array leak over 50 cycles', g._edgeCams.length === base.c
 ok('splitAt: adjacency degrees unchanged', degrees(g) === base.deg);
 ok('splitAt: graph still routes normally afterwards', g.route(0, 2) !== null);
 
+// Both ends on ONE segment, which is every short trip along a township road.
+// The second split has to land on the first one's half, not on the parent the
+// first one hid: re-splitting the parent leaves the two temporary nodes
+// joined only through the segment's ends, and the route drives past the
+// destination to the corner and back.
+g = street(); g.assignCameras([]);
+{
+  const s1 = g.splitAt(42.960, -85.676);
+  const s2 = g.splitAt(42.960, -85.664);
+  const rt = s1 && s2 && g.route(s1.node, s2.node);
+  // 1600 m of street, split at 0.2 and 0.8 of its length.
+  ok('splitAt: two splits on one segment are joined directly',
+     rt && rt.edges.length === 1);
+  ok('splitAt: and the route is the distance between them',
+     rt && Math.abs(rt.meters - 960) < 5);
+  ok('splitAt: and it never reaches either end of the segment',
+     rt && !rt.nodes.includes(0) && !rt.nodes.includes(1));
+  s2.release(); s1.release();
+  ok('splitAt: both released, the segment routes whole again',
+     g.edgeCount() === 1 && g.route(0, 1) && g.route(0, 1).edges[0] === 0);
+}
+
+// Splits on two different segments. The first parent stays out of service
+// while the second is split, or a route could run the whole first segment
+// past the point it was meant to start from.
+g = new R.Graph({
+  nodes: [[42.960,-85.680],[42.960,-85.670],[42.960,-85.660]],
+  edges: [
+    { a:0,b:1,d:0,l:800,t:60,n:'A ST',r:[],z:[],p:[[42.960,-85.680],[42.960,-85.670]] },
+    { a:1,b:2,d:0,l:800,t:60,n:'B ST',r:[],z:[],p:[[42.960,-85.670],[42.960,-85.660]] },
+  ], meta:{}
+});
+g.assignCameras([]);
+{
+  const s1 = g.splitAt(42.960, -85.675);
+  const s2 = g.splitAt(42.960, -85.665);
+  const exposed = (n, e) => g.linksFrom(n).some(l => l.edge === e);
+  ok('splitAt: a second split keeps the first parent hidden',
+     !exposed(0, 0) && !exposed(1, 0));
+  ok('splitAt: and hides its own', !exposed(1, 1) && !exposed(2, 1));
+  s2.release(); s1.release();
+  ok('splitAt: both parents return on release', exposed(0, 0) && exposed(2, 1));
+}
+
 // --- freeway exclusion -------------------------------------------------
 // A fast class-1 shortcut and a slower surface street. The route must take
 // the surface street even though the freeway is quicker, and a point next to

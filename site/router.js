@@ -204,7 +204,8 @@
     // duration of one lookup. Typed arrays do not grow, and reallocating the
     // county's worth of them per lookup would be absurd, so the handful of
     // temporaries live in plain objects past the end of the packed region.
-    // Every accessor checks here first. There are never more than three.
+    // Every accessor falls through to them past the packed range. A lookup
+    // splits once at each end: two nodes and four half-edges at most.
     this._extraNodes = [];
     this._extraEdges = [];
   };
@@ -487,7 +488,7 @@
     this._adjDep = new Float32Array(run);
     this._adjArr = new Float32Array(run);
     this._extraLinks = {};        // node -> [{to, edge, depB, arrB}]
-    this._hiddenEdge = -1;        // an edge splitAt has taken out of service
+    this._hidden = [];            // edges splitAt has taken out of service
 
     var fill = off.slice();
     for (ei = 0; ei < m; ei++) {
@@ -516,8 +517,8 @@
   };
 
   // Every way out of a node, packed links then any temporary ones, skipping
-  // an edge splitAt has hidden. The search calls this once per expansion, so
-  // it returns a reused scratch array rather than allocating.
+  // the edges splitAt has hidden. The search calls this once per expansion,
+  // so it returns a reused scratch array rather than allocating.
   //
   // Freeways never appear: they are left out of the adjacency entirely, not
   // merely discouraged. A trip to a polling place is a neighbourhood trip;
@@ -530,14 +531,28 @@
     if (node < this._nodeCount) {
       var lo = this._adjOff[node], hi = this._adjOff[node + 1];
       for (var i = lo; i < hi; i++) {
-        if (this._adjEdge[i] === this._hiddenEdge) continue;
+        if (this._isHidden(this._adjEdge[i])) continue;
         out.push({ to: this._adjTo[i], edge: this._adjEdge[i],
                    depB: this._adjDep[i], arrB: this._adjArr[i] });
       }
     }
+    // Temporary links are checked too: a second split on the same street
+    // hides the first split's half, which lives here.
     var extra = this._extraLinks[node];
-    if (extra) for (var j = 0; j < extra.length; j++) out.push(extra[j]);
+    if (extra) {
+      for (var j = 0; j < extra.length; j++) {
+        if (!this._isHidden(extra[j].edge)) out.push(extra[j]);
+      }
+    }
     return out;
+  };
+
+  // At most two entries, one per split, so a scan beats any structure.
+  Graph.prototype._isHidden = function (ei) {
+    for (var k = 0; k < this._hidden.length; k++) {
+      if (this._hidden[k] === ei) return true;
+    }
+    return false;
   };
 
   // Wire a TEMPORARY edge into the adjacency. Only splitAt's half-edges come
@@ -808,10 +823,12 @@
   // address and inserts a temporary node there, so the route starts where the
   // person actually is.
   //
-  // The split is TEMPORARY and scoped to one lookup: it appends to the live
-  // node/edge arrays and `release()` truncates them back. Nothing is
-  // persisted, and the graph the next lookup sees is byte-identical to the one
-  // this lookup started with.
+  // The split is TEMPORARY and scoped to one lookup: it appends to
+  // _extraNodes/_extraEdges past the packed arrays and `release()` truncates
+  // them back. Nothing is persisted, and the graph the next lookup sees is
+  // byte-identical to the one this lookup started with. When one lookup
+  // splits twice, release the second first: it truncates the temporaries
+  // back to where it found them.
   Graph.prototype.splitAt = function (lat, lng) {
     var snap = this.snapToRoad(lat, lng);
     if (!snap || snap.edge == null) return null;
@@ -837,8 +854,8 @@
     if (tailLen < 8) return { node: eB, lat: poly[poly.length-1][0],
                               lng: poly[poly.length-1][1], release: function () {} };
 
-    // The temporaries go past the end of the packed arrays, as plain objects.
-    // There are exactly three of them and they live for one lookup.
+    // The temporaries go past the end of the packed arrays, as plain objects:
+    // one node and two half-edges, living for one lookup.
     var extraNodes = this._extraNodes.length, extraEdges = this._extraEdges.length;
     var mid = this._nodeCount + extraNodes;
     this._extraNodes.push([best.lat, best.lng]);
@@ -873,25 +890,33 @@
     }
 
     // Wire the new pieces in, and hide the original so the router cannot use
-    // it to bypass the split point. Hiding is a single id rather than a
-    // rebuilt adjacency list: linksFrom skips it wherever it appears.
-    var wasHidden = this._hiddenEdge;
-    this._hiddenEdge = parent;
+    // it to bypass the split point. Hiding is a short list of ids rather than
+    // a rebuilt adjacency: linksFrom and snapToRoad skip them wherever they
+    // appear. The parent may itself be an earlier split's half, when both
+    // ends of a trip are on one street.
+    this._hidden.push(parent);
     this._linkExtraEdge(eHead);
     this._linkExtraEdge(eTail);
 
+    var keep = this._edgeCount + extraEdges;
     return {
       node: mid, lat: best.lat, lng: best.lng, meters: best.d,
       release: function () {
         self._extraNodes.length = extraNodes;
         self._extraEdges.length = extraEdges;
-        self._hiddenEdge = wasHidden;
-        // The only nodes that gained temporary links are the parent's two
-        // ends and the new midpoint, so only those three need clearing.
-        delete self._extraLinks[eA];
-        delete self._extraLinks[eB];
-        delete self._extraLinks[mid];
-        if (self._edgeCams) self._edgeCams.length = self._edgeCount + extraEdges;
+        var at = self._hidden.indexOf(parent);
+        if (at >= 0) self._hidden.splice(at, 1);
+        // The only nodes that gained links are the parent's two ends and the
+        // new midpoint. Drop only the links this split added: an end can be
+        // an earlier split's midpoint, whose own links are still live.
+        [eA, eB, mid].forEach(function (n) {
+          var links = self._extraLinks[n];
+          if (!links) return;
+          links = links.filter(function (l) { return l.edge < keep; });
+          if (links.length) self._extraLinks[n] = links;
+          else delete self._extraLinks[n];
+        });
+        if (self._edgeCams) self._edgeCams.length = keep;
       }
     };
   };
@@ -1026,7 +1051,7 @@
     var la = Math.round(lat / SNAP_CELL), ln = Math.round(lng / SNAP_CELL);
     var seen = {};
     var consider = function (self, ei) {
-      if (seen[ei]) return;
+      if (seen[ei] || self._isHidden(ei)) return;
       seen[ei] = 1;
       d = self._distToEdge(lat, lng, ei);
       if (ALLEY.test(self.edgeName(ei))) d += 120;   // metres of penalty

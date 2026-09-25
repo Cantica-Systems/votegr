@@ -718,8 +718,13 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .vi-grid .ev-hours span:nth-child(even) { margin-bottom: .3rem; }
 /* Two columns of this need about 240px each. Below that the polling place
    name wraps to three lines and the pair stops reading as a pair, so the
-   grid becomes one column and the rows simply stack. */
-@media (max-width: 600px) {
+   grid becomes one column and the rows simply stack.
+   700px, the same line as isPhone() in app.js, which is what decides to
+   write each row as a folding card. The two have to agree: wherever they
+   do not, card markup lands on the desktop grid as three cramped columns
+   with the browser's own disclosure triangles, and a phone held sideways
+   is exactly that width. */
+@media (max-width: 700px) {
   .vi-grid { grid-template-columns: 1fr; gap: 16px; }
   /* .vi-grid-prefixed to match the specificity of the two-column rules
      above. Written bare, .vi-full lost to .vi-grid .vi-full and kept its
