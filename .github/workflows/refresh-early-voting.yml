@@ -1,12 +1,8 @@
 # Keeps site/data/early-voting.json current from the Kent County clerk.
 #
-# The file went stale for the most ordinary reason there is: nothing ran the
-# script. refresh-cameras.yml was the only refresh job in the repository, and
-# every other refresh was a person remembering. On 2026-09-24 this file still
-# described the 2026-08-04 primary -- generated 2026-09-08, four days after
-# MCL 168.662 fixes early voting sites for the next election, and never run
-# again. Twenty days later the county had almost certainly published November
-# and nobody had looked.
+# Without a schedule the file is refreshed only when someone remembers, and
+# it goes stale in the weeks after MCL 168.662 fixes the early voting sites
+# for the next election, which is exactly when a voter needs it.
 #
 # Weekly, not daily like the cameras. The county publishes this a few times a
 # year, in a burst once the 60-day deadline passes, so a daily run would be
@@ -15,11 +11,12 @@
 #
 # What this job does NOT do:
 #
-#   - It does not deploy. early-voting.json is not one of the files either
-#     page loads (app.js takes graph, precincts, addresses, polling, cameras,
-#     elections, landcover, neighbors, gr-clerk and sources; /simple takes
-#     five of those). Committing it changes the repository and not the site,
-#     so there is no pages.yml to ask for and no actions: write to grant.
+#   - It asks for no deploy. The deploy-key push fires pages.yml like any
+#     push to main, which republishes site/ with this file changed, but
+#     neither page loads early-voting.json (app.js takes graph, precincts,
+#     addresses, polling, cameras, elections, landcover, neighbors, gr-clerk
+#     and sources; /simple takes five of those), so what a reader sees does
+#     not change.
 #
 #   - It does not geocode. The `located` coordinates beside each site come
 #     from geocode_places.py, not from this script. Putting the refresh on a
@@ -42,8 +39,7 @@ on:
     - cron: '43 7 * * 2'
   workflow_dispatch:
 
-# contents only. Nothing here asks another workflow to run, for the reason in
-# the header, so this job needs no actions: write.
+# contents: write, to push the refreshed file back.
 permissions:
   contents: write
 
@@ -56,6 +52,19 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    env:
+      # What the committed file describes, as step outputs. Run before and
+      # after the refresh, so the two can be compared and the commit can say
+      # what moved.
+      DESCRIBE: |
+        import json
+        d = json.load(open('site/data/early-voting.json'))
+        s = d.get('sites') or {}
+        ev = d.get('early_voting') or {}
+        print(f"election={d.get('election',{}).get('date','none')}")
+        print(f"window={ev.get('from','?')}..{ev.get('to','?')}")
+        print(f"sites={len(s)}")
+        print(f"located={sum(1 for v in s.values() if v.get('located'))}")
     steps:
       # The deploy key, not the default token, for the same reason as
       # refresh-cameras.yml: the branch ruleset bypasses the key, and GitHub
@@ -79,15 +88,7 @@ jobs:
       - name: Record what the committed file describes
         id: before
         run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          d = json.load(open('site/data/early-voting.json'))
-          s = d.get('sites') or {}
-          print(f"election={d.get('election',{}).get('date','none')}")
-          print(f"window={d.get('early_voting',{}).get('from','?')}..{d.get('early_voting',{}).get('to','?')}")
-          print(f"sites={len(s)}")
-          print(f"located={sum(1 for v in s.values() if v.get('located'))}")
-          PY
+          python3 -c "$DESCRIBE" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
       - name: Read the county and city pages
@@ -98,32 +99,23 @@ jobs:
         # the job before anything is committed, which is the intended outcome.
         #
         # It also prints the election and window it found, and says so plainly
-        # when that election has already passed -- which is the signal that
-        # would have caught this file being a month stale.
+        # when that election has already passed, which is the signal that the
+        # file has gone stale.
         #
         # A DECLINED line is the other failure and means the opposite: the
         # page was never read, because something in front of it turned this
         # client away. Nothing is wrong with the data or the parser, and the
         # county's markup does not want looking at.
         #
-        # AS OF 2026-09-24 THIS JOB CANNOT SUCCEED, and the weekly run is
-        # expected to be red until that changes. The county's edge began
-        # answering 403 to this project somewhere between 00:21 and 05:09
-        # UTC that day, on both of the kentcountymi.gov URLs the project
-        # reads. Not a datacentre block that a different runner would dodge,
-        # not the user agent, not the request headers, and not Python: the
-        # link checker, which had read the page with a 200 that morning,
-        # gets the same 403 from the same pool minutes after the refresh
-        # does. Nothing here asks it differently; they stopped answering.
+        # Getting past a refusal would mean pretending to be a browser, which
+        # this project does not do (scripts/check_links.mjs sets out the
+        # reasoning). So a refusal leaves the run red, naming the reason,
+        # until the publisher offers a feed or lets a named client through. A
+        # red run that names the reason is the point; a green one that quietly
+        # checked nothing is what this whole job exists to prevent.
         #
-        # Getting past that would mean pretending to be a browser, which
-        # this project does not do -- scripts/check_links.mjs sets out the
-        # reasoning. So the honest options are to ask the county for a
-        # feed or for their edge to let a named client through, to read the
-        # page from somewhere they do not refuse, or to let the weekly run
-        # keep saying DECLINED until one of those happens. A red run that
-        # names the reason is the point; a green one that quietly checked
-        # nothing is what this whole job exists to prevent.
+        # Since 2026-09-24 the county's edge answers 403 to this project, so
+        # the scheduled run is expected red until that changes.
         env:
           # Optional. Without them archive.org declines most captures and the
           # provenance records that honestly instead of claiming a snapshot it
@@ -136,15 +128,7 @@ jobs:
       - name: Report what changed
         id: after
         run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          d = json.load(open('site/data/early-voting.json'))
-          s = d.get('sites') or {}
-          print(f"election={d.get('election',{}).get('date','none')}")
-          print(f"window={d.get('early_voting',{}).get('from','?')}..{d.get('early_voting',{}).get('to','?')}")
-          print(f"sites={len(s)}")
-          print(f"located={sum(1 for v in s.values() if v.get('located'))}")
-          PY
+          python3 -c "$DESCRIBE" >> "$GITHUB_OUTPUT"
           echo "before: ${{ steps.before.outputs.election }} ${{ steps.before.outputs.window }} ${{ steps.before.outputs.sites }} sites, ${{ steps.before.outputs.located }} geocoded"
           cat "$GITHUB_OUTPUT"
 
