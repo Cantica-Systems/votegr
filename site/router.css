@@ -1210,29 +1210,29 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .seg button:last-child { border-right: 0; }
 .seg button.on { background: var(--panel); color: var(--accent); }
 
-/* ---- route cards are now buttons ---- */
-
 /* ---- turn-by-turn ---- */
-ol.steps { list-style: none; margin: 14px 0 0; padding: 0; counter-reset: s; }
+/* An arrow per turn reads faster than a counter: each step carries a .glyph
+   in the 30px gutter on its left, and the arrive step, which has none, takes
+   a flag there instead. */
+ol.steps { list-style: none; margin: 12px 0 0; padding: 0; }
 ol.steps li {
-  position: relative; display: flex; align-items: baseline; gap: 9px;
-  padding: 9px 0 9px 30px; border-bottom: 1px solid var(--line);
-  font-size: .92rem; line-height: 1.45;
+  position: relative; display: flex; align-items: baseline; gap: 10px;
+  padding: 10px 0 10px 30px; border-bottom: 1px solid var(--line);
+  font-size: .92rem; line-height: 1.45; cursor: pointer;
 }
 ol.steps li:last-child { border-bottom: 0; }
-ol.steps li::before {
-  counter-increment: s; content: counter(s);
-  position: absolute; left: 0; top: 9px;
-  width: 21px; height: 21px; border-radius: 50%;
-  background: var(--raise); border: 1px solid var(--line);
-  font-size: .74rem; font-weight: 700; color: var(--dim);
-  display: flex; align-items: center; justify-content: center;
+ol.steps li .glyph {
+  position: absolute; left: 0; top: 9px; width: 20px;
+  text-align: center; font-size: 15px; line-height: 1.2;
+  color: var(--accent); font-weight: 700;
 }
 ol.steps li.arrive::before {
-  content: '✓'; background: var(--warn); border-color: var(--warn); color: #1a1207;
+  content: '⚑'; position: absolute; left: 0; top: 11px;
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700; color: var(--warn);
 }
 ol.steps .stext { flex: 1; }
-ol.steps li { cursor: pointer; }
 ol.steps li:hover { background: var(--raise); }
 /* The step being looked at, and the last one. A highlighted turn is the
    instruction in play, and "Arrive at your destination" is the one every
@@ -1600,23 +1600,6 @@ ol.steps .scam {
 .route-toggle button.on.avoid { box-shadow: inset 0 -3px 0 var(--route-avoid); }
 .route-toggle button.on.fast { box-shadow: inset 0 -3px 0 var(--route-fastsel); }
 
-/* directions list: an arrow per turn reads faster than a counter */
-ol.steps { margin: 12px 0 0; }
-ol.steps li { padding: 10px 0 10px 30px; gap: 10px; }
-ol.steps li::before {
-  content: ''; border: 0; background: none; top: 11px;
-  width: 20px; height: 20px;
-  background-repeat: no-repeat; background-position: center;
-  background-size: 17px 17px;
-}
-ol.steps li.arrive::before { background: none; content: '⚑'; color: var(--warn); font-size: 15px; }
-
-/* wider desktops get a wider panel: the map has room to spare */
-ol.steps li .glyph {
-  position: absolute; left: 0; top: 9px; width: 20px;
-  text-align: center; font-size: 15px; line-height: 1.2;
-  color: var(--accent); font-weight: 700;
-}
 .one-route { font-size: .95rem; color: var(--fg); }
 .one-route b { font-weight: 700; }
 
