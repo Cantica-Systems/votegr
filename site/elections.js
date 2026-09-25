@@ -127,21 +127,12 @@
     return 'open';
   }
 
-  // Open AND somewhere to go. Deliberately separate from windowState: with a
-  // window published and no sites the window is still open and it is our data
-  // that is short, so a caller offering a destination asks this, and a caller
-  // describing the calendar asks windowState.
-  function isOpen(e, today) {
-    return windowState(e, today) === 'open' && sites(e).length > 0;
-  }
-
   var Elections = {
     atTime: atTime, pollsPhase: pollsPhase,
-    MONTHS: MONTHS, WEEKDAYS: WEEKDAYS, DAY_ABBR: DAY_ABBR,
     todayISO: todayISO, todayAbbr: todayAbbr, dayStart: dayStart,
     monthDay: monthDay, withWeekday: withWeekday, dayMonth: dayMonth,
     shortTime: shortTime, next: next, sites: sites,
-    windowState: windowState, isOpen: isOpen
+    windowState: windowState
   };
 
   root.Elections = Elections;

@@ -9,7 +9,7 @@
 
   var map, graph, P, cameras;
   var pollLayer, siteLayer, camLayer, routeLayer, pinLayer;
-  var cachedCameras = null, current = null;
+  var current = null;
   var activeEl = null, destChoice = null, electionDayHours = null;
   // Kept beside activeEl because the countdown re-asks the calendar when the
   // day rolls over under a page nobody has reloaded.
@@ -341,7 +341,7 @@
   // there is no answer yet. (Built as a constant, this read "Ballot drop
   // boxes in " with nothing after it.)
   function listTitle(kind) {
-    var where = (current && current.jurisdiction) || 'Grand Rapids';
+    var where = (current && current.jurisdiction) || 'your area';
     if (kind === 'dropbox' && officeOnly(boxesFor(current))) {
       return 'Returning an absentee ballot in ' + where;
     }
@@ -890,7 +890,7 @@
         '<circle cx="12" cy="12" r="3"/>' +
         '<path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg></button>' +
         '<div class="gear-panel" hidden>' +
-        '<div class="layer-toggles" id="layerToggles">' +
+        '<div class="layer-toggles">' +
         '<div class="lyr"><input type="checkbox" id="lyrPrecincts" checked><label for="lyrPrecincts">Precinct boundaries</label></div>' +
         '<div class="lyr"><input type="checkbox" id="lyrNumbers" checked><label for="lyrNumbers">Precinct numbers</label></div>' +
         // "Your city or township" named the one thing this switch does not
@@ -1067,7 +1067,7 @@
     s.onload = function () {
       if (!window.VoteGRDebug) return;
       window.VoteGRDebug.mount({
-        graph: graph, precincts: P, polygons: precincts, cameras: cameras, map: map,
+        graph: graph, cameras: cameras,
         resolve: resolveEnd, computeRoutes: computeRoutes, draw: drawDebugRoutes,
         // The same suggestion source the search box uses, so the debug ends
         // are picked from the real address index rather than typed blind.
@@ -1134,6 +1134,8 @@
     // roads and addresses behind them left the banner blank for seconds on
     // every load, which read as the page failing.
     var calendarP = loadJson('elections', true).then(function (calendar) {
+      // Election day hours are statewide and statutory, so they are one
+      // object beside the list rather than a field repeated on every election.
       electionDayHours = (calendar && calendar.election_day_hours) || null;
       electionList = (calendar && calendar.elections) || [];
       activeEl = Elections.next(electionList);
@@ -1151,13 +1153,11 @@
       loadJson('neighbors', true),
       loadJson('gr-clerk', true), loadJson('sources', true)
     ]).then(function (res) {
-      var cameraData = res[1], county = res[2];
-      var calendar = res[3], landcover = res[4];
+      var cameraData = res[1], county = res[2], landcover = res[4];
       var neighborData = res[5], clerkData = res[6];
       var sourceData = res[7];
 
       graph = res[0];
-      cachedCameras = cameraData.cameras;
       P = county.P;
       var precinctData = county.index;
       drawPollingPlaces();
@@ -1173,22 +1173,16 @@
       // already says which jurisdictions exist.
       if (precinctData) ownBase.setJurisdictions(precinctData.jurisdictions);
       ownBase.setData(graph, landcover || null);
-      // Every camera in the county, not just the ones inside the city.
-      //
-      // This used to filter to the city rings, because the routes stopped at
-      // the city line and a camera in Wyoming could not be on one. The graph
-      // now covers all thirty jurisdictions, so that filter would hide
-      // cameras that sit on roads a route actually uses -- and a route drawn
-      // as clean past a plate reader we know about is the one failure this
-      // whole tool exists to prevent.
-      cameras = cachedCameras;
-      // Election day hours are statewide and statutory, so they are one
-      // object beside the list rather than a field repeated on every election.
-      electionDayHours = (calendar && calendar.election_day_hours) || null;
-      electionList = (calendar && calendar.elections) || [];
-      activeEl = Elections.next(electionList);
+      // Every camera in the county, unfiltered: a route can use any road in
+      // any jurisdiction, and a route drawn as clean past a plate reader we
+      // know about is the one failure this whole tool exists to prevent.
+      cameras = cameraData.cameras;
       sources = (sourceData && sourceData.sources) || {};
       clerk = placeCoords(clerkData);
+      // The clock started when the calendar landed, but the load has held
+      // the main thread since, and an interval cannot tick through that.
+      // Restarting it here repaints it before warm() below holds the thread
+      // again, so the seconds visibly move while the page finishes loading.
       startCountdown();
       graph.assignCameras(cameras);
       // The street index and the snap grid are built lazily; build them
@@ -1535,7 +1529,6 @@
   // These come last and only fill what the address list's own suggestions
   // leave. A street it has is one this tool can answer, and one that matches
   // should never be pushed down the list by one it cannot.
-  var GR_CITY = 'Grand Rapids City';
   var GR_MCD = '34000';      // the state's MCD code for the City of Grand Rapids
 
   // Whether a result is in the one jurisdiction whose own clerk data this
@@ -1567,7 +1560,7 @@
     // "these are the odd ones"; a reader still has to know that the unlabelled
     // ones are the answerable ones.
     out.forEach(function (o) {
-      o.where = o.where && o.where.length ? o.where.map(jurisdictionLabel) : [GR_CITY];
+      o.where = (o.where || []).map(jurisdictionLabel);
     });
     if (out.length >= limit || !neighbors) return out;
 
@@ -1709,7 +1702,6 @@
   }
 
   function disarmPin() {
-    if (pinArmed) $('mapNote').textContent = '';
     $('pinCue').hidden = true;
     pinArmed = false;
     $('pinBtn').classList.remove('armed');
@@ -1846,20 +1838,23 @@
   }
 
   // The election day row: the polling place, then the day and its hours.
-  function pollingCard(r) {
+  // `multi` says whether there are other destinations to choose between.
+  function pollingCard(r, multi) {
     var html = '';
   // --- election day -----------------------------------------------------
   html += '<div class="vi-where' + (activeEl ? '' : ' vi-full') +
     '" data-kind="polling"><div class="vi-lbl">Election day polling place</div>';
   var place = r.place;
   if (place) {
-    // The name and address ARE the show-on-map control: clicking the place
-    // takes you to the place. A separate link said in four words what the
-    // affordance can say in zero.
+    // The name and address ARE the show-on-map control when the polling
+    // place is the only destination: clicking the place takes you to the
+    // place. A separate link said in four words what the affordance can say
+    // in zero. With other destinations the whole cell is the control, and it
+    // routes, so the name must not claim a different job of its own.
     var clickable = !!(place.lat && place.lng);
-    html += '<div' + (clickable
-        ? ' class="pp-place" id="showPlaceBtn" role="button" tabindex="0"' +
-          ' title="Show it on the map"'
+    html += '<div' + (clickable ? ' class="pp-place"' : '') +
+      (clickable && !multi
+        ? ' id="showPlaceBtn" role="button" tabindex="0" title="Show it on the map"'
         : '') + '>' +
       '<div class="pp-name">' + esc(displayCase(place.name)) + '</div>' +
       '<div class="pp-addr">' + esc(addressForDisplay(place.address)) + '</div>' +
@@ -1899,13 +1894,6 @@
     var nav = $('sectionNav');
     if (nav) { nav.hidden = false; requestAnimationFrame(syncSectionNav); }
     revealMap();
-    // No standing caption: the header names the destination and the map shows
-    // it. The pin-picking instruction, which was this note's one writer, has
-    // its own cue above the map now, so nothing writes here any more. The
-    // element stays for the moment because .map-foot lays the legend out
-    // beside it and dropping it moves the legend up 14px, which is a change
-    // to make on its own rather than inside this one.
-    $('mapNote').textContent = '';
     var place = r.place;
     $('resultBlock').hidden = false;
 
@@ -1940,7 +1928,9 @@
     // Each is built by its own function into its own string rather than
     // appended straight to the page, because on election day the order
     // changes: see below.
-    var boxHtml = dropBoxCard(r), evHtml = earlyVotingCard(r), pollHtml = pollingCard(r);
+    var multi = destinations(r).length > 1;
+    var boxHtml = dropBoxCard(r), evHtml = earlyVotingCard(r),
+        pollHtml = pollingCard(r, multi);
 
     // Normally the order is the order a voter can act: the box is open first
     // and for longest, then early voting, then the deadline. On the day of the
@@ -1977,7 +1967,6 @@
       });
 
     var destCells = $('precinctInfo').querySelectorAll('[data-kind]');
-    var multi = destinations(r).length > 1;
     var phone = isPhone();
     Array.prototype.forEach.call(destCells, function (cell) {
       var kind = cell.dataset.kind;
@@ -2012,12 +2001,17 @@
       };
     });
 
+    // Present only when the polling place is the one destination.
     var spb = $('showPlaceBtn');
-    if (spb && !multi) {
+    if (spb) {
       spb.onkeydown = function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); spb.click(); }
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault(); e.stopPropagation(); spb.click();
       };
-      spb.onclick = function () {
+      spb.onclick = function (e) {
+        // Its own job, not the cell's: on a phone the cell around it routes
+        // and scrolls to the directions, which would undo this framing.
+        e.stopPropagation();
         if (!place || !place.lat) return;
         revealMap();
         map.setView([place.lat, place.lng], 16);
@@ -2057,16 +2051,17 @@
     // publishes for its clerk, which is the same thing said the way a
     // township says it.
     var office = !inGrandRapids(r) && P && r.mcd ? P.clerkOf(r.mcd) : null;
-    var whom = inGrandRapids(r) || !r.jurisdiction
-      ? '<a href="https://www.grandrapidsmi.gov/departments/clerks-office/" ' +
+    var whom = inGrandRapids(r)
+      ? 'the <a href="https://www.grandrapidsmi.gov/departments/clerks-office/" ' +
         'target="_blank" rel="noopener">Grand Rapids City Clerk</a>'
-      : 'the ' + esc(r.jurisdiction) + ' clerk' +
-        (office && office.phone ? ' (' + esc(office.phone) + ')' : '');
+      : r.jurisdiction
+      ? 'the ' + esc(r.jurisdiction) + ' clerk' +
+        (office && office.phone ? ' (' + esc(office.phone) + ')' : '')
+      : 'your clerk';
     var adv = ['<strong>Not an official government tool.</strong> Your voting ' +
       'location is based on the address where you registered to vote, not ' +
       'what you enter here. If you are not sure the entered address is the ' +
-      'same, double-check with ' + (inGrandRapids(r) || !r.jurisdiction ? 'the ' : '') +
-      whom + ' or the ' +
+      'same, double-check with ' + whom + ' or the ' +
       '<a href="https://mvic.sos.state.mi.us/" target="_blank" ' +
       'rel="noopener">Michigan Voter Information Center</a>.'];
     if (r.rivals) adv.push('This address sits on a precinct line and could be in ' +
@@ -2134,33 +2129,6 @@
     return out + '</div>';
   }
 
-  // Two date formats, on purpose. The footer bar renders its dates in a
-  // compact uppercase strip where a weekday would not fit at 320px, so it
-  // takes Elections.monthDay; everywhere a voter has to act on a date, the
-  // weekday leads and Elections.withWeekday is the one to call.
-
-  // Two lines in the header: election day, then early voting under it.
-  //
-  // The early voting sentence used to open the page as a paragraph above the
-  // headline, which meant the first thing anyone read was a caveat about a
-  // thing that had not been scheduled yet. As a labelled line in the chrome it
-  // is available at a glance and in the way of nothing.
-  //
-  // One line per state of Elections.windowState, so the hole this used to
-  // have cannot come back: every state that was not before the window or
-  // inside it once fell through to 'Start date TBD', including the days after
-  // early voting closes and election day itself. Those are the days most
-  // people read this line, and it was telling them the start date had not
-  // been decided when the window had already been and gone.
-  //
-  // 'Start date TBD' now means only what it says: the clerk has published
-  // nothing. A half-published window counts as nothing, since a start with no
-  // end is not a window a voter can act on -- that is windowState's 'none'.
-  //
-  // 'open' is deliberately the dates alone rather than Elections.isOpen(),
-  // which also wants a site list: with a window published and no sites the
-  // window is still open and it is our data that is short, and saying nothing
-  // about the dates would blame the calendar for a gap of our own.
   // The early voting window for this result: the clerk's published dates
   // when we have them, the calendar's otherwise. ONE accessor, because the
   // answer block and the destination list both ask, and a page that disagrees
@@ -2324,9 +2292,6 @@
       // disagree; without them the banner can only say it is today.
       var now = new Date();
       var phase = Elections.pollsPhase(activeEl, electionDayHours, now);
-      box.classList.add('is-today');
-      box.classList.toggle('polls-open', phase === 'open');
-      box.classList.toggle('polls-closed', phase === 'closed');
       if (phase === 'before') {
         if (label) label.textContent = 'Polls Open In:';
         clock.innerHTML = hms(Elections.atTime(activeEl.date, electionDayHours.open) - now);
@@ -2359,7 +2324,6 @@
       return;
     }
 
-    box.classList.remove('is-today', 'polls-open', 'polls-closed');
     if (label) label.textContent = 'Election Day is In:';
     var s = Math.floor(left / 1000);
     var days = Math.floor(s / 86400); s -= days * 86400;
@@ -2397,10 +2361,6 @@
       return hit ? Object.assign({}, place, { lat: hit.lat, lng: hit.lng }) : null;
     }
     return {
-      // Carried through so the panel can say where its list came from. The
-      // file knows; without this the page did not.
-      provenance: data.provenance || null,
-      src: data.src || null,
       election: data.election,
       early_voting: data.early_voting || null,
       sites: (data.early_voting_sites || []).map(fix).filter(Boolean),
@@ -2491,7 +2451,7 @@
   var ROUND_THE_CLOCK = /24\s*hours?\s*(a|per)\s*day.*7\s*days/i;
   function normaliseHours(b) {
     if (b.hours && ROUND_THE_CLOCK.test(b.hours)) {
-      return Object.assign({}, b, { hours: '24/7', hours_as_written: b.hours });
+      return Object.assign({}, b, { hours: '24/7' });
     }
     return b;
   }
@@ -2549,7 +2509,7 @@
 
   // ---- routing + drawing ----------------------------------------------
 
-  function routeTo(r, forcedKind, which) {
+  function routeTo(r, forcedKind) {
     var opts = destinations(r);
     routeLayer.clearLayers(); pinLayer.clearLayers();
 
@@ -2561,11 +2521,6 @@
     var pick = null;
     if (forcedKind) pick = opts.filter(function (o) { return o.kind === forcedKind; })[0];
     if (!pick) pick = opts[0];
-    // A kind can hold several places -- eleven drop boxes, four early voting
-    // sites -- and the nearest is only the default. `which` names one of them.
-    if (pick && which != null && pick.all && pick.all[which]) {
-      pick = Object.assign({}, pick, { place: pick.all[which] });
-    }
     destChoice = pick;
     markDestination();
 
@@ -2614,10 +2569,9 @@
       opts: opts, origin: origin, place: place,
       destSub: destSub(pick, r)
     });
-    var identical = routes.identical;
-    if (identical) selected = 'avoid';
-    // Default to the clean route, but do not fight a choice already made.
-    if (selected !== 'fast' && selected !== 'avoid') selected = 'avoid';
+    // Keep whichever route the reader chose, unless there is no longer a
+    // choice to make.
+    if (routes.identical) selected = 'avoid';
     renderAll(true);
   }
 
@@ -2744,7 +2698,7 @@
       var other = selected === 'avoid' ? 'fast' : 'avoid';
       drawRoute(routes[other], 'muted', other);
     }
-    var main = drawRoute(routes[selected], selected === 'avoid' ? 'avoid' : 'fastmain', selected);
+    drawRoute(routes[selected], selected === 'avoid' ? 'avoid' : 'fastmain', selected);
     renderRouteKey();
 
     // Start and finish are drawn here, not in routeTo, because the start
@@ -2890,7 +2844,7 @@
   // prominently to draw it. They are separate because the unselected route
   // still has an identity worth keeping.
   function drawRoute(r, kind, which) {
-    var pts = r.pts || routePoints(r);
+    var pts = r.pts;
     var casing = getVar('--case');
     if (kind === 'muted') {
       // Solid, not dashed. Dashes are how this map draws precinct and city
@@ -2907,7 +2861,7 @@
       var tone = which === 'avoid' ? getVar('--route-avoid') : getVar('--route-fastsel');
       L.polyline(pts, { color: casing, weight: 9.5, opacity: .55,
         lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
-      var mline = L.polyline(pts, { color: tone, weight: 5.5, opacity: .95,
+      L.polyline(pts, { color: tone, weight: 5.5, opacity: .95,
         lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
       // The camera route wears its stripes even when unselected, so the two
       // lines never need the toggle to be told apart.
@@ -2915,12 +2869,12 @@
         L.polyline(pts, { color: '#ffffff', weight: 5.5, opacity: .55,
           lineCap: 'butt', dashArray: '6 10', interactive: false }).addTo(routeLayer);
       }
-      return mline;
+      return;
     }
     var color = kind === 'avoid' ? getVar('--route-avoid') : getVar('--route-fastsel');
     L.polyline(pts, { color: casing, weight: 13, opacity: .75,
       lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
-    var line = L.polyline(pts, { color: color, weight: 7.5, opacity: 1,
+    L.polyline(pts, { color: color, weight: 7.5, opacity: 1,
       lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
     if (kind === 'avoid') {
       // The clean route keeps the subtle animated flow.
@@ -2934,7 +2888,6 @@
       L.polyline(pts, { color: '#ffffff', weight: 7.5, opacity: .75, lineCap: 'butt',
         dashArray: '7 11', interactive: false }).addTo(routeLayer);
     }
-    return line;
   }
 
   // A key BELOW the map, not inside it.
@@ -3014,8 +2967,9 @@
   }
 
   function renderSteps() {
-    var r = routes[selected];
-    var steps = r.steps || graph.steps(r);
+    // Read, never recomputed: the steps were taken while the split edges
+    // they refer to still existed (see computeRoutes).
+    var steps = routes[selected].steps;
     $('steps').innerHTML = RoutePanel.stepsHtml(steps);
 
     // A step is also a viewport: clicking it frames that stretch of the
