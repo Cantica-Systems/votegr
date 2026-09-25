@@ -22,7 +22,12 @@ const ROOT = join(fileURLToPath(new URL('..', import.meta.url)), 'site');
 const Elections = createRequire(import.meta.url)('../site/elections.js');
 
 let pass = 0, fail = 0;
-function ok(name, cond) { cond ? (pass++, console.log('  ok  ' + name)) : (fail++, console.log('  FAIL ' + name)); }
+// The detail, when a check passes one, is printed only on failure: it is what
+// went wrong, and nothing on success.
+function ok(name, cond, detail = '') {
+  cond ? (pass++, console.log('  ok  ' + name))
+       : (fail++, console.log('  FAIL ' + name + (detail ? '  ' + detail : '')));
+}
 
 // --- static server ----------------------------------------------------
 // Enough of one to load the page. Anything outside site/ is refused rather
@@ -1849,6 +1854,109 @@ for (const w of [390, 1280]) {
   ok('and picking it says the tool does not cover it, and where to look instead',
      /does not cover/i.test(awayText) && /mvic\.sos\.state\.mi\.us/.test(awayText));
   ok('no page errors while doing it', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// --- clearing an answer, and what an error leaves behind ---------------
+// On a phone the footer, and with it About and the theme switch, steps aside
+// while an answer is up and comes back with Start over. So Start over has to
+// exist: the global [hidden] rule is !important, and a `hidden` attribute on
+// the button kept it out of sight however the stylesheet asked for it.
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
+  const shown = (id) => page.evaluate((i) =>
+    getComputedStyle(document.getElementById(i)).display !== 'none', id);
+  const lookUp = async (text) => {
+    await page.fill('#addr', text);
+    await page.press('#addr', 'Enter');
+  };
+
+  ok('no Start over before there is an answer', !(await shown('resetBtn')));
+  await lookUp('300 Monroe Ave NW');
+  await page.waitForFunction(() => !document.getElementById('routeBlock').hidden,
+    null, { timeout: 15000 });
+  ok('Start over appears with the answer', await shown('resetBtn'));
+  ok('while a phone puts the footer away', !(await shown('siteFooter')));
+  await page.click('#resetBtn');
+  ok('Start over clears the answer', await page.evaluate(() =>
+    document.getElementById('resultBlock').hidden &&
+    !document.getElementById('col').classList.contains('has-result')));
+  ok('and brings the footer back', await shown('siteFooter'));
+
+  // A route, then an address that matches nothing, then a theme change. The
+  // error has to take the first answer's route with it: anything that redraws
+  // the map (the theme switch, or the system scheme changing under Auto)
+  // otherwise puts that route back on screen beneath the error.
+  await lookUp('300 Monroe Ave NW');
+  await page.waitForFunction(() => !document.getElementById('routeBlock').hidden,
+    null, { timeout: 15000 });
+  await lookUp('99999 Qqzzx Xqq St');
+  await page.waitForSelector('#precinctInfo .err', { timeout: 10000 });
+  ok('an address that matches nothing hides the last route',
+     await page.evaluate(() => document.getElementById('routeBlock').hidden));
+  // Clicked from script: on a phone the footer holding the switch is put
+  // away while an answer is up. The redraw is the same one a system scheme
+  // change under Auto makes, which needs no click at all.
+  await page.evaluate(() =>
+    document.querySelector('#themeSwitch [data-theme-choice="light"]').click());
+  await page.waitForTimeout(300);
+  ok('and a theme change does not bring it back', await page.evaluate(() =>
+    document.getElementById('routeBlock').hidden));
+  ok('no page errors while doing it', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
+// --- early voting outside the city --------------------------------------
+// The early voting window this page carries is the Grand Rapids clerk's.
+// Other jurisdictions set their own, and the state's release has townships
+// opening four days after the city, so a Kentwood reader told the city's
+// dates would find a locked door. Outside the city there is no window, not
+// the city's. Holds on any date: once the calendar runs out the row is gone
+// everywhere.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
+  await page.fill('#addr', '355 48th St SE');
+  await page.press('#addr', 'Enter');
+  await page.waitForFunction(() =>
+    /Kentwood/.test(document.getElementById('precinctInfo').innerText), null, { timeout: 15000 });
+  ok('a Kentwood address is not given the city clerk\'s early voting dates',
+     await page.evaluate(() => !document.querySelector('#precinctInfo .vi-when-early')));
+  await ctx.close();
+}
+
+// --- a page left open across midnight -----------------------------------
+// The countdown re-reads the calendar when the day rolls over under it. That
+// path threw a ReferenceError at midnight, which no other stretch reaches:
+// they all load a page and read it within the same day. So the clock is
+// installed a few seconds before midnight on election day and run past it.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  const now = new Date();
+  await page.clock.install({
+    time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 50) });
+  const hits = servedHits;
+  served = pinned(0);
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  ok('the rollover is checked against the calendar served to it', servedHits > hits);
+  ok('the countdown is up on election day', await page.evaluate(() =>
+    !document.getElementById('countdown').hidden));
+  // A throw from a timer surfaces here rather than as a pageerror.
+  try { await page.clock.runFor(20000); } catch (e) { errors.push(e.message); }
+  ok('crossing midnight throws nothing', errors.length === 0, errors.join(' | '));
+  ok('and the countdown stands down once the day has passed', await page.evaluate(() =>
+    document.getElementById('countdown').hidden));
+  served = null;
   await ctx.close();
 }
 

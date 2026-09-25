@@ -133,8 +133,13 @@
     wrap.addEventListener('click', function (e) {
       if (e.target.closest('[data-close]')) close();
     });
+    // Escape closes whichever sheet is open, this one or the place list.
+    // Bound once, here: the place list is rewired on every answer, and a
+    // listener added there piled up one per lookup.
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !wrap.hidden) close();
+      if (e.key !== 'Escape') return;
+      Array.prototype.forEach.call(document.querySelectorAll('.modal-wrap'),
+        function (w) { w.hidden = true; });
     });
   }
 
@@ -349,9 +354,6 @@
     var opts = destinations(r);
 
     function close() { wrap.hidden = true; }
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !wrap.hidden) close();
-    });
 
     ['dropbox', 'early'].forEach(function (kind) {
       var btn = $(kind === 'dropbox' ? 'boxListBtn' : 'evListBtn');
@@ -1527,10 +1529,11 @@
   var GR_MCD = '34000';      // the state's MCD code for the City of Grand Rapids
 
   // Whether a result is in the one jurisdiction whose own clerk data this
-  // page carries. The city clerk's file has the early voting sites and drop
-  // boxes for Grand Rapids and nothing else; every other jurisdiction's drop
-  // boxes come from the county's page, and its early voting sites are not
-  // shown at all, because the county's list is for the wrong election.
+  // page carries. The city clerk's file has the early voting dates, sites
+  // and drop boxes for Grand Rapids and nothing else. Every other
+  // jurisdiction's drop boxes come from the county's page or the state's
+  // release, and its early voting is not shown at all: this page has no
+  // current source for another clerk's dates or sites.
   function inGrandRapids(r) {
     return !!(r && r.mcd === GR_MCD);
   }
@@ -1708,6 +1711,8 @@
     $('precinctInfo').innerHTML = '<div class="err">' + msg + '</div>';
     $('advisory').innerHTML = '';
     routeLayer.clearLayers(); pinLayer.clearLayers();
+    routes = null;   // or a theme change redraws the last answer's route
+    drawCameras();
   }
 
   // The absentee drop box row: the where-cell, then the when-cell.
@@ -1758,7 +1763,7 @@
   function earlyVotingCard(r) {
     var html = '';
   // --- early voting -----------------------------------------------------
-  var evState = earlyVotingForBlock();
+  var evState = earlyVotingForBlock(r);
   if (evState) {
     // ev can come back empty with a window published, because destinations()
     // also wants sites with coordinates and an origin to measure from: the
@@ -2116,13 +2121,20 @@
   // which also wants a site list: with a window published and no sites the
   // window is still open and it is our data that is short, and saying nothing
   // about the dates would blame the calendar for a gap of our own.
-  // The clerk's published dates when we have them, the calendar's otherwise.
-  // ONE accessor, because the answer block, the footer bar and the
-  // destination list each ask this question and a page that disagrees with
-  // itself about whether early voting is open is worse than one that says
-  // nothing.
-  function evWindow() {
-    if (clerkForThisElection()) {
+  // The early voting window for this result: the clerk's published dates
+  // when we have them, the calendar's otherwise. ONE accessor, because the
+  // answer block and the destination list both ask, and a page that disagrees
+  // with itself about whether early voting is open is worse than one that
+  // says nothing.
+  //
+  // Grand Rapids only. Both sources are the city's: the calendar's window is
+  // transcribed from the city clerk's page. Other jurisdictions set their own
+  // dates (the state's release has Alpine and Byron opening four days after
+  // the city), and this page has no current source for them, so outside the
+  // city there is no window rather than the city's.
+  function evWindow(r) {
+    if (!inGrandRapids(r)) return null;
+    if (clerkForThisElection(r)) {
       return { early_voting_from: clerk.early_voting.from,
                early_voting_to: clerk.early_voting.to,
                early_voting_sites: clerk.sites };
@@ -2137,8 +2149,8 @@
   // that has rolled to the next one, must not silently supply dates for an
   // election it was never about. That is the same failure the county's early
   // voting page has right now, in reverse.
-  function clerkForThisElection() {
-    return !!(clerk && clerk.early_voting && activeEl &&
+  function clerkForThisElection(r) {
+    return !!(inGrandRapids(r) && clerk && clerk.early_voting && activeEl &&
               clerk.election === activeEl.date);
   }
 
@@ -2158,9 +2170,9 @@
   // 'none' returns null rather than a row: a half-published window is not a
   // window a voter can act on, so the block says nothing rather than describe
   // a date range that does not exist yet.
-  function earlyVotingForBlock() {
-    if (!activeEl) return null;
-    var window = evWindow();
+  function earlyVotingForBlock(r) {
+    var window = activeEl && evWindow(r);
+    if (!window) return null;
     var to = window.early_voting_to;
     switch (Elections.windowState(window)) {
       case 'none':
@@ -2180,11 +2192,11 @@
         return { label: 'Early voting dates',
                  status: Elections.dayMonth(window.early_voting_from) +
                          ' to ' + Elections.dayMonth(to),
-                 site: inGrandRapids(current) && clerkForThisElection() };
+                 site: clerkForThisElection(r) };
       default:
         return { label: 'Early voting open',
                  status: 'Through ' + Elections.dayMonth(to),
-                 site: inGrandRapids(current) };
+                 site: inGrandRapids(r) };
     }
   }
 
@@ -2231,11 +2243,10 @@
     if (!box || !clock) return;
 
     // The day can roll over under a page left open. Re-asking the calendar is
-    // cheaper than being wrong about which election is next, and the footer is
-    // redrawn with it so the two readings of the calendar cannot disagree.
+    // cheaper than being wrong about which election is next. The clerk file
+    // needs no refresh: clerkForThisElection() checks it against activeEl.
     if (activeEl && activeEl.date < Elections.todayISO()) {
       activeEl = Elections.next(electionList);
-      clerk = placeCoords(clerkData);
     }
 
     if (!activeEl) {
@@ -2462,9 +2473,9 @@
     // a Kentwood voter would send them to the wrong clerk's early voting
     // site, and the county's own list is for the August primary.
     var sites = !inGrandRapids(r) ? []
-              : (clerkForThisElection() && clerk.sites.length) ? clerk.sites
+              : (clerkForThisElection(r) && clerk.sites.length) ? clerk.sites
               : Elections.sites(activeEl).filter(function (s) { return s.lat && s.lng; });
-    var evState = Elections.windowState(evWindow());
+    var evState = Elections.windowState(evWindow(r));
     var ranked = nearest(origin, sites);
     if (ranked && evState !== 'closed') {
       out.push({ kind: 'early', label: 'Early voting',
@@ -2504,6 +2515,7 @@
     routeLayer.clearLayers(); pinLayer.clearLayers();
 
     if (!opts.length) {
+      routes = null;
       $('routeBlock').hidden = true;
       return;
     }
@@ -2521,10 +2533,9 @@
     var origin = r.pin ? { lat: r.lat, lng: r.lng }
                        : graph.geocode(r.number, r.street);
     if (!origin) {
-      $('routeBlock').hidden = false;
+      routeError();
       $('routes').innerHTML = '<div class="err">Found where you vote, but could not ' +
         'place your address on the street map, so no route is drawn.</div>';
-      $('steps').innerHTML = ''; $('unavoid').innerHTML = '';
       return;
     }
     var place = pick.place;
@@ -2554,10 +2565,9 @@
     // temporary edges they refer to no longer exist.
     var computed = computeRoutes(origin, place);
     if (!computed) {
-      $('routeBlock').hidden = false;
+      routeError();
       $('routes').innerHTML = '<div class="err">No drivable route between your address ' +
         'and ' + esc(place.name) + ' on this road network.</div>';
-      $('steps').innerHTML = ''; $('unavoid').innerHTML = '';
       map.fitBounds(L.latLngBounds([[origin.lat, origin.lng], [place.lat, place.lng]]).pad(.35), fitOpts());
       return;
     }
@@ -2571,6 +2581,18 @@
     // Default to the clean route, but do not fight a choice already made.
     if (selected !== 'fast' && selected !== 'avoid') selected = 'avoid';
     renderAll(true);
+  }
+
+  // A lookup with no route to draw. The previous answer's route has to go
+  // with it, or a theme change redraws it under this one's error: renderAll
+  // runs whenever routes is set. And the section has to lose map-only, which
+  // revealMap() adds on a first lookup and which hides the message itself.
+  function routeError() {
+    routes = null;
+    drawCameras();
+    $('routeBlock').hidden = false;
+    $('routeBlock').classList.remove('map-only');
+    $('steps').innerHTML = ''; $('unavoid').innerHTML = '';
   }
 
   // Both routes between two points: the fastest, and the one that avoids the
@@ -2591,10 +2613,13 @@
 
     var fast, avoid, t0 = performance.now();
     try {
+      // The fastest route ignores cameras: hide the table for one search,
+      // and put it back even if that search throws, or every later route
+      // would be planned blind to them.
       var saved = graph._edgeCams;
       graph._edgeCams = null;
-      fast = graph.route(originNode, destNode);
-      graph._edgeCams = saved;
+      try { fast = graph.route(originNode, destNode); }
+      finally { graph._edgeCams = saved; }
       avoid = graph.route(originNode, destNode);
       if (fast) { fast.pts = routePoints(fast); fast.steps = graph.steps(fast); }
       if (avoid) {
