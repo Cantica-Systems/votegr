@@ -21,6 +21,7 @@ import { readFile } from 'fs/promises';
 import { join, extname, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
+import { pinnedCalendar } from './pinned_calendar.mjs';
 
 const ROOT = join(fileURLToPath(new URL('..', import.meta.url)), 'site');
 
@@ -33,8 +34,20 @@ const TYPES = {
   '.geojson': 'application/json', '.png': 'image/png',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml',
 };
+// The early voting and drop box checks below are about which blocks are on
+// the card, which is a function of today, so they set this to
+// pinnedCalendar() and clear it after. Null the rest of the time, so
+// everything else reads the files that ship. servedHits counts what it
+// answered, so those checks can tell that their page really was given the
+// pinned files.
+let served = null, servedHits = 0;
 const server = createServer(async (req, res) => {
   const rel = normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
+  if (served && Object.prototype.hasOwnProperty.call(served, rel)) {
+    servedHits++;
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(served[rel])); return;
+  }
   const file = join(ROOT, rel === '/' ? 'index.html' : rel);
   if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
   try {
@@ -50,15 +63,8 @@ const URL_ = ORIGIN + '/simple/index.html';
 // What ships, so the assertions below describe the data rather than a memory
 // of it.
 const read = async (p) => JSON.parse(await readFile(join(ROOT, 'data', p), 'utf8'));
-const clerk = await read('gr-clerk.json');
-const calendar = await read('elections.json');
 const neighbours = await read('neighbors.json');
 const polling = await read('polling.json');
-
-const today = new Date().toISOString().slice(0, 10);
-const nextElection = (calendar.elections || [])
-  .filter(e => e.date >= today).sort((a, b) => a.date < b.date ? -1 : 1)[0];
-const clerkIsCurrent = !!(nextElection && clerk.election === nextElection.date);
 
 // A street the city does not have, taken from the shipped neighbour index so
 // this cannot name one that has since been annexed or renamed.
@@ -118,29 +124,57 @@ for (const width of [1280, 390, 320]) {
     document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok('nothing scrolls sideways with an answer on screen', overflow <= 0);
 
-  // --- early voting, from the clerk when it is about this election -------
-  if (clerkIsCurrent) {
-    const from = clerk.early_voting.from, to = clerk.early_voting.to;
-    const monthDay = iso => {
-      const [y, m, d] = iso.split('-').map(Number);
-      return ['January','February','March','April','May','June','July','August',
-              'September','October','November','December'][m - 1] + ' ' + d;
-    };
-    ok('early voting shows the window the clerk published, not the calendar',
-       answer.includes(monthDay(from)) && answer.includes(monthDay(to)));
-    ok('and names a site from the clerk file',
-       clerk.early_voting_sites.some(s => answer.includes(s.name)));
+  // --- early voting and drop boxes, on a calendar held still -----------
+  // Which of these blocks is on the card is a function of today, so they are
+  // checked on the pinned calendar (pinned_calendar.mjs), and the page is
+  // reloaded on the real files afterwards. Read from the calendar that ships,
+  // this stretch went red from the day after early voting closed, because
+  // the early block is dropped once its window has passed; stayed red on
+  // election day; and once the calendar ran out, its clerk checks skipped
+  // without a word and the order check stayed red for good, because neither
+  // block is drawn with no election. The site was right each time.
+  //
+  // Any date far enough ahead that early voting has not closed would do; 60
+  // is the one the map page's suite uses, so the two pages are checked
+  // against the same calendar. Expectations come from what was served, not
+  // from the files on disk, whose dates the page never saw.
+  //
+  // The pinned election carries no early voting window of its own, whatever
+  // the shipped one says. That is what keeps "not the calendar" meaning
+  // something: a page that ignored the clerk and read the calendar would
+  // find no window there and draw no early block.
+  const cal = pinnedCalendar(ROOT, 60);
+  const clerk = cal['/data/gr-clerk.json'];
+  cal['/data/elections.json'].elections = cal['/data/elections.json'].elections.map(
+    (e) => ({ ...e, early_voting_from: null, early_voting_to: null }));
+  const hitsBefore = servedHits;
+  served = cal;
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForFunction(() => !document.querySelector('input').disabled, null, { timeout: 15000 });
+  ok('early voting and drop boxes are checked against the calendar served to them',
+     servedHits > hitsBefore);
+  await pick(page, ADDRESS);
+  const pinnedAnswer = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
+  const monthDay = iso => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return ['January','February','March','April','May','June','July','August',
+            'September','October','November','December'][m - 1] + ' ' + d;
+  };
+  ok('early voting shows the window the clerk published, not the calendar',
+     pinnedAnswer.includes(monthDay(clerk.early_voting.from)) &&
+     pinnedAnswer.includes(monthDay(clerk.early_voting.to)));
+  ok('and names a site from the clerk file',
+     clerk.early_voting_sites.some(s => pinnedAnswer.includes(s.name)));
 
-    // --- drop boxes ------------------------------------------------------
-    // By name, not by position. The blocks were reordered to match the map
-    // page and "the last one" stopped meaning the drop boxes.
-    const rows = await page.$$eval('.ev-boxes', blocks =>
-      blocks[0] ? blocks[0].querySelectorAll('.loc').length : 0);
-    ok(`every drop box is listed (${clerk.drop_boxes.length})`,
-       rows === clerk.drop_boxes.length);
-    ok('with the dates that make a drop box usable',
-       /Ballots are mailed from|Return it by the time the polls close/.test(answer));
-  }
+  // --- drop boxes --------------------------------------------------------
+  // By name, not by position. The blocks were reordered to match the map
+  // page and "the last one" stopped meaning the drop boxes.
+  const rows = await page.$$eval('.ev-boxes', blocks =>
+    blocks[0] ? blocks[0].querySelectorAll('.loc').length : 0);
+  ok(`every drop box is listed (${clerk.drop_boxes.length})`,
+     rows === clerk.drop_boxes.length);
+  ok('with the dates that make a drop box usable',
+     /Ballots are mailed from|Return it by the time the polls close/.test(pinnedAnswer));
 
   // The same order as the map page, which is the point of having one.
   const order = await page.$$eval('.card-body > *', els => els.map(e => e.className));
@@ -148,6 +182,9 @@ for (const width of [1280, 390, 320]) {
   ok('drop boxes come before early voting, which comes before the polling place',
      at('ev-boxes') > -1 && at('ev-early') > at('ev-boxes') &&
      order.findIndex(c => c === 'loc') > at('ev-early'));
+  served = null;
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForFunction(() => !document.querySelector('input').disabled, null, { timeout: 15000 });
 
   // --- a street on its own is not an address -----------------------------
   await page.fill('#addr, input[type="text"]', '');

@@ -16,6 +16,7 @@ import { join, extname, normalize } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { chromium, devices } from 'playwright';
+import { pinnedCalendar } from './pinned_calendar.mjs';
 
 const ROOT = join(fileURLToPath(new URL('..', import.meta.url)), 'site');
 const Elections = createRequire(import.meta.url)('../site/elections.js');
@@ -34,8 +35,8 @@ const TYPES = {
 };
 // Two stretches need the calendar held still, the countdown and "one
 // expander per card on a phone", because what they check is a function of
-// today and cannot read a moving date. Each sets this to pinnedCalendar()
-// below and clears it after. Null the rest of the time, so everything else
+// today and cannot read a moving date. Each sets this to pinned() below
+// and clears it after. Null the rest of the time, so everything else
 // reads the files that ship. servedHits counts what it answered, so a
 // stretch can tell that its page really was given the pinned files.
 let served = null, servedHits = 0;
@@ -59,51 +60,10 @@ const ORIGIN = 'http://127.0.0.1:' + server.address().port;
 const URL_ = ORIGIN + '/index.html';
 
 // --- a calendar held still --------------------------------------------
-// Dates are relative to today, the way test_early_voting_states.mjs does it,
-// so the fixture cannot rot into a fixed one. It has to pin two files, not
-// one: app.js takes the early voting window from gr-clerk.json whenever that
-// file names the active election (clerkForThisElection), and falls back to
-// elections.json only when it does not, so pinning the calendar alone would
-// leave the early card reading a real date.
-const iso = (d) => {
-  const x = new Date(); x.setDate(x.getDate() + d);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
-};
-const shiftDate = (d, by) => {
-  const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + by);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
-};
-const dayGap = (a, b) =>
-  Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+// pinnedCalendar() is in pinned_calendar.mjs, shared with
+// test_simple_page.mjs, which has the same problem on the other page.
+const pinned = (daysOut) => pinnedCalendar(ROOT, daysOut);
 const realElections = JSON.parse(await readFile(join(ROOT, 'data/elections.json'), 'utf8'));
-const realClerk = JSON.parse(await readFile(join(ROOT, 'data/gr-clerk.json'), 'utf8'));
-function pinnedCalendar(daysOut) {
-  const ELECTION_DAY = iso(daysOut);
-  // Every date in the clerk's file moves by the same amount, so the window,
-  // the per-day hours and the election it names stay consistent with each
-  // other rather than being three separately invented dates.
-  const by = dayGap(realClerk.election, ELECTION_DAY);
-  const clerk = JSON.parse(JSON.stringify(realClerk));
-  clerk.election = ELECTION_DAY;
-  clerk.early_voting.from = shiftDate(realClerk.early_voting.from, by);
-  clerk.early_voting.to = shiftDate(realClerk.early_voting.to, by);
-  clerk.early_voting.days = realClerk.early_voting.days.map(
-    (d) => ({ ...d, date: shiftDate(d.date, by) }));
-  // The real general election, moved, rather than an invented one: it keeps
-  // whatever sites and hours ship with it.
-  const general = realElections.elections[realElections.elections.length - 1];
-  return {
-    '/data/elections.json': {
-      election_day_hours: realElections.election_day_hours,
-      elections: [{ ...general, date: ELECTION_DAY,
-                    early_voting_from: clerk.early_voting.from,
-                    early_voting_to: clerk.early_voting.to }],
-    },
-    '/data/gr-clerk.json': clerk,
-  };
-}
 
 // The shipped calendar running out is not a failure. elections.json's own
 // how_to_update calls it deliberate: "If every date has passed the page
@@ -250,7 +210,7 @@ for (const w of WIDTHS) {
   // no "days until" sentence. Any date ahead of today would do here; 60 is
   // the card block's, so the two stretches serve the same calendar.
   const hitsBefore = servedHits;
-  served = pinnedCalendar(60);
+  served = pinned(60);
   await page.reload({ waitUntil: 'networkidle' });
   ok('the countdown is checked against the calendar served to it', servedHits > hitsBefore);
   const cd1 = await page.evaluate(() => {
@@ -598,7 +558,7 @@ for (const w of WIDTHS) {
 // drop box" -- neither of which said the section itself was shut.
 //
 // Which cards are shut is a function of TODAY, so this block serves the
-// pinned calendar (pinnedCalendar, near the top of the file).
+// pinned calendar (pinned_calendar.mjs).
 //
 // 60 days out is the number that matters. ABSENTEE_LEAD_DAYS is 40 in
 // app.js, so an election further out than that has not reached its absentee
@@ -608,7 +568,7 @@ for (const w of WIDTHS) {
 // expanded, and the tap below closed it instead of opening it, which took
 // four assertions down at once.
 {
-  served = pinnedCalendar(60);
+  served = pinned(60);
   const ctx = await browser.newContext({ ...devices['Pixel 7'] });
   const page = await ctx.newPage();
   await page.goto(URL_, { waitUntil: 'networkidle' });
