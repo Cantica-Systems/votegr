@@ -110,13 +110,13 @@ def main():
     lines = [LineString([(p[1], p[0]) for p in e["p"]]) for e in edges]
     tree = STRtree(lines)
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    for stale in OUT_DIR.glob("*.json"):
-        stale.unlink()
-
+    # Every file is built in memory first and written only once every guard
+    # below has passed, so a refusal leaves the previous build's chunks and
+    # index exactly as they were rather than a half-replaced directory.
     chunk_nodes = {}
     table = []
     metas = {}
+    pending = []          # (path, body), written at the end
     for mcd, outline in sorted(outlines.items()):
         area = ringed(outline)
         keep = sorted(i for i in tree.query(area) if lines[i].intersects(area))
@@ -183,10 +183,10 @@ def main():
             "restrictions": here_restrictions,
         }
         metas[mcd] = document["meta"]
-        path = OUT_DIR / f"{mcd}.json"
-        path.write_text(json.dumps(document, separators=(",", ":")) + "\n")
+        body = json.dumps(document, separators=(",", ":")) + "\n"
+        pending.append((OUT_DIR / f"{mcd}.json", body))
         table.append((names[mcd], len(here_edges), len(here_nodes),
-                      len(here_restrictions), path.stat().st_size))
+                      len(here_restrictions), len(body.encode("utf-8"))))
 
     # The loader reads this first and nothing else until it has: it says
     # which chunks exist and how big each one is, which is what lets the
@@ -222,11 +222,17 @@ def main():
              for mcd, m in sorted(metas.items())),
             key=lambda c: c["mcd"]),
     }
-    (OUT_DIR / "index.json").write_text(
-        json.dumps(index, separators=(",", ":")) + "\n")
-    print(f"wrote {OUT_DIR / 'index.json'} ({len(index['chunks'])} chunks)")
+    pending.append((OUT_DIR / "index.json",
+                    json.dumps(index, separators=(",", ":")) + "\n"))
 
     verify_seams(outlines, chunk_nodes, names)
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for stale in OUT_DIR.glob("*.json"):
+        stale.unlink()
+    for path, body in pending:
+        path.write_text(body)
+    print(f"wrote {len(index['chunks'])} chunks and {OUT_DIR / 'index.json'}")
 
     print(f"\n{'jurisdiction':<26}{'edges':>8}{'nodes':>8}{'turns':>7}{'KB':>7}")
     for name, e, n, r, size in sorted(table, key=lambda row: -row[1]):

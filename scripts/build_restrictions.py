@@ -195,15 +195,16 @@ def main():
                               "jurisdictions. The Grand Rapids sign inventory "
                               "was dropped in favour of one source with one "
                               "licence everywhere."))
-    GRAPH.write_text(json.dumps(graph, separators=(",", ":")))
 
     print(f"attached {len(uniq)} turn restrictions "
           f"({sum(1 for r in uniq if r['no'])} no_*, "
           f"{sum(1 for r in uniq if not r['no'])} only_*)")
     print(f"dropped: {dropped}")
-    print(f"graph.json now {GRAPH.stat().st_size/1048576:.2f} MB raw")
+    # Checked before the write, so a refusal leaves build/graph.json as it was.
     if not uniq:
         sys.exit("REFUSE: no restrictions matched; check the build order")
+    GRAPH.write_text(json.dumps(graph, separators=(",", ":")))
+    print(f"graph.json now {GRAPH.stat().st_size/1048576:.2f} MB raw")
 
 
 if __name__ == "__main__":

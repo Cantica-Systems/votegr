@@ -209,10 +209,12 @@ def main():
         raise SystemExit(f"REFUSING to write: {len(chunks)} jurisdictions got "
                          f"addresses, expected {EXPECTED_JURISDICTIONS}")
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Built in memory and written only after the checks below, so a refusal
+    # leaves the committed chunks as they were.
     total = total_ambiguous = 0
     covered = set()
     table = []
+    pending = []          # (path, body)
     for mcd, streets in sorted(chunks.items()):
         here = [p for p in props if p["mcd"] == mcd]
         codes = sorted(p["code"] for p in here)
@@ -259,9 +261,9 @@ def main():
             "precincts": codes,
             "streets": placed,
         }
-        path = OUT_DIR / f"{mcd}.json"
-        path.write_text(json.dumps(document, separators=(",", ":")) + "\n")
-        table.append((name, count, len(placed), path.stat().st_size))
+        body = json.dumps(document, separators=(",", ":")) + "\n"
+        pending.append((OUT_DIR / f"{mcd}.json", body))
+        table.append((name, count, len(placed), len(body.encode("utf-8"))))
 
     missing = {p["code"] for p in props} - covered
     if missing:
@@ -270,6 +272,10 @@ def main():
     if total < MIN_ADDRESSES:
         raise SystemExit(f"REFUSING to write: only {total:,} addresses placed "
                          f"(expected at least {MIN_ADDRESSES:,})")
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for path, body in pending:
+        path.write_text(body)
 
     print(f"\nplaced {total:,} addresses across {len(chunks)} jurisdictions")
     print(f"  outside every precinct  : {outside:,}")
