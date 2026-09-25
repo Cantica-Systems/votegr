@@ -582,7 +582,7 @@ for (const w of WIDTHS) {
 // pinned calendar (pinned_calendar.mjs).
 //
 // 60 days out is the number that matters. ABSENTEE_LEAD_DAYS is 40 in
-// app.js, so an election further out than that has not reached its absentee
+// elections.js, so an election further out than that has not reached its absentee
 // window and the drop box card is reliably shut. Read from the live
 // calendar, this block fails as soon as the next election is within 40
 // days: the drop box card renders expanded, and the tap below closes it

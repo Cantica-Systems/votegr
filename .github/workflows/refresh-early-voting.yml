@@ -15,8 +15,8 @@
 #     push to main, which republishes site/ with this file changed, but
 #     neither page loads early-voting.json (app.js takes graph, precincts,
 #     addresses, polling, cameras, elections, landcover, neighbors, gr-clerk
-#     and sources; /simple takes five of those), so what a reader sees does
-#     not change.
+#     and sources; /simple takes precincts, addresses, polling, elections,
+#     neighbors and gr-clerk), so what a reader sees does not change.
 #
 #   - It does not geocode. The `located` coordinates beside each site come
 #     from geocode_places.py, not from this script. Putting the refresh on a
