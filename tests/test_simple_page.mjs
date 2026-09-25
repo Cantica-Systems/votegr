@@ -8,10 +8,12 @@
 // break here is a break for the people least able to work around it.
 //
 // What it checks is what would fail silently: that a real address still comes
-// back with its ward, precinct and polling place; that a street outside the
-// city is offered and ANSWERED rather than refused; that early voting and the
-// drop boxes come from the clerk's file when it is about this election; and
-// that the page still talks to nobody but its own host.
+// back with its ward, precinct and polling place, in the city and across the
+// county; that a street the address list cannot answer is offered and
+// ANSWERED rather than refused; that an address two towns share is the
+// reader's to pick; that early voting and the city's drop boxes come from the
+// clerk's file when it is about this election; and that the page still talks
+// to nobody but its own host.
 //
 // Expectations are read from the shipped data rather than written here, so a
 // refresh that changes the numbers cannot leave this file asserting last
@@ -20,13 +22,18 @@ import { createServer } from 'http';
 import { readFile } from 'fs/promises';
 import { join, extname, normalize } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import { chromium } from 'playwright';
 import { pinnedCalendar } from './pinned_calendar.mjs';
 
 const ROOT = join(fileURLToPath(new URL('..', import.meta.url)), 'site');
+const { Precincts } = createRequire(import.meta.url)('../site/precinct.js');
 
 let pass = 0, fail = 0;
-function ok(name, cond) { cond ? (pass++, console.log('  ok  ' + name)) : (fail++, console.log('  FAIL ' + name)); }
+function ok(name, cond, detail = '') {
+  cond ? (pass++, console.log('  ok  ' + name))
+       : (fail++, console.log('  FAIL ' + name + (detail ? '  ' + detail : '')));
+}
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -66,10 +73,21 @@ const read = async (p) => JSON.parse(await readFile(join(ROOT, 'data', p), 'utf8
 const neighbours = await read('neighbors.json');
 const polling = await read('polling.json');
 
-// A street the city does not have, taken from the shipped neighbour index so
-// this cannot name one that has since been annexed or renamed.
-const outsideStreet = Object.keys(neighbours.streets)
-  .filter(s => (neighbours.streets[s] || []).length)
+// The county index, built the way the page builds it, so the checks below can
+// ask it what to expect.
+const index = await read('precincts.json');
+const mcds = index.jurisdictions.map(j => j.mcd);
+const addressFiles = await Promise.all(mcds.map(m => read(`addresses/${m}.json`)));
+const pollingFiles = await Promise.all(mcds.map(m => read(`polling/${m}.json`)));
+const county = Precincts.county({ index, addresses: addressFiles, polling: pollingFiles,
+                                  cityPolling: polling, cityMcd: '34000' });
+
+// A street the address list cannot answer, in a jurisdiction it does not
+// cover, taken from the shipped neighbour index so this cannot name one that
+// has since been annexed or renamed.
+const unindexed = county.unindexed(neighbours.streets);
+const outsideStreet = Object.keys(unindexed)
+  .filter(s => unindexed[s].every(j => !county.coversJurisdiction(j)))
   .sort()[0];
 
 // --- the address used throughout ---------------------------------------
@@ -194,26 +212,28 @@ for (const width of [1280, 390, 320]) {
   ok('and the hint asks for the house number', await page.evaluate(() =>
      /start with the house number/i.test(document.body.innerText)));
 
-  // --- a street outside the city ----------------------------------------
+  // --- a street outside the county ----------------------------------------
   const options = await pick(page, '100 ' + outsideStreet);
-  ok('a street outside the city is offered, not refused',
-     options.some(o => o.includes(outsideStreet)));
+  ok('a street outside the county is offered, not refused',
+     options.some(o => o.toUpperCase().includes(outsideStreet)));
+  ok('written the way people write it, not in the index\'s capitals',
+     !options.some(o => o.includes(outsideStreet)));
   ok('and the option says which jurisdiction it is in',
-     options.some(o => neighbours.streets[outsideStreet].some(j => o.includes(j))));
+     options.some(o => unindexed[outsideStreet].some(j => o.includes(j))));
   // A name, not a phrase: "Kentwood City" or "Ada Township", never "in …",
   // and the same grey whether or not the street is in the city.
   ok('every row names its place as a City or a Township, with no "in"',
      lastWhere.length > 0 && lastWhere.every(w => /(City|Township)$/.test(w) && !/^in /.test(w)));
-  ok('no row is coloured for being outside the city', lastOutsideRows === 0);
+  ok('no row is coloured for being outside the county', lastOutsideRows === 0);
 
   const outside = await page.evaluate(() => ({
     text: document.body.innerText.replace(/\s+/g, ' '),
     box: document.querySelector('#addr, input[type="text"]').value,
   }));
   ok('picking it explains where the address actually is',
-     /not the City of Grand Rapids/.test(outside.text));
+     /outside Kent County/.test(outside.text));
   ok('names the jurisdiction in the answer',
-     neighbours.streets[outsideStreet].some(j => outside.text.includes(j)));
+     unindexed[outsideStreet].some(j => outside.text.includes(j)));
   ok('keeps the address in the box, because the address is right',
      outside.box.toUpperCase().includes(outsideStreet));
   ok('and does not pretend to know a precinct for it',
@@ -225,6 +245,85 @@ for (const width of [1280, 390, 320]) {
   if (offsite.length) offsite.forEach(u => console.log('       ' + u));
   if (errors.length) errors.forEach(e => console.log('       ' + e));
 
+  await ctx.close();
+}
+
+// --- across the county -------------------------------------------------
+// /simple answered for Grand Rapids alone, so an address anywhere else in
+// the county was "not listed here" while the map page answered it. It now
+// asks the same lookup the map page does. Fixtures are polling places, so no
+// house is named: the Kentwood Activities Center (a city with wards) and Ada
+// Congregational (a township, without).
+{
+  const { ctx, page, errors, offsite } = await open(390);
+  const answerFor = async (text) => {
+    await pick(page, text);
+    return page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
+  };
+
+  const kw = county.lookup('355 48th St SE');
+  const kwText = await answerFor('355 48th St SE');
+  ok('a Kentwood address answers, naming Kentwood',
+     /Where you vote:\s*Kentwood/.test(kwText));
+  ok('with its ward and precinct', new RegExp(`Ward:\\s*${kw.ward}\\s*Precinct:\\s*${kw.precinct}\\b`).test(kwText));
+  ok('and the polling place the county lists for it', kwText.includes(kw.place.name));
+  const kwBoxes = await page.$$eval('.ev-boxes .loc', els => els.length);
+  ok(`and every Kentwood drop box (${county.dropBoxes('42820').length})`,
+     kwBoxes === county.dropBoxes('42820').length);
+  ok('and no early voting: the city clerk\'s dates are not Kentwood\'s',
+     !(await page.$('.ev-early')));
+
+  const adaText = await answerFor('6330 Ada Dr SE');
+  ok('a township address answers, naming the township',
+     /Where you vote:\s*Ada Township/.test(adaText));
+  ok('with no Ward at all, not a blank one', !/Ward:/.test(adaText) && /Precinct:\s*\d/.test(adaText));
+  ok('and the drop box the state lists for it',
+     county.dropBoxes('00240').every(b => adaText.toUpperCase().includes(b.address.toUpperCase())));
+  ok('and a Directions link that names the township, not the city',
+     (await page.$$eval('.ev-boxes a.dir-btn', els => els.map(a => decodeURIComponent(a.href))))
+       .every(h => /Ada Township, MI/.test(h) && !/Grand Rapids, MI/.test(h)));
+
+  // The same number and street in two towns, found in the data rather than
+  // written here: one row per town, and Enter is not allowed to pick.
+  const shared = [];
+  for (const s of county.streetNames) {
+    const by = new Map();
+    for (const r of county.streets[s]) {
+      if (!by.has(r[0])) by.set(r[0], new Set());
+      by.get(r[0]).add(county.mcdOf(r));
+    }
+    for (const [n, ms] of by) if (ms.size === 2) shared.push([n, s, [...ms]]);
+  }
+  const [n, street, pair] = shared[0];
+  await page.fill('#addr', '');
+  await page.type('#addr', `${n} ${street}`, { delay: 5 });
+  await page.waitForSelector('#opts li', { timeout: 5000 });
+  const where = await page.$$eval('#opts li .opt-where', els => els.map(e => e.textContent.trim()));
+  const label = (m) => {
+    const name = county.jurisdictions[m];
+    return /Township$/.test(name) ? name : name + ' City';
+  };
+  ok('an address in two towns is offered once for each, naming only its own',
+     pair.every(m => where.includes(label(m))) && where.filter(w => / or /.test(w)).length === 0);
+  await page.press('#addr', 'Enter');
+  await page.waitForTimeout(300);
+  ok('and Enter asks the reader to pick rather than answering',
+     !(await page.$('.card')) && /more than one place/i.test(await page.textContent('#status')));
+  for (const m of pair) {
+    const i = where.indexOf(label(m));
+    await page.$$eval('#opts li', (els, k) =>
+      els[k].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })), i);
+    await page.waitForTimeout(300);
+    ok(`picking ${county.jurisdictions[m]} answers ${county.jurisdictions[m]}`,
+       new RegExp(`Where you vote:\\s*${county.jurisdictions[m]}\\b`).test(
+         await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '))));
+    await page.fill('#addr', '');
+    await page.type('#addr', `${n} ${street}`, { delay: 5 });
+    await page.waitForSelector('#opts li', { timeout: 5000 });
+  }
+
+  ok('the county page still talks to nobody but its own host', offsite.length === 0);
+  ok('and nothing failed to load or threw', errors.length === 0, errors.join(' | '));
   await ctx.close();
 }
 
