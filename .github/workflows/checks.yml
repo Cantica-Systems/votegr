@@ -1,28 +1,29 @@
 # Runs the repository's own checks on every pull request.
 #
 # pages.yml deploys site/ on every push to main, so main IS production and a
-# merge is a release. Until now nothing ran before that: the tests existed and
-# were run by whoever remembered. This is the step that makes remembering
-# unnecessary, and gives branch protection something real to require.
+# merge is a release. This runs the suites before that happens, so nobody has
+# to remember to, and gives branch protection something real to require.
 #
 # Ten suites, cheapest first, so an obvious break fails in seconds rather
 # than after a browser download:
 #
 #   tests/test_display_case.mjs         display casing, over the real corpus
-#   tests/test_precinct_outline.mjs     the jurisdiction outline is a border, not
-#                                 a line through the middle of the place
-#   tests/test_polling_data.mjs         every polling place has a real address and
-#                                 a coordinate to route to
-#   tests/test_router.mjs               the routing core, restrictions and address lookup
-#   tests/audit_routes.mjs              1,000 real routes countywide, mechanically
-#                                 checked -- the one
-#                                 that matters, per the README, and ~40s
+#   tests/test_precinct_outline.mjs     the jurisdiction outline is a border,
+#                                       not a line through the middle
+#   tests/test_polling_data.mjs         every polling place has a real address
+#                                       and a coordinate to route to
+#   tests/test_router.mjs               the routing core, restrictions and
+#                                       address lookup
+#   tests/audit_routes.mjs              1,000 real routes countywide,
+#                                       mechanically checked: the one that
+#                                       matters, per the README, and ~40s
 #   tests/test_page.mjs                 the page in a real browser at three widths
 #   tests/test_simple_page.mjs          /simple in a real browser at three widths
-#   tests/test_early_voting_states.mjs  the four early voting states, from a fixture
+#   tests/test_early_voting_states.mjs  the early voting states and election
+#                                       day, from a fixture
 #   tests/test_check_links.mjs          what the link checker makes of a response
-#   tests/test_check_links_inputs.mjs   that the link checker can still read every
-#                                 file it names
+#   tests/test_check_links_inputs.mjs   that the link checker can still read
+#                                       every file it names
 #
 # scripts/compare_osrm.mjs is deliberately absent. It queries a public OSRM server,
 # which makes it network-dependent and slow, and sending trips to a routing
@@ -35,8 +36,8 @@
 # function: it is what decides whether a link-check run is red, and it is
 # where a host-by-host exemption list would grow back. And the files it reads
 # are in this repository, so whether it can still read them is answerable on
-# the pull request that moves one -- which is a week earlier than the weekly
-# run finds out, and 98b3c81 is why that week matters.
+# the pull request that moves one, a week before the weekly run would find
+# out.
 name: Checks
 
 on:
@@ -90,25 +91,27 @@ jobs:
       - name: Router core
         run: node tests/test_router.mjs
 
-      - name: Real trips across the city
+      - name: Real trips across the county
         run: node tests/audit_routes.mjs
 
-      # Only chromium. The page is plain HTML, CSS and ES5-era JavaScript, so
-      # a second engine would cost minutes to tell us the same thing.
+      # Only chromium. The pages are plain HTML, CSS and JavaScript with no
+      # build step, so a second engine would cost minutes to tell us the same
+      # thing.
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
       - name: The page in a browser
         run: node tests/test_page.mjs
 
-      # The light version, which answers the same question from the same files
-      # and had no browser test at all until now. Its own file rather than
-      # more of tests/test_page.mjs: different page, different failures.
+      # The light version, which answers the same question from the same
+      # files. Its own file rather than more of tests/test_page.mjs: different
+      # page, different failures.
       - name: The /simple page in a browser
         run: node tests/test_simple_page.mjs
 
-      # Four early voting states, only one of which the committed data can
-      # reach on any given day, so this serves its own dated fixture.
+      # Four early voting states and election day itself, only one of which
+      # the committed data can reach on any given day, so this serves its own
+      # dated fixture.
       - name: Early voting states
         run: node tests/test_early_voting_states.mjs
 
@@ -118,8 +121,7 @@ jobs:
         run: node tests/test_check_links.mjs
 
       # Makes no request either: it reads the files the live checker reads and
-      # fails if one of them has moved. 98b3c81 renamed a file out from under
-      # that list and this suite went green anyway; the weekly run caught it
-      # two Mondays running, which is two Mondays later than here.
+      # fails if one of them has moved, on the pull request that moved it
+      # rather than at the next weekly run.
       - name: Link checker inputs
         run: node tests/test_check_links_inputs.mjs
