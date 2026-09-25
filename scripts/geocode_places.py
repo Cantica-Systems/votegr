@@ -36,8 +36,6 @@ import sys
 import time
 from collections import defaultdict
 
-import requests
-
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 POLLING_DIR = ROOT / "site" / "data" / "polling"
 EARLY_VOTING = ROOT / "site" / "data" / "early-voting.json"
@@ -196,7 +194,13 @@ def fetch_parcels():
     imported: that module needs shapely to do its precinct work, and this one
     needs nothing but the centroid. A geocoder that cannot run without a
     geometry library it never calls is a geocoder people stop running.
+
+    requests is imported here, not at the top, for the same reason:
+    merge_foia_dropboxes.py borrows this module's helpers and never fetches,
+    and a run from an existing --parcels cache never fetches either.
     """
+    import requests
+
     rows, offset = [], 0
     while True:
         params = {
