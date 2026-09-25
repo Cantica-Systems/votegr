@@ -19,9 +19,11 @@ not print. Anything the two disagree about is reported, never silently
 resolved -- a polling place the two levels of government describe differently
 is exactly the thing a voter needs told.
 
-Nothing here is geocoded. The browser already geocodes the address a voter
-types, against the same street chunk it loaded to route them, so it can
-geocode the polling place the same way and there is no coordinate to go stale.
+Nothing here is geocoded, and every run writes these files afresh, so it
+drops the lat and lng that geocode_places.py stamped on each polling place and
+clerk's office (drop boxes carried forward from the state keep theirs). The
+page offers no route to a polling place without a coordinate, so
+geocode_places.py must run after this script, every time.
 
 Verifies before writing: every precinct in the county must gain a polling
 place, and every page's own heading must name the jurisdiction we asked for,
@@ -255,7 +257,7 @@ def existing_boxes(mcd):
 
 
 def parse_polling(lines, not_notes=frozenset()):
-    """[{ward, precinct, name, address}] from the Election Day section.
+    """[{ward, precinct, name, address, note}] from the Election Day section.
 
     A ward jurisdiction prints "Ward 1, Precinct 2"; a township prints
     "Precinct 2". Both are followed by the venue name and its street address.
@@ -269,8 +271,8 @@ def parse_polling(lines, not_notes=frozenset()):
     and no route, with nothing downstream saying so. So the address is found
     by its shape and the name is whatever precedes it.
 
-    A note can follow the address, as "(Back entrance)" does in Grand Rapids,
-    and is ignored: the scan stops at the address.
+    A note can follow the address, as "(Back entrance)" does in Grand Rapids.
+    read_note() keeps it, as `note`, when it is about the building.
     """
     try:
         start = next(i for i, line in enumerate(lines)
@@ -488,9 +490,9 @@ def main():
                                  "every election, and MCL 168.662 settles them "
                                  "60 days out, so re-run after that date for "
                                  "each election.",
-                "not_geocoded": "The browser geocodes these against the street "
-                                "chunk it already loaded, so no coordinate here "
-                                "can go stale.",
+                "geocoded_by": "geocode_places.py, which must run after this "
+                               "script: a refresh writes these records without "
+                               "coordinates.",
             },
             "mcd": mcd,
             "jurisdiction": names[mcd],

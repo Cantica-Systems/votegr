@@ -6,7 +6,7 @@ site/data/early-voting.json.
 The county lists early voting for every jurisdiction on one page, which is the
 only place it exists in one piece: the state publishes none, and thirty clerks
 publish thirty formats. Grand Rapids is on it too, with two sites, which makes
-this a second opinion on the city's own elections.json rather than only a
+this a second opinion on the city's own gr-clerk.json rather than only a
 filler for the other twenty-nine.
 
 This is a page written for people, not an interface, and it should be treated
@@ -17,8 +17,7 @@ place Saturday, July 25 - Sunday, August 2", whose year is taken from the
 election because the sentence does not carry one.
 
 So the value here is as a CROSS-CHECK, not as a source of record. It is a
-second opinion on what the clerks publish and on what Google Civic returns
-during the weeks it has Michigan data, and disagreement between the three is
+second opinion on what the clerks publish, and disagreement between the two is
 the signal worth having.
 
 Staleness is not this script's judgement to make. The window it scraped is
@@ -348,8 +347,9 @@ def main():
     document = {
         "provenance": {
             "description": "Kent County early voting sites and hours, one per "
-                           "jurisdiction. Grand Rapids is not on this page and "
-                           "keeps its own sites in elections.json.",
+                           "jurisdiction. Grand Rapids appears too; its source "
+                           "of record is gr-clerk.json, and the city's own "
+                           "page is kept below as grand_rapids_clerk.",
             "source": "Kent County Clerk / Register of Deeds",
             "source_url": URL,
             "generated": datetime.date.today().isoformat(),
@@ -363,8 +363,8 @@ def main():
                             "prose written for people: no election id, no ISO "
                             "dates, no schema. The election, the window and its "
                             "year are all inferred here, and the value is in "
-                            "disagreeing with the clerks and with Google Civic, "
-                            "not in being believed over them.",
+                            "disagreeing with the clerks, not in being believed "
+                            "over them.",
             "staleness": "Not decided here. The window is written down and the "
                          "page applies the same windowState() it applies to "
                          "every other early voting date, so a window that has "
