@@ -3,10 +3,8 @@
 """Fetch the coordinates of every OpenStreetMap via-node the restriction
 relations point at, and write build/osm_via_nodes.json.
 
-This file had no producer. build_restrictions.py and build_graph_osm.py both
-read it, the README says every data file is reproducible, and the script that
-made it was not in the repository -- so a clean checkout could not rebuild the
-graph's turn restrictions at all. This closes that hole.
+build_restrictions.py reads this file; without it a clean checkout cannot
+rebuild the graph's turn restrictions.
 
 A turn restriction is "from this way, via this node, to that way". The ways
 arrive with refresh_osm_roads.py; the via NODES do not, because Overpass
