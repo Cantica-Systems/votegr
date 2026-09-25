@@ -67,9 +67,13 @@
 
     // Addresses. A chunk stores its precincts as a list and each row points
     // at a position in it, so 227,000 rows do not repeat a 13-digit string;
-    // here the position becomes the code. Streets that run through more than
-    // one jurisdiction -- 28th St SE is in three -- merge into one list,
-    // sorted by number, and the rows carry which side of the line they are on.
+    // here the position becomes the code. A street name found in more than
+    // one jurisdiction merges into one list, sorted by number, and each row's
+    // code says which jurisdiction it is in. Sometimes that is one street
+    // crossing a line (28th St SE runs through three); as often it is two
+    // streets that share a name (Rockford and Cedar Springs each have a N
+    // Main St NE), so an address is answered within one jurisdiction: see
+    // places() below.
     var docs = opts.addresses || [];
     var dirty = {};
     for (i = 0; i < docs.length; i++) {
@@ -368,11 +372,53 @@
     return out;
   };
 
+  // ---- one street name, several places -------------------------------------
+  //
+  // 25 N Main St NE is a real address in Rockford and in Cedar Springs, eight
+  // miles apart. Read off the merged list, it was answered as whichever town
+  // sorted first, and a number between two of one town's houses could be
+  // inferred from the other town's. So the jurisdiction comes first: which
+  // ones could hold this address, and then the answer within one of them.
+
+  // The jurisdiction a row is in, by its code. Null in the city files.
+  Precincts.prototype.mcdOf = function (row) {
+    var d = this.byCode && this.byCode[row[1]];
+    return d ? d.mcd : null;
+  };
+
+  // A street's rows, or only those in one jurisdiction.
+  Precincts.prototype._rows = function (street, mcd) {
+    var rows = this.streets[street];
+    if (!rows || !mcd || !this.byCode) return rows || null;
+    var self = this;
+    var mine = rows.filter(function (r) { return self.mcdOf(r) === mcd; });
+    return mine.length ? mine : null;
+  };
+
+  // Every jurisdiction that could hold this address: those with the number on
+  // file, or failing that, those whose own rows on the street bracket it.
+  // Usually one. Empty in the city files, and when a number falls between two
+  // jurisdictions' rows on a street that crosses the line, which resolve()
+  // then answers from the merged list as the boundary case it is.
+  Precincts.prototype.places = function (street, number) {
+    var rows = this.streets[street];
+    if (!rows || !this.byCode || number == null) return [];
+    var self = this, mcds = [], seen = {}, exact = [], i, m;
+    for (i = 0; i < rows.length; i++) {
+      m = this.mcdOf(rows[i]);
+      if (m && !seen[m]) { seen[m] = 1; mcds.push(m); }
+      if (m && rows[i][0] === number && exact.indexOf(m) < 0) exact.push(m);
+    }
+    if (exact.length) return exact;
+    return mcds.filter(function (mcd) { return !!self.resolve(street, number, mcd); });
+  };
+
   // Resolve a house number on a street. Answers only when the neighbors on
   // the SAME SIDE agree, because a precinct line often runs down the middle of
-  // a street, putting odd and even in different precincts.
-  Precincts.prototype.resolve = function (street, number) {
-    var rows = this.streets[street];
+  // a street, putting odd and even in different precincts. With `mcd`, only
+  // that jurisdiction's rows are read.
+  Precincts.prototype.resolve = function (street, number, mcd) {
+    var rows = this._rows(street, mcd);
     if (!rows) return null;
 
     var exact = null;
@@ -427,7 +473,7 @@
     // No number yet: offer streets, so the next keystroke has somewhere to go.
     var self = this;
     var tag = function (o) {
-      var w = self.whereIs(o.street);
+      var w = o.mcd ? [self.jurisdictions[o.mcd]] : self.whereIs(o.street);
       if (w && w.length) o.where = w;
       return o;
     };
@@ -438,27 +484,29 @@
     }
 
     var out = [];
-    // Exact hits first, across every matching street.
-    streets.forEach(function (s) {
-      var rows = self.streets[s] || [];
-      for (var i = 0; i < rows.length; i++) {
-        if (rows[i][0] === t.number) {
-          out.push({ street: s, number: t.number, kind: 'exact' });
-          break;
+    // Exact hits first, across every matching street, then inferred ones
+    // (between known neighbors on the same side). One row per jurisdiction
+    // that could hold the address, each naming only that jurisdiction.
+    ['exact', 'inferred'].forEach(function (kind) {
+      streets.forEach(function (s) {
+        if (out.some(function (o) { return o.street === s; })) return;
+        var hasExact = self._hasNumber(s, t.number);
+        if ((kind === 'exact') !== hasExact) return;
+        var mcds = self.places(s, t.number);
+        if (mcds.length) {
+          mcds.forEach(function (mcd) {
+            out.push({ street: s, number: t.number, kind: kind, mcd: mcd });
+          });
+        } else if (hasExact || self.resolve(s, t.number)) {
+          out.push({ street: s, number: t.number, kind: kind });
         }
-      }
-    });
-    // Then an inferred hit (between known neighbors on the same side).
-    streets.forEach(function (s) {
-      if (out.some(function (o) { return o.street === s; })) return;
-      var r = self.resolve(s, t.number);
-      if (r) out.push({ street: s, number: t.number, kind: 'inferred' });
+      });
     });
     // Nearby house numbers are a LAST RESORT, offered only when the number
     // typed matches nothing anywhere. Listing a street's other addresses
     // beside a perfectly good answer just makes the reader pick their own
     // address out of a lineup of their neighbors'.
-    if (out.length) return out.slice(0, limit).map(tag);
+    if (out.length) return markChoices(out).slice(0, limit).map(tag);
 
     // Before falling back to neighbors, try the SAME number on the same
     // street in another quadrant. Grand Rapids numbers radiate from Fulton
@@ -472,15 +520,13 @@
       this.streetNames.forEach(function (s) {
         if (streets.indexOf(s) >= 0) return;
         if (strippedQuadrant(s) !== base) return;
-        var rows = self.streets[s] || [];
-        for (var i = 0; i < rows.length; i++) {
-          if (rows[i][0] === t.number) {
-            out.push({ street: s, number: t.number, kind: 'quadrant' });
-            break;
-          }
-        }
+        if (!self._hasNumber(s, t.number)) return;
+        var mcds = self.places(s, t.number);
+        (mcds.length ? mcds : [undefined]).forEach(function (mcd) {
+          out.push({ street: s, number: t.number, kind: 'quadrant', mcd: mcd });
+        });
       });
-      if (out.length) return out.slice(0, limit).map(tag);
+      if (out.length) return markChoices(out).slice(0, limit).map(tag);
     }
 
     streets.slice(0, 3).forEach(function (s) {
@@ -495,22 +541,45 @@
       });
       for (var i = 0; i < near.length && i < 3; i++) {
         if (near[i][0] === t.number) continue;
-        out.push({ street: s, number: near[i][0], kind: 'near' });
+        out.push({ street: s, number: near[i][0], kind: 'near',
+                   mcd: self.mcdOf(near[i]) || undefined });
       }
     });
 
     // De-duplicate, keeping the strongest kind for each address.
     var seen = {}, uniq = [];
     out.forEach(function (o) {
-      var k = o.number + '|' + o.street;
+      var k = o.number + '|' + o.street + '|' + (o.mcd || '');
       if (seen[k]) return;
       seen[k] = 1; uniq.push(o);
     });
-    return uniq.slice(0, limit).map(tag);
+    return markChoices(uniq).slice(0, limit).map(tag);
   };
 
+  Precincts.prototype._hasNumber = function (street, number) {
+    var rows = this.streets[street] || [];
+    for (var i = 0; i < rows.length; i++) if (rows[i][0] === number) return true;
+    return false;
+  };
+
+  // The same number and street offered in more than one jurisdiction is a
+  // question only the reader can answer, so each such row says so. Enter
+  // then opens the list rather than taking the first of them.
+  function markChoices(list) {
+    var count = {};
+    list.forEach(function (o) {
+      var k = o.number + '|' + o.street;
+      count[k] = (count[k] || 0) + 1;
+    });
+    list.forEach(function (o) { if (count[o.number + '|' + o.street] > 1) o.choice = true; });
+    return list;
+  }
+
   // Full lookup: typed text -> everything the page needs, or a reason it can't.
-  Precincts.prototype.lookup = function (text) {
+  // `mcd` is the jurisdiction the reader picked. Without one, an address
+  // more than one jurisdiction could hold is not answered: the error names
+  // the places, and the reader chooses.
+  Precincts.prototype.lookup = function (text, mcd) {
     var self = this;
     var t = this.parseTyped(text);
     if (t.number == null) return { error: 'no_number', rest: t.rest,
@@ -519,7 +588,14 @@
     if (!candidates.length) return { error: 'no_street', rest: t.rest };
     // exact name wins; otherwise the best-ranked match
     var street = candidates.indexOf(t.rest) >= 0 ? t.rest : candidates[0];
-    var res = this.resolve(street, t.number);
+    var places = mcd ? [mcd] : this.places(street, t.number);
+    if (places.length > 1) {
+      return { error: 'several_places', street: street, number: t.number,
+               places: places.map(function (m) {
+                 return { mcd: m, jurisdiction: self.jurisdictions[m] };
+               }) };
+    }
+    var res = this.resolve(street, t.number, places[0]);
     if (!res) return { error: 'no_number_on_street', street: street,
                        number: t.number, ambiguous: candidates.slice(0, 6) };
     var place = this.pollingPlace(res.precinct);

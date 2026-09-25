@@ -136,11 +136,14 @@
 
     // Enter with nothing highlighted still has to do something useful: take
     // the best suggestion when there is one, and otherwise hand the text to
-    // the page to explain.
+    // the page to explain. A best suggestion marked `choice` is one of
+    // several the reader has to pick between, so Enter opens the list
+    // instead of guessing which.
     function enter() {
       if (!element().hidden && index >= 0) { opts.onChoose(items[index]); return; }
       var text = input.value.trim();
       var best = opts.suggest(text, 1) || [];
+      if (best.length && best[0].choice) { refresh(); return; }
       if (best.length) { opts.onChoose(best[0]); return; }
       opts.onMiss(text);
     }

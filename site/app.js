@@ -1496,14 +1496,24 @@
     // so nothing downstream cares and the reader gets their own address back.
     input.value = item.number + ' ' + displayCase(item.street);
     resetChoices();
-    var r = P.lookup(input.value);
+    // The row's own jurisdiction, where it has one: the same number and
+    // street can be a real address in two places.
+    var r = P.lookup(input.value, item.mcd);
+    if (r.error === 'several_places') {
+      showError(esc(input.value) + ' is an address in ' +
+        r.places.map(function (p) { return esc(p.jurisdiction); }).join(' and in ') +
+        '. Pick yours from the list as you type.');
+      return;
+    }
     if (r.error) {
       showError('Could not resolve ' + esc(input.value) + '.');
       return;
     }
     // Where the address was inferred from its neighbors, let the precinct
     // boundary overrule them. See refineWithPolygon in precinct.js.
-    P.refineWithPolygon(r, function (n, st) { return graph.geocode(n, st); }, precincts);
+    P.refineWithPolygon(r, function (n, st) {
+      return graph.geocode(n, st, within(r.mcd));
+    }, precincts);
     setHint('');
     // Drop focus before rendering, not after. On a phone the soft keyboard is
     // most of the lower screen, and show() fits the map to the viewport it
@@ -1642,6 +1652,36 @@
   function precinctAt(lat, lng) {
     if (!P || !precincts) return null;
     return P.precinctAt(lat, lng, precincts);
+  }
+
+  // "In this jurisdiction", as a test geocode() can prefer, built once per
+  // jurisdiction from its precinct polygons. A street name is not an address
+  // across the county: without this, 113 N Main St NE in Rockford is placed
+  // on Cedar Springs' N Main St NE, and routed from there. Within about 45 m
+  // counts, because a section-line road is often the line itself and its
+  // centreline sits on one side or the other by a hair.
+  var NUDGES = [[0, 0], [4e-4, 0], [-4e-4, 0], [0, 5.5e-4], [0, -5.5e-4]];
+  var withinCache = {};
+  function within(mcd) {
+    if (!mcd || !precincts) return null;
+    if (!withinCache[mcd]) {
+      var mine = precincts.filter(function (p) { return p.mcd === mcd; });
+      withinCache[mcd] = function (lat, lng) {
+        return NUDGES.some(function (d) {
+          return mine.some(function (p) {
+            return Precincts.pointInRings(lat + d[0], lng + d[1], p.rings);
+          });
+        });
+      };
+    }
+    return withinCache[mcd];
+  }
+
+  // Where an answer starts on the street map: the dropped pin, or the
+  // address placed on its own jurisdiction's streets.
+  function addressPoint(r) {
+    return r.pin ? { lat: r.lat, lng: r.lng }
+                 : graph.geocode(r.number, r.street, within(r.mcd));
   }
 
   function armPin() {
@@ -2353,7 +2393,7 @@
     if (!data || !graph) return null;
     function fix(place) {
       var m = /^(\d+)\s+(.+)$/.exec(place.address || '');
-      var hit = m && graph.geocode(Number(m[1]), m[2]);
+      var hit = m && graph.geocode(Number(m[1]), m[2], within(GR_MCD));
       return hit ? Object.assign({}, place, { lat: hit.lat, lng: hit.lng }) : null;
     }
     return {
@@ -2465,8 +2505,7 @@
 
   function destinations(r) {
     var out = [];
-    var origin = r.pin ? { lat: r.lat, lng: r.lng }
-                       : graph.geocode(r.number, r.street);
+    var origin = addressPoint(r);
 
     // The clerk's own sites when we have them, the calendar's otherwise --
     // and only for Grand Rapids. Both lists are the city's; offering them to
@@ -2530,8 +2569,7 @@
     destChoice = pick;
     markDestination();
 
-    var origin = r.pin ? { lat: r.lat, lng: r.lng }
-                       : graph.geocode(r.number, r.street);
+    var origin = addressPoint(r);
     if (!origin) {
       routeError();
       $('routes').innerHTML = '<div class="err">Found where you vote, but could not ' +
