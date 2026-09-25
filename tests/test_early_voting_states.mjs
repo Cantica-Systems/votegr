@@ -2,7 +2,8 @@
 // The early voting group in the answer block has four states, and only one
 // of them can be reached from the committed data on any given day. So the
 // states are driven here by serving a synthetic elections.json, with every
-// date relative to TODAY so the fixture cannot rot into a fixed calendar.
+// date relative to TODAY so the fixture cannot rot into a fixed calendar,
+// beside a gr-clerk.json that names no election.
 //
 // The state worth the whole file is "closed": after the window ends but
 // before election day, the block must stop naming an early voting site. A
@@ -66,12 +67,20 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=
   '.geojson': 'application/json', '.png': 'image/png', '.woff2': 'font/woff2',
   '.svg': 'image/svg+xml' };
 
+// Both pages take the early voting window from gr-clerk.json whenever it
+// names the active election (see pinned_calendar.mjs), so the real file would
+// override the fixture on the day iso(30) lands on its election date. Served
+// naming none, the fixture decides every state on every day. Not a 404:
+// Grand Rapids' drop boxes come from this file too.
+const CLERK = { ...JSON.parse(await readFile(join(ROOT, 'data/gr-clerk.json'), 'utf8')),
+                election: null };
+
 let current = null;
 const server = createServer(async (req, res) => {
   const rel = normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
-  if (rel === '/data/elections.json') {
+  if (rel === '/data/elections.json' || rel === '/data/gr-clerk.json') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(current)); return;
+    res.end(JSON.stringify(rel === '/data/gr-clerk.json' ? CLERK : current)); return;
   }
   const file = join(ROOT, rel === '/' ? 'index.html' : rel);
   if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
