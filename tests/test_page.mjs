@@ -1,5 +1,5 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
-// Plain-assert tests for the page itself. Run: node test_page.mjs
+// Plain-assert tests for the page itself. Run: node tests/test_page.mjs
 //
 // test_router.mjs checks the answer. This checks that a reader can actually
 // get at it: that the masthead fits, that nothing scrolls sideways on a
@@ -38,12 +38,13 @@ const TYPES = {
   '.geojson': 'application/json', '.png': 'image/png',
   '.woff2': 'font/woff2', '.svg': 'image/svg+xml',
 };
-// Two stretches need the calendar held still, the countdown and "one
-// expander per card on a phone", because what they check is a function of
-// today and cannot read a moving date. Each sets this to pinned() below
-// and clears it after. Null the rest of the time, so everything else
-// reads the files that ship. servedHits counts what it answered, so a
-// stretch can tell that its page really was given the pinned files.
+// Some stretches need the calendar held still (the countdown, "one expander
+// per card on a phone", the midnight rollover), because what they check is
+// a function of today and cannot read a moving date. Each sets this to
+// pinned() below and clears it after. Null the rest of the time, so
+// everything else reads the files that ship. servedHits counts what it
+// answered, so each of those stretches checks that its page really was
+// given the pinned files.
 let served = null, servedHits = 0;
 const server = createServer(async (req, res) => {
   const rel = normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
@@ -248,10 +249,9 @@ for (const w of WIDTHS) {
      cd1.labels.join(',') === 'Days,Hours,Minutes,Seconds');
   // A colon, not a comma: the election is the label and the day is the value.
   ok('it names the election it is counting to', /^[^:]+: .+\d{4}$/.test(cd1.note));
-  // The footer used to print the same date in a shorter voice and this
-  // asserted the two could not disagree. The band is gone: the countdown
-  // above says it once, in full, and a second copy of one date in the
-  // chrome at the bottom of every screen was not worth the row.
+  // The countdown says the date once, in full. A second copy of one date in
+  // the chrome at the bottom of every screen is not worth the row, and two
+  // copies are two chances to disagree.
   ok('and the footer no longer prints a second copy of it', cd1.footBand === false);
   ok('the election and its date are told apart by colour',
      cd1.whenColor !== cd1.forColor);
@@ -464,10 +464,15 @@ for (const w of WIDTHS) {
 
   // Three ways to vote, three marks on the map, and a legend that draws the
   // same three. Told apart by shape as well as colour.
+  //
+  // Counted inside #map: the legend's swatches carry the same site-* classes,
+  // so a page-wide count finds one of each with no marker drawn at all.
+  // Early voting sites are not counted here. Whether they are drawn is a
+  // function of today (not once the window closes, not once the calendar
+  // runs out), so they are checked on the pinned calendar in the phone block.
   const marks = await page.evaluate(() => ({
-    polling: document.querySelectorAll('.site-polling').length,
-    early: document.querySelectorAll('.site-early').length,
-    dropbox: document.querySelectorAll('.site-dropbox').length,
+    polling: document.querySelectorAll('#map .site-polling').length,
+    dropbox: document.querySelectorAll('#map .site-dropbox').length,
     legend: [...document.querySelectorAll('.map-legend .sitek')].map(i => i.dataset.kind),
     legendDrawn: [...document.querySelectorAll('.map-legend .sitek svg')].length,
     shapes: ['polling', 'early', 'dropbox'].map(k => {
@@ -476,7 +481,7 @@ for (const w of WIDTHS) {
     })
   }));
   ok('the polling places are on the map', marks.polling > 100);
-  ok('so are the drop boxes and the early voting sites', marks.dropbox > 0 && marks.early > 0);
+  ok('so are the drop boxes', marks.dropbox > 0);
   ok('the legend names all three', marks.legend.join() === 'polling,early,dropbox');
   ok('and draws each of them', marks.legendDrawn === 3);
   ok('the three marks are three different drawings',
@@ -556,11 +561,22 @@ for (const w of WIDTHS) {
   await ctx.close();
 }
 
+// And without the parameter: a plain load, no panel.
+{
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
+  ok('without ?debug no panel and no debug.js', await page.evaluate(() =>
+     !document.getElementById('debugPanel') && ![...document.scripts].some(s => /debug\.js/.test(s.src))));
+  await ctx.close();
+}
+
 // --- one expander per card on a phone ---
 // The dates are the button: a card that is shut says that way of voting is
 // not open yet, and tapping the head opens it on the place and the detail.
-// It used to take two links under the dates -- "More" and "Show the nearest
-// drop box" -- neither of which said the section itself was shut.
+// Two links under the dates ("More", "Show the nearest drop box") would say
+// neither of those things, which is why the old pair is asserted gone.
 //
 // Which cards are shut is a function of TODAY, so this block serves the
 // pinned calendar (pinned_calendar.mjs).
@@ -568,15 +584,16 @@ for (const w of WIDTHS) {
 // 60 days out is the number that matters. ABSENTEE_LEAD_DAYS is 40 in
 // app.js, so an election further out than that has not reached its absentee
 // window and the drop box card is reliably shut. Read from the live
-// calendar this block passed until 2026-09-24 and failed from then on: the
-// November election came within 40 days, the drop box card rendered
-// expanded, and the tap below closed it instead of opening it, which took
-// four assertions down at once.
+// calendar, this block fails as soon as the next election is within 40
+// days: the drop box card renders expanded, and the tap below closes it
+// instead of opening it.
 {
+  const hitsBefore = servedHits;
   served = pinned(60);
   const ctx = await browser.newContext({ ...devices['Pixel 7'] });
   const page = await ctx.newPage();
   await page.goto(URL_, { waitUntil: 'networkidle' });
+  ok('the cards are checked against the calendar served to them', servedHits > hitsBefore);
   await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
   await page.fill('#addr', '602 Alexander St SE');
   await page.press('#addr', 'Enter');
@@ -593,6 +610,13 @@ for (const w of WIDTHS) {
   ok('election day is open', (cards.filter(c => c.kind === 'polling')[0] || {}).open === true);
   ok('and the old pair of links is gone', await page.evaluate(() =>
      !document.querySelector('.vi-more, .vi-place')));
+  // The early voting sites on the map, checked here rather than with the
+  // other marks in the width loop: this calendar has the window ahead, so
+  // they are drawn on any date the suite runs. Inside #map, because the
+  // legend's swatch carries the same class.
+  ok('the early voting sites are on the map', await page.waitForFunction(() =>
+     document.querySelectorAll('#map .site-early').length > 0, null, { timeout: 15000 })
+     .then(() => true, () => false));
   // Tapping the head opens that card and nothing else.
   await page.tap('.vi-card-dropbox summary');
   await page.waitForTimeout(250);
@@ -886,14 +910,10 @@ for (const w of WIDTHS) {
     const cs = credit && getComputedStyle(credit);
     return {
       saysStateNeedNotKnow: /state does not need to learn that you looked/i.test(text),
-      // This used to read the accuracy hedge under "What this is" -- that the
-      // answer is a best effort estimate and is usually right -- which was
-      // removed on request, taking the words with it. Of the three claims it
-      // made, the one worth holding is the middle one: that the answer is
-      // computed on the reader's own machine. That is the whole privacy
-      // proposition rather than a caveat about it, "How it works" still makes
-      // it, and it is the one a rewrite would most easily drop. So this now
-      // reads it there.
+      // The claim worth holding is that the answer is computed on the
+      // reader's own machine. It is the whole privacy proposition rather than
+      // a caveat about it, "How it works" makes it, and it is the one a
+      // rewrite would most easily drop.
       saysOnYourDevice: /runs on your device/i.test(text)
         && /without making any network requests/i.test(text),
       creditText: credit ? credit.innerText.replace(/\s+/g, ' ').trim() : null,
@@ -1114,19 +1134,19 @@ for (const w of WIDTHS) {
      idn.length === 2 && idn.every(r => r.width < rail.railWidth - 1));
   // And the column as a whole reads as centred: three rows of different
   // widths sharing one axis, rather than three blocks flush to a left edge.
-  // Jurisdiction included -- it is the widest, so it is the row that sets
+  // Jurisdiction included: it is the widest, so it is the row that sets
   // where that axis falls.
   // The width clause is load bearing, not belt and braces: with align-items
   // gone the rows stretch to the full rail and TRIVIALLY share a centre, so
   // an axis check on its own goes green on the layout it is meant to catch.
-  // The other half of the touch rule above: gating the fade on a real pointer
-  // has to leave the pointer's fade alone, or it is just a deletion.
-  ok('a pointer still gets the fade a touch does not', await page.evaluate(() =>
-     getComputedStyle(document.querySelector('.vi-dest')).transitionDuration !== '0s'));
   ok('the rail is three rows on one centre axis',
      rail.rows.length === 3 &&
      rail.rows.every(r => Math.abs(r.block - rail.rows[0].block) < 0.6) &&
      rail.rows.filter(r => r.width < rail.railWidth - 1).length === 2);
+  // The other half of the touch rule above: gating the fade on a real pointer
+  // has to leave the pointer's fade alone, or it is just a deletion.
+  ok('a pointer still gets the fade a touch does not', await page.evaluate(() =>
+     getComputedStyle(document.querySelector('.vi-dest')).transitionDuration !== '0s'));
   await ctx.close();
 }
 
@@ -1190,12 +1210,10 @@ for (const w of WIDTHS) {
   });
   ok('choosing a suggestion on mousedown draws the answer', r.drawn);
   ok('the tap\'s trailing click never reaches the answer', r.drawn && r.clicks === 0 && after.clicks === 0);
-  // This asserted the page had not moved at all, as a proxy for "the
-  // trailing click did not reach a card and drive us to the map". A lookup
-  // now lands on the voting info deliberately, so the proxy would report
-  // that as the failure it was watching for. Assert the destination instead,
-  // which is what was actually meant and tells the two apart: the answer is
-  // under the bar, and the map is not.
+  // Asserted as a destination, not as "the page did not move": a lookup
+  // lands on the voting info deliberately, so a no-movement check would
+  // report that as the failure it was watching for. The answer is under the
+  // bar, and the map is not.
   ok('a phone lookup lands on the voting info, not the map',
      after.gap >= -1 && after.gap <= 48 && after.mapBelow);
   // The swallow is one click wide: the next click on a card still lands.
@@ -1269,13 +1287,13 @@ for (const w of WIDTHS) {
 }
 
 // --- dropping a pin -------------------------------------------------
-// The feature had no test at all, which is how both of these shipped: the
-// only cue that the map was waiting for a tap was a crosshair cursor, which
-// a finger never sees, and the drop then scrolled the map off the screen to
-// land on the voting info, moving the thing the reader had just used.
+// Both of the ways this can fail are silent: a map waiting for a tap whose
+// only cue is a crosshair cursor, which a finger never sees, and a drop that
+// scrolls the map off the screen to land on the voting info, moving the
+// thing the reader had just used.
 //
-// Both widths, because the phone is where the note that used to carry the
-// instruction sat below the fold and where the scroll was worst.
+// Both widths, because the phone is where an instruction below the map
+// sits below the fold and where that scroll is worst.
 for (const w of [390, 1280]) {
   console.log('\ndropping a pin, ' + w + 'px');
   const ctx = await browser.newContext({ viewport: { width: w, height: 844 } });
@@ -1335,7 +1353,6 @@ for (const w of [390, 1280]) {
       // filling that block pushed the map down past the bottom edge. At
       // 390px its top sat at 910 in an 844 viewport.
       mapVisible: map.top < window.innerHeight - 80 && map.bottom > 80,
-      mapUnderBar: map.top,
     };
   });
   ok('the drop answers with a ward and precinct', after.answered && after.noError);
@@ -1495,9 +1512,14 @@ for (const w of [390, 1280]) {
 //
 // The tints are read off the real renderer rather than re-derived here: a copy
 // of the formula in the test would agree with a wrong formula in the source.
-{
+//
+// Both themes, because the palettes differ and the page opens in dark unless
+// the reader has chosen otherwise, so a context left alone only ever sees
+// one of them. The choice is set the way the theme switch stores it.
+for (const theme of ['dark', 'light']) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
   const page = await ctx.newPage();
+  await page.addInitScript((t) => { try { localStorage.setItem('theme', t); } catch (e) {} }, theme);
   await page.goto(URL_, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
 
@@ -1531,15 +1553,22 @@ for (const w of [390, 1280]) {
     // The land tone underneath, so the comparison is of what a reader sees
     // rather than of translucent paint in the abstract.
     const land = getComputedStyle(document.documentElement).getPropertyValue('--lg-land').trim();
-    return { tints: Object.values(byP), land };
+    return { tints: Object.values(byP), land,
+             theme: document.documentElement.getAttribute('data-theme') };
   });
-  ok('the ward tint is painted for a warded city', tints.tints.length > 10);
+  ok(`${theme}: the page is in the theme asked for`, tints.theme === theme, `data-theme=${tints.theme}`);
+  ok(`${theme}: the ward tint is painted for a warded city`, tints.tints.length > 10);
   const wards = new Set(tints.tints.map(t => t.ward));
-  ok('and Grand Rapids paints all three of its wards', wards.size === 3);
+  ok(`${theme}: and Grand Rapids paints all three of its wards`, wards.size === 3);
+  // basemap.js publishes the land tone so this can compose against the real
+  // one. Required rather than defaulted: a fallback here would be the second
+  // copy of the backdrop that publishing it exists to avoid, and would be
+  // the wrong colour for one of the two themes.
+  ok(`${theme}: the map publishes its land tone`, /^#[0-9a-f]{6}$/i.test(tints.land),
+     JSON.stringify(tints.land));
 
   // hsla() over an opaque backdrop, then CIELAB, which is the only space in
   // which "further apart" means what a reader means by it.
-  const LAND = /^#[0-9a-f]{6}$/i.test(tints.land) ? tints.land : '#20242c';
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
   const hsl2rgb = (h, s, l) => { h /= 360; s /= 100; l /= 100;
     const f = n => { const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l);
@@ -1555,7 +1584,7 @@ for (const w of [390, 1280]) {
     return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)]; };
   const dE = (a, b) => { const A = lab(a), B = lab(b);
     return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]); };
-  const bg = hex(LAND);
+  const bg = hex(tints.land);
   const seen = tints.tints.map(t => {
     const m = /^hsla\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*,\s*([\d.]+)\s*\)$/.exec(t.color);
     const [h, sa, l, al] = m.slice(1).map(Number);
@@ -1574,17 +1603,15 @@ for (const w of [390, 1280]) {
   // precincts in different wards, or the colour is not reporting ward at all.
   // Held to half, which is the margin the lightness step was chosen against,
   // and both themes have to clear it.
-  ok('two precincts in one ward look closer than two in different wards',
-     maxSame < minCross);
-  ok('and with the margin the step was set against (same < cross / 2)',
-     maxSame < minCross / 2);
-  if (!(maxSame < minCross / 2)) {
-    console.log('       worst same-ward dE ' + maxSame.toFixed(1) +
-                ', closest cross-ward dE ' + minCross.toFixed(1));
-  }
+  const spread = `worst same-ward dE ${maxSame.toFixed(1)}, closest cross-ward dE ${minCross.toFixed(1)}`;
+  ok(`${theme}: two precincts in one ward look closer than two in different wards`,
+     maxSame < minCross, spread);
+  ok(`${theme}: and with the margin the step was set against (same < cross / 2)`,
+     maxSame < minCross / 2, spread);
   // The other half of the intent: a smaller step must not become no step, or
   // neighbouring precincts stop being tellable apart inside their ward.
-  ok('neighbouring precincts still differ inside a ward', maxAdj > 2.3);
+  ok(`${theme}: neighbouring precincts still differ inside a ward`, maxAdj > 2.3,
+     `largest step between neighbours dE ${maxAdj.toFixed(1)}`);
 
   await ctx.close();
 }
@@ -1789,25 +1816,15 @@ for (const w of [390, 1280]) {
   await ctx.close();
 }
 
-// Plain load, no panel.
-{
-  const ctx = await browser.newContext();
-  const page = await ctx.newPage();
-  await page.goto(URL_, { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
-  ok('without ?debug no panel and no debug.js', await page.evaluate(() =>
-     !document.getElementById('debugPanel') && ![...document.scripts].some(s => /debug\.js/.test(s.src))));
-  await ctx.close();
-}
-
 // --- a street the address list cannot answer --------------------------
-// The page used to tell a Grand Rapids Township reader that the township had
-// no address index, after the index had grown to cover the whole county. Two
-// ways in: a street the list has under the county's spelling ("E Fulton St"
-// for FULTON ST E) was offered as out of reach, and a township street with no
-// address in the parcel file got the same words. Numbers are 99999, which
-// exists nowhere, and the streets are a school campus road and a road in a
-// township outside the county, so no stranger's house is named here.
+// A street the address list cannot answer has to be told so accurately, and
+// the index covers the whole county, so "this township has no address index"
+// is never the right answer. Two ways in: a street the list has under the
+// county's spelling ("E Fulton St" for FULTON ST E) must be offered as the
+// county's street, and a township street with no address in the parcel file
+// must be told to use the pin. Numbers are 99999, which exists nowhere, and
+// the streets are a school campus road and a road in a township outside the
+// county, so no stranger's house is named here.
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();

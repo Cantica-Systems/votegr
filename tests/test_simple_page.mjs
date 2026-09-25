@@ -1,9 +1,8 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
-// Plain-assert tests for /simple, the light version. Run: node test_simple_page.mjs
+// Plain-assert tests for /simple, the light version. Run: node tests/test_simple_page.mjs
 //
-// This page had no browser test at all, which is how it drifted from the map
-// page in the first place: the two answer the same question from the same
-// files, and only one of them was being checked. It is also the version that
+// The two pages answer the same question from the same files, so checking
+// only one of them lets the other drift. This is also the version that
 // matters most on an old phone, a slow connection or a screen reader, so a
 // break here is a break for the people least able to work around it.
 //
@@ -30,6 +29,8 @@ const ROOT = join(fileURLToPath(new URL('..', import.meta.url)), 'site');
 const { Precincts } = createRequire(import.meta.url)('../site/precinct.js');
 
 let pass = 0, fail = 0;
+// The detail, when a check passes one, is printed only on failure: it is what
+// went wrong, and nothing on success.
 function ok(name, cond, detail = '') {
   cond ? (pass++, console.log('  ok  ' + name))
        : (fail++, console.log('  FAIL ' + name + (detail ? '  ' + detail : '')));
@@ -146,11 +147,10 @@ for (const width of [1280, 390, 320]) {
   // Which of these blocks is on the card is a function of today, so they are
   // checked on the pinned calendar (pinned_calendar.mjs), and the page is
   // reloaded on the real files afterwards. Read from the calendar that ships,
-  // this stretch went red from the day after early voting closed, because
-  // the early block is dropped once its window has passed; stayed red on
-  // election day; and once the calendar ran out, its clerk checks skipped
-  // without a word and the order check stayed red for good, because neither
-  // block is drawn with no election. The site was right each time.
+  // this stretch goes red once early voting closes (the early block is
+  // dropped once its window has passed), on election day, and for good once
+  // the calendar runs out (neither block is drawn with no election), with
+  // the site right each time.
   //
   // Any date far enough ahead that early voting has not closed would do; 60
   // is the one the map page's suite uses, so the two pages are checked
