@@ -20,11 +20,11 @@ on:
     - cron: '17 6 * * *'
   workflow_dispatch:
 
-# contents: to push the refreshed data back. actions: to ask the Pages
-# workflow to run afterwards, which is not optional here, see the deploy step.
+# contents: write, to push the refreshed data back. The push is made with the
+# deploy key, and a deploy-key push fires pages.yml like any push to main, so
+# nothing here asks for the deploy.
 permissions:
   contents: write
-  actions: write
 
 # Never let two refreshes overlap, and never cancel one halfway: a killed run
 # between write and commit would leave the tree in a state nobody chose.
@@ -69,55 +69,31 @@ jobs:
         run: python3 scripts/refresh_cameras.py
 
       - name: Report the delta
-        # This step used to REFUSE a drop past a fifth of the set, on the
-        # reasoning that a truncated answer returning 25 of 148 clears the
-        # script's MIN_CAMERAS floor and would quietly delete 123 cameras.
-        # That reasoning describes a real risk and it is deliberately no
-        # longer acted on: the page must show the LATEST set, and a rule that
-        # cannot tell a genuine removal from a bad day stops publishing real
-        # changes and latches the job red, which is what it did on 2026-09-18.
-        # Completeness of the ANSWER is checked where it can be, in
+        id: after
+        # Printed, not enforced. A floor on how far the set may shrink cannot
+        # tell a genuine removal from a truncated answer, so it holds back real
+        # removals and latches the job red, and the page must show the LATEST
+        # set. Completeness of the ANSWER is checked where it can be, in
         # refresh_cameras.py, which skips any Overpass reply carrying a
-        # truncation 'remark' and refuses a result under MIN_CAMERAS=20.
-        # The delta is printed so a surprising one is visible in the log and
-        # in the commit subject, not hidden.
+        # truncation 'remark' and refuses a result under MIN_CAMERAS=20. The
+        # delta also goes in the commit subject, so a surprising one is seen.
         run: |
           BEFORE=${{ steps.before.outputs.count }}
           AFTER=$(python3 -c "import json;print(len(json.load(open('site/data/cameras.json'))['cameras']))")
-          echo "before=$BEFORE after=$AFTER"
-          python3 -c "import sys;b,a=int(sys.argv[1]),int(sys.argv[2]);print(f'Delta: {a-b:+d}')" "$BEFORE" "$AFTER"
+          echo "count=$AFTER" >> "$GITHUB_OUTPUT"
+          printf 'before=%d after=%d delta=%+d\n' "$BEFORE" "$AFTER" "$((AFTER - BEFORE))"
 
-      - name: Commit and deploy if anything changed
+      - name: Commit if anything changed
+        # The push is the deploy: made with the deploy key, it fires pages.yml
+        # like any push to main. A push with the default token would not, since
+        # GitHub fires no workflows for those.
         run: |
           if git diff --quiet -- site/data/cameras.json; then
-            echo "No change this week. Nothing to commit."
+            echo "No change since the last run. Nothing to commit."
             exit 0
           fi
-          BEFORE=${{ steps.before.outputs.count }}
-          AFTER=$(python3 -c "import json;print(len(json.load(open('site/data/cameras.json'))['cameras']))")
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add site/data/cameras.json
-          git commit -m "Refresh ALPR cameras from OpenStreetMap ($BEFORE -> $AFTER)"
+          git commit -m "Refresh ALPR cameras from OpenStreetMap (${{ steps.before.outputs.count }} -> ${{ steps.after.outputs.count }})"
           git push
-          # Ask for the deploy explicitly.
-          #
-          # This was REQUIRED while the push used GITHUB_TOKEN: GitHub
-          # deliberately does not fire workflows for those pushes, so pages.yml
-          # ignored the commit and the refreshed list sat in the repository
-          # without reaching anyone. Measured at the time: the first real run
-          # committed 148 -> 152 and no deploy followed it.
-          #
-          # Since the push moved to the deploy key that is no longer true. A
-          # deploy-key push is an ordinary push and DOES fire pages.yml, so this
-          # dispatch is now belt-and-braces and may cause two deploy runs per
-          # refresh. It is kept on purpose until a real run is observed: the
-          # failure mode of removing it wrongly is a site that silently stops
-          # updating, and the failure mode of keeping it is one redundant deploy.
-          # Drop it once the push alone is seen to publish.
-          #
-          # Dispatching the existing workflow rather than copying its steps
-          # keeps one definition of how this site is published.
-          gh workflow run "Deploy site to GitHub Pages" --ref main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
