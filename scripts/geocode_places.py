@@ -2,12 +2,11 @@
 # Released into the public domain under the Unlicense, see UNLICENSE.
 """Stamp coordinates onto every polling place, drop box and early voting site.
 
-Grand Rapids has always placed its destinations by interpolating along the
-street centreline in the routing graph. That works, but it puts a marker on
-the road outside the building rather than on the building, and outside the
-city there was nothing at all: all 202 county polling places and all 23 drop
-boxes arrive from the county as a name and an address string, with no
-coordinate anywhere. No coordinate means no marker, no distance and no route.
+The county publishes every polling place, drop box and early voting site as a
+name and an address string, with no coordinate anywhere, and no coordinate
+means no marker, no distance and no route. Interpolating along the street
+centreline gives one, but it puts the marker on the road outside the building
+rather than on the building.
 
 The county's own parcel layer already has the answer, and this project already
 reads it. refresh_addresses.py pulls the centroid of every addressed parcel in
@@ -20,12 +19,13 @@ polling places. So this reads the same layer and keeps the centroid for those.
 A parcel centroid beats an interpolated centreline point: it is the building's
 own parcel rather than a guess at where along the block it sits.
 
-WHAT THIS DOES NOT DO: invent a coordinate. An address that does not match a
-parcel is left without one and reported, because a marker in the wrong place
-is worse than no marker -- somebody drives to it. The misses are listed at the
-end so they can be looked at rather than averaged away.
+WHAT THIS DOES NOT DO: invent a coordinate. An address that matches neither
+a parcel nor, failing that, a street centreline (see centreline()) is left
+without one and reported, because a marker in the wrong place is worse than
+no marker: somebody drives to it. The misses are listed at the end so they
+can be looked at rather than averaged away.
 
-Usage: python3 geocode_places.py [--parcels CACHE.json]
+Usage: python3 geocode_places.py [--parcels CACHE.json] [--dry-run]
 """
 import argparse
 import json
@@ -248,13 +248,12 @@ def load_parcels(cache):
 
 
 def build_index(parcels):
-    """(number, street) -> (lng, lat), averaged over the parcels that share it.
+    """Two indexes of parcel centroids: by (number, street), and by number,
+    street name without its type word, and quadrant.
 
-    A condo building files one parcel per unit at the same street address.
-    Their centroids are metres apart and all of them are the building, so the
-    mean is the building. Where an address somehow spans a wider spread that
-    is reported rather than averaged, because it means the two are not the
-    same place.
+    A condo building files one parcel per unit at the same street address, so
+    one key can hold many centroids. one_place() averages them when they are
+    one building and refuses when they are not.
     """
     exact, loose = defaultdict(list), defaultdict(list)
     for text, lng, lat in parcels:
@@ -477,13 +476,12 @@ def main():
             run.stamp(document["clerk"], document["clerk"]["address"],
                       f"{where} clerk's office", bbox, f"c:{mcd}", mcd)
 
-        # The county page does not format the two fields the same way twice.
-        # Grand Rapids rows carry the ADDRESS in `name` and a note in
-        # `address` ("300 Ottawa Ave NW" / "Across from Calder Plaza"); every
-        # other jurisdiction is the other way round ("Kentwood City Hall" /
-        # "4900 Breton Avenue SE"). So take whichever field parses as an
-        # address rather than trusting either name. Reading only `name` said
-        # thirteen boxes had no address at all when all thirteen do.
+        # Take whichever field parses as an address rather than trusting
+        # either name. The county page writes the venue then the address
+        # ("Kentwood City Hall" / "4900 Breton Avenue SE") everywhere but
+        # Grand Rapids, which it swaps ("300 Ottawa Ave NW" / "Across from
+        # Calder Plaza") and which is skipped above; a row elsewhere written
+        # the same way would still place.
         for slot, box in enumerate(document.get("drop_boxes") or []):
             written = next((v for v in (box.get("address"), box.get("name"))
                             if split_address(v)), box.get("name"))

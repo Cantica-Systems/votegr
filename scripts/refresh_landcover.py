@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # Released into the public domain under the Unlicense, see UNLICENSE.
-"""Fetch water, parks and railways for Grand Rapids from OpenStreetMap.
+"""Fetch water, parks and railways from OpenStreetMap, over the Grand Rapids
+city limits plus a 0.02 degree pad, about 2 km.
+
+That extent is a known gap. The map covers the whole county, and beyond the
+pad it draws no water, parks or rail. Widening it means taking the extent
+from the precinct polygons, as refresh_osm_roads.py does, and it changes
+landcover.json, so it is a decision rather than a tidy-up.
 
 These are what separate a street diagram from something that reads as a map.
 The Grand River runs straight through the middle of the city and is how most

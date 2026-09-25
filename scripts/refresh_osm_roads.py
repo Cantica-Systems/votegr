@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # Released into the public domain under the Unlicense, see UNLICENSE.
-"""Fetch the drivable road network for Grand Rapids from OpenStreetMap.
+"""Fetch OpenStreetMap's drivable ways and turn-restriction relations across
+Kent County into build/osm_roads.json.
 
-An alternative build input to refresh_centerlines.py. OSM carries two things
-the city's own centerline layer does not: turn restrictions (no-left-turn and
-friends, as relations) and a network that exists everywhere, so the same
-pipeline works for any city rather than only where an Act 51 agency publishes
-direction attributes.
+The centerlines carry no turn restrictions at all, so this is where they come
+from: build_restrictions.py matches each OSM restriction to the centerline
+graph by the bearings of these ways at the via node.
 
 Fetched once at build time. Nothing here runs in a browser.
 """
@@ -30,9 +29,8 @@ ENDPOINTS = [
     "https://overpass.private.coffee/api/interpreter",
 ]
 
-# Everything a car may legally drive on. `service` is included because
-# driveways and parking aisles connect real addresses to the street, but it is
-# down-weighted later at graph build time.
+# Everything a car may legally drive on, `service` included, so a restriction
+# whose from- or to-way is a service road still has that way to match against.
 DRIVABLE = ("motorway|trunk|primary|secondary|tertiary|unclassified|residential|"
             "living_street|service|motorway_link|trunk_link|primary_link|"
             "secondary_link|tertiary_link|road")

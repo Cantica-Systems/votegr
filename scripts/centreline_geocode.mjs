@@ -1,6 +1,6 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
 // Geocode addresses the parcel layer does not carry, by interpolating along
-// the street centreline -- exactly what the browser does for Grand Rapids.
+// the street centreline, exactly as the browser does.
 //
 // Called by geocode_places.py for its leftovers. It shells out to node rather
 // than reimplementing the interpolation in Python on purpose: this loads

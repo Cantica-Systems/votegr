@@ -13,9 +13,9 @@ the seam unroutable.
 The consequence is that chunks from different builds must never be mixed. Ids
 are positions in this build's arrays, so a stale chunk merged with a fresh one
 would point at the wrong roads. Every chunk therefore carries the `build`
-fingerprint stamped here, and the loader refuses to merge across a mismatch --
-which matters most once a service worker is caching these files and a deploy
-lands between two fetches.
+fingerprint stamped here, and the loader (Graph.addChunk in site/router.js)
+refuses to merge across a mismatch, so a deploy that lands between two
+fetches cannot mix builds.
 
 Nodes are segment endpoints, keyed by quantized coordinate PLUS grade-separation
 level so an overpass endpoint never fuses with the street beneath it. Edges

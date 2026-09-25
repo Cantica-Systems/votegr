@@ -6,8 +6,6 @@ build_graph.py.
 Source: the layer published on the City of Grand Rapids ArcGIS Online tenant,
 which is not a city layer at all -- it is the REGIS/Kent County dataset, 39,209
 segments across 48 jurisdictions, and the city's own service simply hosts it.
-That discovery is what made the Kent County widening cheap: the streets were
-already here, behind a filter.
 
 It carries traffic DIRECTION (TRAFFIC_ALIGN) and POSTED_SPEED per segment,
 which is what makes a legal client-side router possible, and address ranges

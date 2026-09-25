@@ -53,18 +53,22 @@ export const TEXT_FILES = [
 // every data file's provenance block. The two answer different questions, so
 // the run reports them apart. A page link that rots is a reader clicking
 // through to a 404. A source that rots is the provenance of the data itself
-// no longer resolving -- the endpoint a refresh script pulls from, or the
-// citation for a row on screen -- which is the more serious of the two and
-// was, until now, buried in one alphabetical list with the rest.
+// no longer resolving (the endpoint a refresh script pulls from, or the
+// citation for a row on screen), which is the more serious of the two.
 export const isSource = f => f === SOURCES_REGISTRY || DATA_FILES.includes(f);
 
 // Data files whose provenance block names where the data came from. Only
-// that block is read; the rest is coordinates and house numbers. Every
-// site/data/*.json is listed, so a new one is a deliberate addition rather
-// than an oversight: early-voting.json and gr-clerk.json were missing here
-// and went unchecked until 2026-09-22. A file may carry no URL of its own
-// and still belong -- gr-clerk.json names its source by `src` and leaves the
-// URL to sources.json -- because what it carries is not fixed forever.
+// that block is read; the rest is coordinates and house numbers. Every file
+// directly under site/data/ is listed, so a new one is a deliberate addition
+// rather than an oversight. The per-jurisdiction files in the polling/,
+// addresses/ and graph/ directories are deliberately not read. The address
+// and graph chunks cite nothing that is not already checked here, and the
+// polling files cite thirty pages on the county's site, which has answered
+// this project with 403 since 2026-09-24; thirty more requests a week to a
+// host that is refusing us would be poor manners. A file may carry no URL of
+// its own and still belong (gr-clerk.json names its source by `src` and
+// leaves the URL to sources.json), because what it carries is not fixed
+// forever.
 export const DATA_FILES = [
   'addresses', 'boundary', 'cameras', 'early-voting', 'elections',
   'gr-clerk', 'graph', 'landcover', 'neighbors', 'polling', 'precincts',
@@ -98,11 +102,11 @@ const SPACING_MS = 300;
 // test_check_links.mjs covers nothing but this function, because it is the
 // part that decides whether a run is red.
 //
-// Three buckets, and the rule names no host. An earlier version kept a list
-// of hosts whose firewall answers with 403 and counted those as reachable,
-// which does not scale: the list grows every time another agency turns on
-// bot management, each entry is a link that quietly stopped being checked,
-// and the growing is done by a person editing this file to clear a red run.
+// Three buckets, and the rule names no host. A list of hosts whose firewall
+// answers with 403, counted as reachable, does not scale: it grows every
+// time another agency turns on bot management, each entry is a link that
+// quietly stopped being checked, and the growing is done by a person editing
+// this file to clear a red run.
 //
 // The line that does scale is between "this page is gone" and "we could not
 // find out". Only the first is worth failing on, and only three answers mean
@@ -179,12 +183,8 @@ async function check(url) {
 
 // ---- collect ----------------------------------------------------------
 // A file named above that cannot be read is reported, and the run carries on
-// without it. This used to throw, and the cost was not theoretical: the list
-// above still said `compare_osrm.mjs` after that file moved into scripts/ on
-// 2026-09-09, so every weekly run from then on died on its first readFile and
-// reported nothing at all about the other two dozen links. Noticing that
-// something moved is the entire job, and a checker that cannot say what it
-// found is worse than one that says a file is gone and keeps going.
+// without it: a checker that dies on its first missing path says nothing
+// about the other links, and noticing that something moved is the job.
 //
 // It is still a failure, for the same reason the per-host exemption list was
 // one: a path that quietly stops being read is a set of links that quietly

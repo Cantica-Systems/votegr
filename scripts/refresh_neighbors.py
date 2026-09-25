@@ -5,24 +5,20 @@
 More than half the road segments carrying a Grand Rapids ZIP are not in the
 City of Grand Rapids. People in Wyoming, Kentwood, Walker, East Grand Rapids
 and, most confusingly, Grand Rapids CHARTER TOWNSHIP all have Grand Rapids
-mailing addresses and vote somewhere this tool does not cover.
-
-Without this index those people get "no street matches that", which reads as
-a bug in the tool rather than what it is. With it the page can say which
-jurisdiction the street is in and send them to the right place.
+mailing addresses. Without this index a street the page cannot answer gets
+"no street matches that", which reads as a bug rather than what it is; with
+it the page can say which jurisdiction the street is in.
 
 Names only, no geometry and no address ranges: this exists to explain a miss,
 not to answer a lookup.
 
-That was written when the tool covered only the city. The main page now has
-every parcel address in the county, so fourteen of these fifteen
-jurisdictions are ones it CAN answer, and most of the names here are streets
-its address list already has under the county's spelling (E FULTON ST here,
-FULTON ST E there). The page filters this file through the address list when
-it loads (Precincts.unindexed in site/precinct.js) and offers only what is
-left: streets in Tallmadge Township, which is in Ottawa County, and streets
-in the other fourteen that have no address in the parcel file at all. /simple
-is still city-only and uses the file as it is.
+/simple is city-only and uses the file as it is. The main page covers the
+county, and fourteen of these fifteen jurisdictions are ones it CAN answer,
+so it filters this file through its address list when it loads
+(Precincts.unindexed in site/precinct.js). Most names here are streets that
+list already has under the county's spelling (E FULTON ST here, FULTON ST E
+there), and what is left is streets in Tallmadge Township, which is in Ottawa
+County, and streets in the other fourteen with no address in the parcel file.
 """
 import json
 import sys

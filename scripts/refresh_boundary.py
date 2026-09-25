@@ -2,9 +2,8 @@
 # Released into the public domain under the Unlicense, see UNLICENSE.
 """Fetch the City of Grand Rapids limits and write site/data/boundary.json.
 
-Drawn on the map so the covered area is obvious: routing stops at the city
-line, and without the outline a route that stops there looks like a bug rather
-than the edge of the data.
+Neither page loads it. It is build input: refresh_landcover.py takes its
+bounding box from it, and compare_osrm.mjs samples its trips inside it.
 
 Source is the Michigan Geographic Framework, the state's authoritative civic
 boundary layer (the same lines NG-911 uses). Public, no key.
@@ -19,7 +18,7 @@ from useragent import USER_AGENT as UA
 
 MGF_CITIES = ("https://gisagocss.state.mi.us/arcgis/rest/services/OpenData/"
               "michigan_geographic_framework/MapServer/1/query")
-PLACE_FIPS = "34000"          # Grand Rapids; matches the centerline filter
+PLACE_FIPS = "34000"          # Grand Rapids
 OUT = Path(__file__).resolve().parent.parent / "site" / "data" / "boundary.json"
 
 
@@ -56,7 +55,7 @@ def main():
     if not data:
         sys.exit("REFUSE: could not fetch the Grand Rapids boundary")
 
-    # Keep the largest ring set; a city can ship as several fragments.
+    # Keep every ring; a city can ship as several fragments.
     rings = []
     for f in data["features"]:
         rings.extend((f.get("geometry") or {}).get("rings") or [])

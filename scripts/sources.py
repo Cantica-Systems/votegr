@@ -2,10 +2,10 @@
 # Released into the public domain under the Unlicense, see UNLICENSE.
 """The master list of where our data comes from: site/data/sources.json.
 
-Every data file used to carry its own provenance block, which meant the same
-publisher, URL and licence were written out ten times in ten shapes -- and
-elections.json, whose dates, sites and hours genuinely come from three
-different places, had to invent key names (`early_voting_sites_source`,
+Every data file carries a provenance block about ITSELF (see provenance.py).
+What one block cannot say is where individual records came from when they
+differ in origin: elections.json's dates, sites and hours come from three
+different places, and it had to invent key names (`early_voting_sites_source`,
 `early_voting_hours_source`) to say so.
 
 So sources are registered once, by id, and everything else POINTS at one:

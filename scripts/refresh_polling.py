@@ -56,7 +56,7 @@ OUT_DIR = ROOT / "site" / "data" / "polling"
 # MCD FIPS -> the county's page for that jurisdiction. Hardcoded rather than
 # scraped from the site navigation so a run is deterministic, and checked
 # against each page's own heading so a renumbered id cannot pass silently.
-# Note 34260: the state calls it Grand Rapids Township, the county calls it
+# Note 34020: the state calls it Grand Rapids Township, the county calls it
 # Grand Rapids Charter Township, and they are the same place.
 PAGES = {
     "00240": "324/Ada-Township",   # Ada Township
@@ -93,10 +93,6 @@ PAGES = {
 
 POLLING_HEADING = "Election Day Polling Location"   # some pages drop the plural
 DROPBOX_HEADING = "Absentee Voter Drop Box Locations"
-# The trailing colon is not decoration: about a third of the county's pages
-# write "Precinct 1:" and the rest write "Precinct 1". Both are the same
-# label, and an anchored pattern without the colon silently reads twelve
-# jurisdictions as having no polling places at all.
 # Thirty pages, five ways of writing the same label: "Precinct 1", "Precinct
 # 1:" with a colon, "Precincts 1 and 2" and "Precincts 1, 2 & 3" where several
 # share a venue, and Bowne -- with its single precinct -- dropping the plural
@@ -216,7 +212,7 @@ ADDRESS_OVERRIDES = {
         "source_url": "https://www.algomatwp.org/departments/elections/index.php",
     },
     # Wyoming's own fire station, Wyoming ward 1 precinct 3. The street is
-    # GEZON; the county page writes GENZON, and so did this file until now.
+    # GEZON; the county page writes GENZON.
     # Nothing anywhere else spells it with the N: not one parcel, not one road
     # segment in the graph this site routes on, not Wyoming's own drop box a
     # few rows below in the same file -- "Wyoming Gezon Parkway Station",

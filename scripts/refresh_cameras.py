@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 # Released into the public domain under the Unlicense, see UNLICENSE.
 """Pull known ALPR camera positions across Kent County from OpenStreetMap via
-Overpass, and write the cached camera floor (site/data/cameras.json).
+Overpass, and write the camera set the page shows (site/data/cameras.json).
 
-This is the ONLY camera source. The browser used to be able to re-query
-Overpass live, adding to this set but never showing fewer; that control is
-gone, so the page shows exactly what this script last wrote and nothing
-corrects it at read time. So the pull walks an endpoint fallback chain and
-refuses to write an INCOMPLETE answer (Overpass signals truncation with a
-'remark' at HTTP 200, and its main front 504s under load). A busy mirror is
-retried, with a growing wait; a truncated answer is not, because asking again
-returns the same one.
+This is the ONLY camera source: the page shows exactly what this script last
+wrote, and nothing corrects it at read time. So the pull walks an endpoint
+fallback chain and refuses to write an INCOMPLETE answer (Overpass reports a
+partial answer with a 'remark' at HTTP 200, and its main front 504s under
+load). A busy mirror is retried, with a growing wait; a truncated answer is
+not, because asking again returns the same one.
 
 Completeness of the ANSWER is the test. The count is not: a complete answer
 with fewer cameras than last time is published as-is, because OSM removals are
@@ -31,12 +29,11 @@ from useragent import USER_AGENT as UA
 # Kent County with ~2km margin (S, W, N, E) for Overpass. The county's own
 # precinct polygons span 42.768..43.294 N, -85.791..-85.310 W.
 #
-# This was the Grand Rapids city bbox (42.87, -85.78, 43.05, -85.55) until the
-# lookup went county-wide. That bbox is 373 km2 of a 2,280 km2 county: outside
-# it there were no cameras ON FILE, which is not the same fact as no cameras,
-# and the page would have told a Rockford voter their trip passed none. A
-# camera set that stops at a line the reader cannot see is worse than no
-# avoidance at all, because it reads as a clean bill of health.
+# A box that stops short of the county line has no cameras ON FILE beyond it,
+# which is not the same fact as no cameras, and the page would tell a voter
+# out there that their trip passes none. A camera set that stops at a line
+# the reader cannot see is worse than no avoidance at all, because it reads
+# as a clean bill of health.
 BBOX = (42.75, -85.81, 43.31, -85.29)
 
 ENDPOINTS = [
@@ -64,20 +61,20 @@ ENDPOINT_PAUSE_S = 2             # between endpoints inside one round
 # header can say an hour and this job will not hold a runner that long.
 RETRY_AFTER_CAP_S = 300
 OUT = Path(__file__).resolve().parent.parent / "site" / "data" / "cameras.json"
-MIN_CAMERAS = 20   # GR metro has hundreds; a handful back = truncated/broken
-# There is deliberately NO never-fewer-than-last-time rule. There was one, and
-# it treated every shrink as a truncated answer, which meant a camera genuinely
-# removed from OSM could never leave this file and one bad day from a loaded
-# mirror latched the job red until someone intervened: it refused on 2026-09-18
-# at 4 cameras short, then at 42. The published set is now whatever the last
+MIN_CAMERAS = 20   # the county has hundreds; a handful back = truncated/broken
+# There is deliberately NO never-fewer-than-last-time rule. It treats every
+# shrink as a truncated answer, so a camera genuinely removed from OSM could
+# never leave this file, and one bad day from a loaded mirror latches the job
+# red until someone intervenes. The published set is whatever the last
 # complete answer said, removals included.
 #
-# What still has to hold is that the ANSWER was complete, which is a different
-# question from whether the count went down and is checked where it belongs, in
-# fetch_result(): Overpass flags a server-side timeout with a 'remark' at HTTP
-# 200, and that response is skipped in favour of the next mirror. MIN_CAMERAS
-# stays as the absolute floor, since a result in the single digits is a broken
-# query rather than a county that removed its readers overnight.
+# What has to hold is that the ANSWER was complete, which is a different
+# question from whether the count went down, and it is checked where it
+# belongs, in fetch_result(): an answer whose 'remark' reports a runtime
+# error, a timeout or truncation is skipped in favour of the next mirror.
+# MIN_CAMERAS stays as the absolute floor, since a result in the single
+# digits is a broken query rather than a county that removed its readers
+# overnight.
 
 QL = f"""[out:json][timeout:60];
 (

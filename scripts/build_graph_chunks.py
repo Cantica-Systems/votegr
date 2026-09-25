@@ -3,11 +3,11 @@
 """Cut build/graph.json into the per-jurisdiction chunks the browser loads,
 under site/data/graph/.
 
-Why chunks: the county graph is 39,209 segments. Parsing that and building a
-router index over it costs a second or more of blocked main thread on a
-mid-range phone, and tens of megabytes of heap on top of Leaflet and the
-canvas basemap. One jurisdiction at a time keeps the worst case at Grand
-Rapids, which is the payload that already works today.
+Why chunks: the county graph is 39,209 segments, and parsing it as one
+document peaks near 102 MiB of heap on a phone that also holds Leaflet and
+the canvas basemap. Cut into thirty files, sized in advance by index.json,
+the page streams them through one at a time and packs each as it arrives,
+so the peak stays near the 13 MiB the packed county costs anyway.
 
 Why an overlap ring: a chunk cut exactly at the jurisdiction line cannot route
 across it, so a trip from a Wyoming address to a polling place two blocks

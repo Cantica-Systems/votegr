@@ -10,10 +10,9 @@ address never leaves the browser.
 
 One file per jurisdiction, named by its MCD FIPS code, because a county-wide
 index is too much for a phone to parse: 232,000 parcels is about 2.2 MB of
-JSON and tens of megabytes of heap once parsed. Chunked, the worst case is
-Grand Rapids -- which is exactly the payload that already works today -- and
-every other jurisdiction is a fraction of it. Which chunk to load comes from
-the jurisdictions index in precincts.json.
+JSON and tens of megabytes of heap once parsed. Chunked, the largest file is
+Grand Rapids and every other jurisdiction is a fraction of it. Which chunk to
+load comes from the jurisdictions index in precincts.json.
 
 Only three things per address are published: the house number, the precinct,
 and how many metres the parcel sits from the precinct edge. Owner names,

@@ -46,29 +46,15 @@ CITY_URL = ("https://www.grandrapidsmi.gov/departments/clerks-office/"
             "elections/early-voting/")
 UA = {
     "User-Agent": USER_AGENT,
-    # Say what this client can read. urllib sends no Accept header at all,
-    # which is a gap worth closing on its own: a client asking for a document
-    # should state what it can parse, and every other client does.
+    # Say what this client can read: urllib sends no Accept header at all,
+    # and a client asking for a document should state what it can parse.
     #
-    # It was added for a worse reason, and the reason turned out to be wrong.
-    # The county's edge refused the first scheduled run with a 403 in 130
-    # milliseconds, on a URL check_links.mjs had read with a 200 five hours
-    # earlier, and the missing Accept header was the visible difference
-    # between the two requests. It was not the operative one. Adding it
-    # changed nothing -- 403 again -- and running the link checker again
-    # immediately afterwards found it now gets 403 from that host too, on
-    # both county URLs. Node and Python, with the header and without.
-    #
-    # So the county began refusing this project somewhere between 00:21 and
-    # 05:09 UTC on 2026-09-24, and none of it was ever about how this script
-    # asks. The mistake was comparing two requests five hours apart and
-    # treating the gap as immaterial; the server had changed underneath.
-    #
-    # The header stays because it is correct, not because it helps. What is
-    # NOT done, here or anywhere in this project, is claiming to be a browser
-    # to get past that refusal -- check_links.mjs states the reasoning, and a
-    # server that has decided it does not want scripted readers has decided
-    # it, whether or not a lie would work.
+    # It is not a way past the county's refusal. Since 2026-09-24 the
+    # county's edge has answered 403 to every client this project runs, node
+    # and Python, with this header and without. Nothing here or anywhere in
+    # this project claims to be a browser to get past that: check_links.mjs
+    # states the reasoning, and a server that has decided it does not want
+    # scripted readers has decided it, whether or not a lie would work.
     "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
 }
 
@@ -258,11 +244,11 @@ def main():
 
     # A block is: the jurisdiction, "Dates/Times:", ONE OR MORE hours lines,
     # "Location:" (or "Locations:"), then one or more places. The counts vary
-    # per jurisdiction -- East Grand Rapids publishes four different weekday
-    # patterns, Grand Rapids runs two sites -- so this reads until the next
-    # thing rather than assuming a fixed shape. An earlier version walked back
-    # a fixed three lines from "Location:" and silently lost the six
-    # jurisdictions whose hours run to more than one line.
+    # per jurisdiction (East Grand Rapids publishes four different weekday
+    # patterns, Grand Rapids runs two sites), so this reads until the next
+    # thing rather than assuming a fixed shape: walking back a fixed number
+    # of lines from "Location:" silently loses every jurisdiction whose hours
+    # run to more than one line.
     known = set(index)
     sites, unknown = {}, []
     i = 0
@@ -307,12 +293,9 @@ def main():
     # Carry the coordinates forward where the address text is unchanged.
     #
     # This script writes jurisdiction, hours and locations; the `located`
-    # block beside them, with a lat and lng per address, is put there
-    # afterwards by geocode_places.py. So a refresh used to drop all thirty,
-    # and that was tolerable while a person ran this and could run the
-    # geocoder after it. Under a schedule it is not: the job would delete
-    # every coordinate in the file on each run that found a change, weekly,
-    # unattended.
+    # block beside them, with a lat and lng per address, is added afterwards
+    # by geocode_places.py. This runs weekly and unattended, so it must not
+    # delete every coordinate in the file each time the page changes.
     #
     # A `located` entry is a geocode OF the locations text, so it stays valid
     # exactly as long as that text does. Matching the whole list, in order,

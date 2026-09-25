@@ -13,14 +13,12 @@ speeds, freeways correctly modeled as one-way carriageways) but they carry no
 turn restrictions at all. OSM carries them and nothing else here beats the
 centerline data, so we take exactly the one thing that is missing.
 
-OSM is now the ONLY source. Grand Rapids publishes a 44,892-row sign
-inventory, and this script used to infer bans from the posted MUTCD no-turn
-signs and merge them in -- 45 restrictions the city had and OSM did not. That
-is gone. It covered one city out of thirty and had been frozen upstream since
-March 2024, so keeping it meant Grand Rapids alone carried restrictions its
-neighbours could never have, from a source nobody was refreshing. One source
-with one licence across every jurisdiction is worth more than 45 bans in one
-of them.
+OSM is the ONLY source, in every jurisdiction. The Grand Rapids sign
+inventory is not used: it covers one city of thirty and has been frozen
+upstream since March 2024, so it would give Grand Rapids alone restrictions
+its neighbours could never have, from a source nobody refreshes. One source
+with one licence everywhere is worth more than a few dozen extra bans in one
+place.
 
 Matching is geometric, not by id: the two datasets share no keys. For each OSM
 restriction we find the city node nearest its via point, then pick the incident
@@ -110,11 +108,10 @@ def main():
 
         # Candidate city nodes near the OSM via point, nearest first.
         #
-        # Taking only the single nearest node dropped 70 of 115 in-city
-        # restrictions: the two datasets split streets differently, so the
-        # closest node is often a nearby vertex rather than the intersection
-        # the restriction is about. Trying several and keeping whichever
-        # actually resolves both the from- and to-way recovers most of them
+        # Several, not only the nearest: the two datasets split streets
+        # differently, so the closest node is often a nearby vertex rather
+        # than the intersection the restriction is about. Keeping whichever
+        # candidate resolves both the from- and to-way recovers most of those
         # without loosening the tolerances that keep bad matches out.
         near = []
         for ni, nd in enumerate(nodes):
