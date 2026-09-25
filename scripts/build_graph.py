@@ -40,10 +40,16 @@ OUT = ROOT / "build" / "graph.json"
 
 Q = 5  # coord rounding for node identity (~1.1m)
 
-# Fallback speeds (mph) by MI functional class when POSTED_SPEED is null/0.
-FC_DEFAULT_MPH = {
-    "1": 55, "2": 45, "3": 40, "4": 35, "5": 30, "6": 25, "7": 25,
-}
+# The speed for a segment with no POSTED_SPEED, whatever its class.
+#
+# A table of defaults by functional class used to sit here, keyed "1" to
+# "7". It never matched anything: FUNCTIONAL_CLASSIFICATION holds labels
+# such as "Urban Minor Arterial" (see FC_CLASS below), so every unposted
+# segment fell through to this value, arterials and freeways included.
+# This states what the code does rather than hiding it behind a dead lookup.
+# Defaulting by class instead would change travel times on every unposted
+# arterial and local road, so it wants a graph rebuild and a clean run of
+# tests/audit_routes.mjs, not a quiet edit here.
 DEFAULT_MPH = 25
 
 
@@ -128,9 +134,8 @@ def main():
 
         length_m = path_len(path)
         mph = a.get("POSTED_SPEED") or 0
-        if not mph or mph <= 0:
-            fc = str(a.get("FUNCTIONAL_CLASSIFICATION") or "").strip()
-            mph = FC_DEFAULT_MPH.get(fc, DEFAULT_MPH)
+        if mph <= 0:
+            mph = DEFAULT_MPH
         sec = length_m / (mph * 0.44704)  # mph -> m/s
 
         ta = (a.get("TRAFFIC_ALIGN") or "").strip()
