@@ -6,24 +6,17 @@
 // covers whether it ever gets to ask, which turned out to be a thing that
 // could break entirely on its own.
 //
-// It exists because of a real failure, and a quiet one. TEXT_FILES named
-// `compare_osrm.mjs` at the repository root. 98b3c81 moved that file into
-// scripts/ and updated the workflows, the README and BUILD.md, but not the
-// one path that lived inside the moved file itself. collect() threw ENOENT
-// on its first read, so the weekly run died before its first request and
-// reported nothing at all: not the missing file, not the two dozen links it
-// never reached. It ran red on 2026-09-14 and again on 2026-09-21, eleven
-// seconds each time, and said so only in a log nobody had reason to open.
-//
-// Nothing on a pull request could have caught it. checks.yml ran the
-// classifier tests, and the classifier was fine. The live check runs weekly
-// by design, because it depends on a dozen other organisations' servers. So
-// the move went green and stayed green.
+// The list of files lives inside the checker, where moving a file elsewhere
+// in the repository does not update it, and a path that goes missing costs
+// the weekly run every link it would have read there. The classifier tests
+// cannot see that, and the live check runs weekly by design, because it
+// depends on a dozen other organisations' servers. So a move goes green on
+// its pull request and the first sign of it is a red Monday.
 //
 // This is the part of the live check that depends on nobody else's server,
 // which is exactly the part that can run here, on the pull request that does
-// the renaming. The checker no longer dies on a path that moved -- it reports
-// it and carries on -- but reporting it weekly is still a week late.
+// the renaming. The checker reports a path it cannot read and carries on
+// rather than dying on it, but reporting it weekly is still a week late.
 import { TEXT_FILES, DATA_FILES, collect, isSource } from '../scripts/check_links.mjs';
 
 let fails = 0;
@@ -65,15 +58,14 @@ const PAGES = TEXT_FILES.filter(f => f !== 'site/data/sources.json');
 ok('while the docs and pages do not', !PAGES.some(isSource),
    PAGES.filter(isSource).join(', '));
 
+// Every link lands in exactly one group by construction: a link is a source
+// when any file it was found in is one. What can go wrong is the classifier
+// answering the same way every time, which would report one empty heading
+// every week.
 const all = [...foundIn.keys()];
 const src = all.filter(u => foundIn.get(u).some(isSource));
 const page = all.filter(u => !foundIn.get(u).some(isSource));
-ok('every link is a source or a page link, never both and never neither',
-   src.length + page.length === all.length &&
-   new Set([...src, ...page]).size === all.length);
-// A classifier that answered the same way every time would pass the line
-// above and report one empty heading every week.
-ok('and neither group is empty', src.length > 0 && page.length > 0,
+ok('neither the sources nor the page links are empty', src.length > 0 && page.length > 0,
    `sources=${src.length} pages=${page.length}`);
 
 console.log(`\n${fails === 0 ? 'check_links inputs: all passed' : fails + ' FAILED'}`);
