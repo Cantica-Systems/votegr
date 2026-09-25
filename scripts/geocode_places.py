@@ -32,7 +32,6 @@ import json
 import pathlib
 import re
 import subprocess
-import sys
 import time
 from collections import defaultdict
 
@@ -434,8 +433,7 @@ class Run:
         record["lat"], record["lng"] = lat, lng
         record["geocode"] = how
         self.stats["hit"] += 1
-        self.stats[how.split(" ")[0] if how.startswith("quadrant") else how] += 1
-        self.stats["quadrant inferred"] += how.startswith("quadrant")
+        self.stats["quadrant inferred" if how.startswith("quadrant") else how] += 1
         return True
 
 

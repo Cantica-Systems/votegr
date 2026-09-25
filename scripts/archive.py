@@ -107,8 +107,8 @@ def _save_authenticated(url, keys):
     return None
 
 
-def _get(url, timeout, headers=None):
-    request = urllib.request.Request(url, headers={**UA, **(headers or {})})
+def _get(url, timeout):
+    request = urllib.request.Request(url, headers=UA)
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return response
 
@@ -140,7 +140,7 @@ def _age_days(timestamp, today):
     return (today - stamp).days
 
 
-def snapshot(url, today=None, force=False):
+def snapshot(url):
     """Make sure a recent capture of `url` exists, and return it.
 
     Returns {"url", "timestamp", "captured": bool} or None. `captured` says
@@ -149,16 +149,17 @@ def snapshot(url, today=None, force=False):
     been captured this week already.
     """
     from datetime import date
-    today = today or date.today()
+    today = date.today()
 
-    if not force:
-        have = existing(url)
-        if have and have.get("timestamp"):
-            age = _age_days(have["timestamp"], today)
-            if age is not None and age <= MAX_AGE_DAYS:
-                return {**have, "captured": False}
+    # One lookup serves both questions: is there a recent enough capture to
+    # use as it is, and if not, what timestamp would a new one have to beat.
+    have = existing(url)
+    if have and have.get("timestamp"):
+        age = _age_days(have["timestamp"], today)
+        if age is not None and age <= MAX_AGE_DAYS:
+            return {**have, "captured": False}
 
-    before = have["timestamp"] if (have := existing(url)) else None
+    before = have["timestamp"] if have else None
 
     keys = credentials()
     if keys:
@@ -222,7 +223,7 @@ def cite(url):
     return block
 
 
-def snapshot_or_note(url, **kwargs):
+def snapshot_or_note(url):
     """What goes into a provenance block, whether or not archiving worked.
 
     An OLD capture is reported as old. Save Page Now can decline to take a new
@@ -233,7 +234,7 @@ def snapshot_or_note(url, **kwargs):
     timestamp is always written down, and a stale one says so.
     """
     from datetime import date
-    result = snapshot(url, **kwargs)
+    result = snapshot(url)
     if not result:
         return {"archived": None,
                 "archive_note": "No Wayback capture was available or could be "

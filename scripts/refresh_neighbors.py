@@ -37,7 +37,6 @@ LAYER = ("https://gisagocss.state.mi.us/arcgis/rest/services/OpenData/"
          "michigan_geographic_framework/MapServer/20/query")
 OUT = Path(__file__).resolve().parent.parent / "site" / "data" / "neighbors.json"
 DELAY = 2.0
-PAGE = 1000          # the layer caps maxRecordCount at 1000
 
 # Jurisdictions that share Grand Rapids postal ZIPs, by MGF minor civil
 # division code. Grand Rapids city itself (34000) is deliberately absent.
@@ -80,8 +79,9 @@ def main():
         # This layer rejects resultOffset together with returnDistinctValues,
         # and it rejects a NULL test on RDNAME, so the query stays as plain as
         # possible: one distinct pull per jurisdiction, empties dropped here.
-        # No paging, so a jurisdiction with more than maxRecordCount distinct
-        # names would truncate; that is reported rather than passed over.
+        # No paging, so a jurisdiction with more than the layer's
+        # maxRecordCount (1000) distinct names would truncate; that is
+        # reported rather than passed over.
         page = get({
             "where": f"FMCDL={code}",
             "outFields": "RDNAME",

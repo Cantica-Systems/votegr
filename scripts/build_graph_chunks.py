@@ -31,7 +31,6 @@ Usage: python3 build_graph_chunks.py    (after build_restrictions.py)
 """
 import json
 import math
-import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -215,12 +214,11 @@ def main():
             how_to_update="Never on its own. It is written with the chunks "
                           "by this script and shares their build "
                           "fingerprint, so rebuild them together."),
-        "chunks": sorted(
-            ({"mcd": mcd, "jurisdiction": names[mcd],
-              "nodes": m["nodes"], "edges": m["edges"], "points": m["points"],
-              "restrictions": m["restrictions"], "bbox": m["bbox"]}
-             for mcd, m in sorted(metas.items())),
-            key=lambda c: c["mcd"]),
+        "chunks": [
+            {"mcd": mcd, "jurisdiction": names[mcd],
+             "nodes": m["nodes"], "edges": m["edges"], "points": m["points"],
+             "restrictions": m["restrictions"], "bbox": m["bbox"]}
+            for mcd, m in sorted(metas.items())],
     }
     pending.append((OUT_DIR / "index.json",
                     json.dumps(index, separators=(",", ":")) + "\n"))

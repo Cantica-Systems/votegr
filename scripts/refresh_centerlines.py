@@ -69,13 +69,6 @@ def main():
         "outSR": "4326",
         "f": "json",
     }
-    # Cheap count first (etiquette: know the size before paging).
-    cnt = _get({**base, "returnCountOnly": "true"})
-    total = cnt.get("count")
-    print(f"upstream reports {total} segments for the region")
-    if total is None:
-        sys.exit("no count returned; aborting")
-
     feats = []
     offset = 0
     while True:

@@ -22,7 +22,6 @@ from useragent import USER_AGENT as UA
 # file, since these scripts live in scripts/ and write into site/data.
 ROOT = Path(__file__).resolve().parent.parent
 PRECINCTS = ROOT / "site" / "data" / "precincts.geojson"
-BOUNDARY = ROOT / "site" / "data" / "boundary.json"
 OUT = ROOT / "build" / "osm_roads.json"
 
 ENDPOINTS = [
@@ -118,7 +117,6 @@ def main():
         t = e.get("tags", {})
         slim_ways.append({
             "id": e["id"],
-            "nodes": e.get("nodes") or [],
             "geom": [[round(g["lat"], 6), round(g["lon"], 6)]
                      for g in (e.get("geometry") or [])],
             "highway": t.get("highway"),
@@ -127,7 +125,6 @@ def main():
             "junction": t.get("junction"),
             "maxspeed": t.get("maxspeed"),
             "access": t.get("access"),
-            "service": t.get("service"),
         })
 
     slim_rels = []
