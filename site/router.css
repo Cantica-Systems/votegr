@@ -878,8 +878,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .bx-name { font-weight: 650; display: flex; justify-content: space-between;
             align-items: baseline; gap: 12px; }
 /* The order of the list is by distance; this is what makes that legible.
-   Straight-line, and it says so, because the drive is longer and the reader
-   should not read one as the other. */
+   The figure is straight-line and printed bare, as in app.js; the drive
+   itself appears once a place is chosen. */
 .bx-dist { font-weight: 400; font-size: .82rem; color: var(--dim);
            white-space: nowrap; }
 .bx-addr { color: var(--dim); font-size: .87rem; }

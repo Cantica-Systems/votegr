@@ -550,14 +550,11 @@
     if (!boxes.length && !office) return [];
 
     const parts = [el("div", "lead-2 sec-head", "Drop off an absentee ballot")];
-    // A box is only useful once there is a ballot to put in it. Michigan
-    // sends absentee ballots 40 days before an election, and a returned
-    // ballot has to be in hand when the polls close.
-    const start = Elections.dayStart(election.date);
-    start.setDate(start.getDate() - 40);
-    const from = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}` +
-                 `-${String(start.getDate()).padStart(2, "0")}`;
-    const early = Elections.todayISO() < from;
+    // A box is only useful once there is a ballot to put in it, and a
+    // returned ballot has to be in hand when the polls close. The first day
+    // is the map page's, from ../elections.js.
+    const from = Elections.absenteeFrom(election);
+    const early = !!from && Elections.todayISO() < from;
     parts.push(el("div", "sec-sub",
       early
         ? el("span", null, el("strong", "when", Elections.monthDay(from)),
