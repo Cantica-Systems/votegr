@@ -1,13 +1,15 @@
-/* Self-drawn basemap.
- * Released into the public domain under the Unlicense, see UNLICENSE.
+/* Released into the public domain under the Unlicense, see UNLICENSE.
+ * Self-drawn basemap.
  *
- * Draws the map from files the page already holds: the road geometry in
- * graph.json, plus water, parks and rail in landcover.json. No tiles, so no
- * request leaves the browser to draw the map, which is the whole point of the
- * tool and something a raster basemap cannot offer at any quality.
+ * Draws the map from files the page already holds: the county road graph in
+ * data/graph/ (packed by router.js), plus water, parks and rail in
+ * landcover.json. No tiles, so no request leaves the browser to draw the
+ * map, which is the whole point of the tool and something a raster basemap
+ * cannot offer at any quality.
  *
- * Rendered to a single canvas via Leaflet's Layer API rather than as SVG
- * paths: 10,521 streets as DOM nodes would crawl on a phone.
+ * Rendered to two canvases, the ground and the labels above the route, via
+ * Leaflet's Layer API rather than as SVG paths: 39,164 street segments as
+ * DOM nodes would crawl on a phone.
  */
 (function (root) {
   'use strict';
@@ -145,11 +147,11 @@
     ctx.restore();
   }
 
-  // Half the camera marker's footprint, in CSS pixels. MEASURED from the live
-  // icon (58x58, because the box includes the direction cone) rather than
-  // guessed. Both things drawn on the label canvas, street names and precinct
-  // numbers, clear this radius, and they read it from here so the two passes
-  // cannot drift apart.
+  // How far street names and precinct numbers keep from a camera marker's
+  // centre, in CSS pixels. The marker is 38x38 (cameras.js SIZE, a box that
+  // includes the direction cone), so half its footprint is 19 and this
+  // leaves 10 more of clear margin around it. Both things drawn on the label
+  // canvas read it from here so the two passes cannot drift apart.
   var MARKER_R = 29;
 
   // Does block x deserve its cell's name more than block y? Route proximity
@@ -216,16 +218,13 @@
     // them. They are computed there, by build_precincts.py, as the union of
     // each jurisdiction's precincts.
     //
-    // This used to be worked out here instead: count every precinct edge in
-    // the jurisdiction and keep the ones seen only once, on the reasoning
-    // that an edge two precincts share is seen twice and an edge on the
-    // outside is seen once. That is true of the ground and false of the
-    // file. Each precinct polygon is thinned on its own upstream, so the two
-    // sides of a shared border keep different vertices off the same line,
-    // neither edge matches its twin, and both were drawn. It put 263 km of
-    // line through the insides of jurisdictions, 71 km of it inside Grand
-    // Rapids, which is where it was noticed: a third of the yellow on the
-    // screen was interior precinct borders wearing the city border's colour.
+    // They are not derived here by keeping the precinct edges seen only
+    // once, on the reasoning that a shared border is seen twice. That is true
+    // of the ground and false of the file: each precinct polygon is thinned
+    // on its own upstream, so the two sides of a shared border keep
+    // different vertices off the same line and neither edge matches its
+    // twin. Derived that way, the outlines carry 263 km of interior precinct
+    // border wearing the jurisdiction border's colour.
     setJurisdictions: function (list) {
       this._outlines = {};
       for (var i = 0; i < (list || []).length; i++) {
@@ -244,28 +243,26 @@
     // precincts are tinted and only its outer border is drawn: an address
     // in Solon Township lights Solon Township, and the rest of the county
     // stays plain land with faint precinct lines for context. Nothing is
-    // tinted until there is an answer. This replaced a scheme that coloured
-    // all thirty jurisdictions at once, which made everything outside the
-    // one you were looking at read as a darker, busier region rather than
-    // as not-in-scope.
+    // tinted until there is an answer. Colouring all thirty jurisdictions at
+    // once makes everything outside the one you are looking at read as a
+    // darker, busier region rather than as not-in-scope.
     setScope: function (mcd) {
       this._scopeMcd = mcd == null ? null : String(mcd);
       this._scopeBorder = this._outline(this._scopeMcd);
       this._redraw();
     },
 
-    // What identifies a precinct: the state's 13-digit code where the list
-    // carries one, the bare number for the city-only files that do not. On
-    // a county map the number alone matched "Precinct 2" in every
-    // jurisdiction at once, and the fill that means "this one is yours" lit
-    // up all over the county.
+    // What identifies a precinct: the state's 13-digit code, which every
+    // precinct in precincts.json carries. On a county map the number alone
+    // matches "Precinct 2" in every jurisdiction at once, and the fill that
+    // means "this one is yours" would light up all over the county.
     _pid: function (pr) {
-      return pr.code != null ? String(pr.code) : String(pr.precinct);
+      return String(pr.code);
     },
 
-    // Which of the precinct overlays are drawn. Three wards of twenty-ish
-    // precincts each is a lot of ink for someone who only wants the route,
-    // so every piece of it can be switched off.
+    // Which of the precinct overlays are drawn. Two hundred precinct
+    // outlines is a lot of ink for someone who only wants the route, so
+    // every piece of it can be switched off.
     setLayerOpts: function (o) {
       this._opts = o || {};
       this._redraw();
@@ -287,7 +284,7 @@
       this._redraw();
     },
 
-    // Street names used by the current route. They are labeled before
+    // Street names used by the current route. They are labelled before
     // anything else, because a step that says "turn right onto Jefferson"
     // is worthless if Jefferson is the one street on screen without a name.
     setRouteStreets: function (names, pts) {
@@ -334,8 +331,8 @@
       // Only redraw when the map SETTLES, and at most once per animation
       // frame. During a drag Leaflet translates the pane, and these canvases
       // are children of panes, so they move with it for free; redrawing on
-      // every `move` event repainted 10,000 roads per frame and held panning
-      // to about 20fps.
+      // every `move` event repaints the whole road network per frame, which
+      // held panning to about 20fps when the network was the city alone.
       //
       // The canvases are drawn PADDED beyond the viewport so a pan reveals
       // ground that is already there instead of blank edges. Same approach as
@@ -360,7 +357,7 @@
     },
 
     // Group edges by class once, so each frame is a few long paths per class
-    // rather than 10,521 individual strokes with style changes between them.
+    // rather than 39,164 individual strokes with style changes between them.
     _bucket: function () {
       if (!this._graph) return {};
       if (this._buckets) return this._buckets;
@@ -465,12 +462,12 @@
       this._drawnW = cw; this._drawnH = ch;
 
       // Publish the swatch colours the legend needs, from the palette the map
-      // is about to draw with. The legend used to hardcode them, which meant
-      // it showed the light theme's dark purple on the dark theme's dark
-      // background. Reading them from here is the only way the key and the
-      // map cannot disagree. Wards are published solid: on the map they are
-      // translucent fills lying over streets, but a key has nothing beneath
-      // it and the map alpha renders as a washed-out smear at swatch size.
+      // is about to draw with. Reading them from here is the only way the key
+      // and the map cannot disagree across themes: a hardcoded key shows one
+      // theme's purple on the other's background. Wards are published solid:
+      // on the map they are translucent fills lying over streets, but a key
+      // has nothing beneath it and the map alpha renders as a washed-out
+      // smear at swatch size.
       try {
         var rs = document.documentElement.style;
         rs.setProperty('--lg-precinct', P.precinct);
@@ -538,12 +535,12 @@
         // on the map then failed its bounds check against a 5px-wide
         // viewport and nothing was drawn.
         var casingW = w + (CLASS[cls].casing || 0) * 2;
-        this._strokePaths(ctx, buckets[cls], P.casing, casingW, pt);
+        this._strokeLines(ctx, buckets[cls], P.casing, casingW, pt);
       }
       for (i = 0; i < order.length; i++) {
         cls = order[i]; w = widthFor(cls, z);
         if (w <= 0 || z < CLASS[cls].minZ) continue;
-        this._strokePaths(ctx, buckets[cls],
+        this._strokeLines(ctx, buckets[cls],
                           P.road[CLASS[cls].name] || P.road.local, w, pt);
       }
 
@@ -555,13 +552,15 @@
       if (this._precincts && (O.wards || O.precincts !== false)) {
         var act = this._activePrecinct;
 
-        // Ward colour first, precinct shade within it.
+        // Ward colour first, precinct shade within it, for the jurisdiction
+        // in scope only.
         //
-        // A city has at most three wards, so each gets a hue of its own and they
-        // are told apart at a glance. There are dozens of precincts, which is
-        // far too many for distinct colours, so each takes a lightness step off
-        // its ward's hue instead. A precinct then reads as different from the
-        // one beside it while the ward still reads as one area.
+        // A city has at most three wards, so each gets a hue of its own and
+        // they are told apart at a glance; a township, having none, takes one
+        // hue. There are dozens of precincts, which is far too many for
+        // distinct colours, so each takes a lightness step off its ward's hue
+        // instead. A precinct then reads as different from the one beside it
+        // while the ward still reads as one area.
         //
         // The step is keyed on the precinct number rather than its position in
         // the ward, because precincts are numbered in blocks per ward and
@@ -569,52 +568,35 @@
         // number is therefore what makes NEIGHBOURS differ, which is the whole
         // point.
         //
-        // The step has to stay SMALL, and it did not. At 10 points over a
-        // modulus of 5 the lift spanned 40 points of lightness inside one
-        // ward, which is further apart than the three ward hues are, so the
-        // fill reported precinct % 5 and not ward: measured in CIELAB over the
-        // land tone, two precincts in ONE ward reached dE 25.9 while the
-        // closest pair from DIFFERENT wards sat at 4.8. Near the top of that
-        // range all three hues washed out towards white as well. Grand Rapids
-        // showed it worst, being the city with all three wards on screen at
-        // once.
+        // The step has to stay SMALL. A big one spans more lightness inside
+        // one ward than lies between the three ward hues, so the fill reports
+        // precinct % 5 rather than ward (at 10 points, measured in CIELAB over
+        // the land tone, two precincts in ONE ward reach dE 25.9 while the
+        // closest pair from DIFFERENT wards sits at 4.8), and the top of the
+        // range washes out towards white. 6 points is the largest step that
+        // keeps the worst same-ward pair under half the closest cross-ward
+        // pair in BOTH themes. The lift is centred on wardL rather than
+        // climbing from it, so the range is wardL +/- 2 steps, the legend
+        // swatch at --lg-wardN is the middle of what gets painted rather than
+        // the darkest corner of it, and no precinct approaches white.
+        // tests/test_page.mjs asserts the ordering rather than these numbers,
+        // reading the tints off this renderer.
         //
-        // 6 points is the largest step that keeps the worst same-ward pair
-        // under half the closest cross-ward pair in BOTH themes. The lift is
-        // centred on wardL rather than climbing from it, so the range is
-        // wardL +/- 2 steps, the legend swatch at --lg-wardN is the middle of
-        // what gets painted rather than the darkest corner of it, and no
-        // precinct approaches white. tests/test_page.mjs asserts the ordering
-        // rather than these numbers, reading the tints off this renderer.
-        //
-        // WHICH step a number takes is a separate question from how big the
-        // step is, and getting it wrong is what made precincts stop reading
-        // as precincts. `n % 5` hands consecutive numbers CONSECUTIVE steps,
-        // so two precincts side by side -- which, numbered in blocks per
-        // ward, is exactly what consecutive numbers are -- differed by the
-        // smallest gap the scheme has: one step. Measured in CIELAB over the
-        // land tone that is dE 1.26 in the light theme, under the threshold
-        // for telling two greys apart across a dashed line, against dE 13.7
-        // between wards. Ward read instantly and precinct did not read at
-        // all. The dE 7.3 / 5.4 once quoted here was the widest pair in a
-        // ward, four steps apart; no two neighbours were ever that far.
-        //
+        // WHICH step a number takes matters as much as how big the step is.
+        // `n % 5` hands consecutive numbers CONSECUTIVE steps, so two
+        // precincts side by side differ by the smallest gap the scheme has:
+        // dE 1.26 in the light theme, under the threshold for telling two
+        // greys apart across a dashed line, against dE 13.7 between wards.
         // Doubling before the modulus permutes the same five steps into the
         // order 0, +2, -1, +1, -2, which puts every consecutive pair at least
-        // TWO steps apart. Neighbours go to dE 3.15 light / 3.76 dark. The
-        // set of steps is unchanged, so the widest same-ward pair and the
-        // closest cross-ward pair are exactly what they were (5.70 vs 13.74
-        // light, 8.28 vs 18.74 dark, same-ward worst still 42-44% of the
-        // nearest cross-ward pair): the fill still reports ward first.
-        // Tints, for the jurisdiction in scope only. A city with wards keeps
-        // a hue per ward, as Grand Rapids always had; a township, having
-        // none, takes one hue. Precincts step in lightness by number within
-        // it so neighbours differ while the area still reads as one.
+        // TWO steps apart: neighbours at dE 3.15 light / 3.76 dark. The set of
+        // steps is unchanged, so the widest same-ward pair and the closest
+        // cross-ward pair stay at 5.70 vs 13.74 light and 8.28 vs 18.74 dark
+        // (same-ward worst 42-44% of the nearest cross-ward pair): the fill
+        // still reports ward first.
         var scope = this._scopeMcd;
-        var inScope = function (p) {
-          return !scope ? p.mcd == null : String(p.mcd) === scope;
-        };
-        if (O.wards && (scope || !this._precincts.some(function (p) { return p.mcd != null; }))) {
+        var inScope = function (p) { return String(p.mcd) === scope; };
+        if (O.wards && scope) {
           for (var wi = 0; wi < this._precincts.length; wi++) {
             var wp = this._precincts[wi];
             if (!inScope(wp)) continue;
@@ -702,9 +684,7 @@
         var actP = this._activePrecinct;
         // Precinct numbers share the label canvas with the street names, and
         // this pass runs BEFORE _labels, so it cannot inherit that pass's
-        // collision work and has to clear the markers itself. Missing this is
-        // what left numbers sitting on cameras after the street names had
-        // already been fixed.
+        // collision work and has to clear the markers itself.
         var obsN = (this._obstacles || []).map(pt);
         lctx.save();
         lctx.textAlign = 'center';
@@ -763,31 +743,24 @@
     // Street names. Without them this is a diagram rather than a map: you can
     // see the shape of the city but cannot tell anyone which road to take.
     //
-    // One label per street name per screen, placed on its longest visible run
-    // and rotated to follow it, with a coarse occupancy grid so names do not
-    // pile up on each other. Which classes get labelled rises with zoom.
+    // One label per street name per geographic cell, placed on the cell's
+    // best block (nearest the route, then the longest run) and rotated to
+    // follow it, with a coarse occupancy grid so names do not pile up on
+    // each other. Which classes get labelled rises with zoom.
     _labels: function (ctx, P, z, size, pt, worldOff) {
       if (z < 10 || !this._graph) return;
-      // Label more of the network sooner. At z13-14 only arterials were named,
-      // which is most of a city with no names on it.
-      // Local streets from z14, not z15. At street zoom a reader expects
-      // every road they can see to be named; holding locals back one whole
-      // level is what left most of the map anonymous.
+      // Local streets are named from z14: at street zoom a reader expects
+      // every road they can see to be named. Collectors from z13, arterials
+      // and up from z10.
       var maxCls = z >= 14 ? 5 : z >= 13 ? 4 : 3;
       var g = this._graph, edgeTotal = g.edgeCount();
-      // Up to three candidate blocks per street name, ranked by how close
-      // they sit to the screen center. The old rule kept only the LONGEST
-      // block city-wide, which for long north-south avenues was usually off
-      // screen or clipped by the edge margin, so vertical streets lost their
-      // labels; the center-most visible block is the one a reader wants
-      // named anyway.
       var best = {};
-      // ONE NAME PER GEOGRAPHIC CELL, not one per screen. The old rule ranked
-      // every candidate block by how close it sat to the SCREEN centre, so
-      // panning moved the centre, re-ranked the blocks and re-placed the name:
-      // a 150px drag moved 14 of 51 visible names, one of them 756m down the
-      // road. A cell keyed on world pixels cannot move under a pan, so the
-      // same block wins every redraw and the name stays on the road it names.
+      // ONE NAME PER GEOGRAPHIC CELL, not one per screen. Ranking blocks by
+      // how close they sit to the SCREEN centre re-ranks them on every pan
+      // and re-places the name: a 150px drag moved 14 of 51 visible names,
+      // one of them 756m down the road. A cell keyed on world pixels cannot
+      // move under a pan, so the same block wins every redraw and the name
+      // stays on the road it names.
       //
       // 300 world px, chosen by measuring: a cell the size of the canvas gave
       // 42 distinct names on a downtown view, 560 gave 46, 400 gave 47, 300
@@ -796,12 +769,11 @@
       // of them, since a cell whose winner lands outside the drawable canvas
       // contributes nothing.
       //
-      // It also fixes what the screen-centre rule was introduced for: a long
-      // avenue now earns a name in each cell it crosses, so it is labelled
+      // A long avenue earns a name in each cell it crosses, so it is labelled
       // wherever you are on it rather than only when its best block happens
       // to be near the middle of the view.
       var wx = worldOff ? worldOff.x : 0, wy = worldOff ? worldOff.y : 0;
-      var LCELL = 300;   // world px; see the sweep in the commit message
+      var LCELL = 300;   // world px; see the sweep above
       var route = this._routeStreets || {};
       var routeScreen = null;
       if (this._routePts && this._routePts.length) {
@@ -834,19 +806,17 @@
             (a[1] > size.y + LCELL && b[1] > size.y + LCELL)) continue;
         var dx = b[0] - a[0], dy = b[1] - a[1];
         var len = Math.sqrt(dx * dx + dy * dy);
-        // A name needs a long block to sit along; a shield only needs to fit
-        // across the road, so freeway blocks qualify at a much shorter run.
-        // Filtering both at 42px is what left US-131 unlabelled when zoomed
-        // out, since ramps chop a freeway into short pieces.
         // How much on-screen road a name needs before it is worth trying.
-        // Bigger roads earn a label on a shorter run, because naming the
-        // arterial matters more than naming the side street beside it; and
-        // everything relaxes as you zoom in. The old flat 42px at z13-15 is
-        // what left those zooms almost entirely anonymous.
-        var kls = ec;
+        // A shield only has to fit across the road, and ramps chop a freeway
+        // into short pieces, so freeway blocks qualify at the shortest run.
+        // Bigger roads earn a label on a shorter run than smaller ones,
+        // because naming the arterial matters more than naming the side
+        // street beside it; and everything relaxes as you zoom in. One flat
+        // 42px leaves US-131 unlabelled zoomed out and z13-15 almost entirely
+        // anonymous.
         var minRun;
-        if (kls === 1) minRun = 18;
-        else if (kls <= 3) minRun = z >= 15 ? 22 : 28;
+        if (ec === 1) minRun = 18;
+        else if (ec <= 3) minRun = z >= 15 ? 22 : 28;
         else minRun = z >= 17 ? 22 : z >= 16 ? 26 : z >= 15 ? 30 : z >= 14 ? 34 : 40;
         if (len < minRun) continue;
         var mx0 = (a[0] + b[0]) / 2, my0 = (a[1] + b[1]) / 2;
@@ -871,12 +841,11 @@
         // ONE winner per cell, decided on the geography alone: route
         // proximity, then the longest run, then the edge's own index so the
         // comparison is total and two equal blocks cannot swap. There is
-        // deliberately no bench behind it. A list meant the drawing pass
-        // could walk down to a different block when the first was off screen
-        // or blocked, and "which block is on screen" is exactly the thing
-        // that changes when you drag. A cell whose winner is not drawable
-        // now yields no label, and the street is named in the next cell
-        // along instead.
+        // deliberately no bench behind it. A list would let the drawing pass
+        // walk down to a different block when the first was off screen or
+        // blocked, and "which block is on screen" is exactly the thing that
+        // changes when you drag. A cell whose winner is not drawable yields
+        // no label, and the street is named in the next cell along instead.
         if (!slot) best[key] = { name: en, best: cand };
         else if (betterBlock(cand, slot.best)) slot.best = cand;
       }
@@ -897,16 +866,16 @@
         return X.best.idx - Y.best.idx;
       });
 
-      // The collision grid tightens with zoom. One fixed cell size meant the
-      // spacing that keeps a city-wide view readable also throttled a street
-      // view, where there is room for far more names.
+      // The collision grid tightens with zoom. With one fixed cell size the
+      // spacing that keeps a city-wide view readable would also throttle a
+      // street view, where there is room for far more names.
       var CELL = z >= 17 ? 34 : z >= 16 ? 40 : z >= 15 ? 46 : z >= 14 ? 54 : 62;
       var taken = {};
 
       // Claim the footprint of every visible marker BEFORE any name is placed,
-      // so a street name is never drawn under a camera. Reserving up front
-      // rather than checking afterwards means a blocked name moves to its next
-      // candidate block instead of simply being dropped.
+      // so a street name is never drawn under a camera. A name whose cell
+      // winner is blocked is simply not drawn in that cell; the street is
+      // named in the next cell along.
       var obstacles = this._obstacles || [];
       var obsPx = [];                    // on-screen obstacle centres, in pixels
       var OB = MARKER_R;
@@ -926,8 +895,8 @@
       // Precinct numbers are drawn on this same canvas by the pass that runs
       // just before this one, and it cannot see the names that do not exist
       // yet. So the avoidance has to happen from this side: reserve what it
-      // drew before a single name is placed. Without this the two passes each
-      // behaved correctly on their own and still printed over each other.
+      // drew before a single name is placed, or the two passes each behave
+      // correctly on their own and still print over each other.
       var preBoxes = this._precinctBoxes || [];
       for (var pb = 0; pb < preBoxes.length; pb++) {
         var B = preBoxes[pb];
@@ -944,20 +913,19 @@
       ctx.lineJoin = 'round';
 
       for (var k = 0; k < names.length; k++) {
-        // best is keyed by name AND cell now, so the display name comes off
-        // the slot rather than out of the key.
+        // best is keyed by name and cell, so the display name comes off the
+        // slot rather than out of the key.
         var slotK = best[names[k]], streetName = slotK.name;
         var onRoute = !!route[streetName];
-        var placed = 0;
-        // Exactly one attempt: this cell's winner, or nothing. The loop that
-        // used to walk a bench of alternates is gone, because every reason it
-        // gave up on a block -- off screen, cell already claimed -- is a fact
-        // about the current view, so the name landed somewhere else as soon as
-        // the view changed. A street that loses one cell is still named in the
-        // next, and a name that cannot be drawn here simply is not drawn here.
+        // Exactly one attempt: this cell's winner, or nothing. Every reason
+        // to give up on a block, off screen or cell already claimed, is a
+        // fact about the current view, so falling back to another block would
+        // move the name whenever the view changed. A street that loses one
+        // cell is still named in the next, and a name that cannot be drawn
+        // here simply is not drawn here. The loop runs once; it is there so
+        // each test below can give up with `continue`.
         var cands = [slotK.best];
         for (var q = 0; q < cands.length; q++) {
-          if (placed >= (onRoute ? 2 : 1)) break;
           var it = cands[q];
           var mx = (it.a[0] + it.b[0]) / 2, my = (it.a[1] + it.b[1]) / 2;
           if (mx < 16 || mx > size.x - 16 || my < 12 || my > size.y - 12) continue;
@@ -969,14 +937,13 @@
           if (sh) {
             // A shield sits upright across the road rather than running along
             // it, which is how every road map does it and how a driver reads
-            // it at a glance.
-            // Freeways are split at every ramp, so their on-screen blocks are
-            // short when zoomed out. A shield sits ACROSS the road rather than
-            // along it, so it needs far less room than a name would.
+            // it at a glance. Freeways are split at every ramp, so their
+            // on-screen blocks are short when zoomed out, and a shield needs
+            // far less room than a name would.
             if (it.len < 22) continue;
             var shx = Math.round((mx + wx) / CELL), shy = Math.round((my + wy) / CELL);
             // A shield is a solid badge, so it must not land on a name that is
-            // already there. Claim the centre cell and its four neighbors,
+            // already there. Claim the centre cell and its four neighbours,
             // which is roughly the badge's footprint.
             if (taken[shx + ':' + shy]) continue;
             // A shield is drawn on this same canvas, so it can cover a camera
@@ -990,7 +957,6 @@
             }
             if (shClash) continue;
             drawShield(ctx, sh, mx, my, this._dark);
-            placed++;
             taken[shx + ':' + shy] = 1;
             taken[(shx + 1) + ':' + shy] = 1;
             taken[(shx - 1) + ':' + shy] = 1;
@@ -1010,9 +976,9 @@
           if (tw > it.len * 2.6 + 40) continue;
 
           // Reserve every cell the text actually covers, not just the one it
-          // is anchored in. Once labels were allowed to overrun their block a
-          // single-cell claim stopped describing the space they occupy, and
-          // downtown names began printing over each other.
+          // is anchored in. A label may overrun its block, so a single-cell
+          // claim does not describe the space it occupies, and downtown names
+          // would print over each other.
           var cells = spanCells(mx, my, ang, tw, size_px, CELL, wx, wy);
           var clash = false;
           for (var ci = 0; ci < cells.length; ci++) {
@@ -1022,9 +988,9 @@
 
           // Exact test against the markers, on top of the grid one.
           //
-          // The grid works in cells of 34 to 62 pixels and a camera marker is
-          // 58 across, so reserving whole cells cannot express the footprint
-          // precisely: a name placed in the next cell along still bled into
+          // The grid works in cells of 34 to 62 pixels and a marker's clearance
+          // is 58 across (MARKER_R each way), so reserving whole cells cannot
+          // express it precisely: a name placed in the next cell along still bled into
           // the marker. Measured, that left two markers in eleven covered.
           // Walking the label's own baseline and rejecting any candidate that
           // passes within the marker's radius closes the gap exactly.
@@ -1076,7 +1042,6 @@
           ctx.fillStyle = onRoute ? (P.labelRoute || P.label) : P.label;
           ctx.fillText(label, 0, 0);
           ctx.restore();
-          placed++;
         }
       }
     },
@@ -1128,24 +1093,6 @@
         ctx.moveTo(a[0], a[1]);
         for (var j = 1; j < l.length; j++) {
           var b = pt(l[j]);
-          ctx.lineTo(b[0], b[1]);
-        }
-      }
-      ctx.stroke();
-    },
-
-    _strokePaths: function (ctx, paths, color, width, pt) {
-      if (!paths || !paths.length) return;
-      ctx.strokeStyle = color; ctx.lineWidth = width;
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.beginPath();
-      for (var i = 0; i < paths.length; i++) {
-        var p = paths[i];
-        if (!p || p.length < 2) continue;
-        var a = pt(p[0]);
-        ctx.moveTo(a[0], a[1]);
-        for (var j = 1; j < p.length; j++) {
-          var b = pt(p[j]);
           ctx.lineTo(b[0], b[1]);
         }
       }
