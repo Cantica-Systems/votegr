@@ -1,6 +1,7 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
-// What the route panel SAYS: the two route cards and their verdict line, the
-// turn list, the unavoidable-cameras note, and the destination picker.
+// What the route panel SAYS: the two-option route toggle and its verdict
+// line, the turn list, the unavoidable-cameras note, and the destination
+// picker.
 //
 // Split out of app.js to separate wording from wiring. Everything here takes
 // route data and returns a string; nothing here touches the map, the graph or
@@ -9,12 +10,12 @@
 // where the care in this project actually lives, is no longer buried inside
 // Leaflet calls.
 //
-// The distance and time formats moved with it, because after the split
-// nothing else on the page measured anything.
+// The distance and time formats live here too; app.js borrows fmtMi for the
+// drop box list, and debug.js the mile.
 (function (root) {
   'use strict';
 
-  var METERS_PER_MILE = 1609.34;
+  var METERS_PER_MILE = 1609.344;       // the international mile, exactly
 
   function fmtMi(m) { return (m / METERS_PER_MILE).toFixed(1) + ' mi'; }
   function fmtMin(s) { return Math.max(1, Math.round(s / 60)) + ' min'; }
@@ -35,9 +36,9 @@
 
   // "Would taking the cameras actually get you there faster?" Both routes come
   // out of the same search over the same graph, so this is a direct comparison
-  // of their seconds and meters. The threshold is the same one the verdict
-  // line has always used for "costs you nothing": a saving the display cannot
-  // even show (under 0.05 mi and half a minute) is not a saving.
+  // of their seconds and meters. The threshold is the one the verdict line
+  // uses for "costs you nothing": a saving the display cannot even show
+  // (under 0.05 mi and half a minute) is not a saving.
   //
   // ONE predicate for both decisions that depend on it: whether the fastest
   // route is offered at all, and how its cost is described when it is.
@@ -66,7 +67,7 @@
 
   function camWord(n) {
     return n === 0 ? '<span class="cam-zero">no cameras</span>'
-      : '<span class="cam-big">' + n + ' camera' + (n > 1 ? 's' : '') + '</span>';
+      : '<span class="cam-big">' + n + ' camera' + plural(n) + '</span>';
   }
 
   // A glyph per manoeuvre, read off the instruction text. Faster to scan
@@ -94,12 +95,11 @@
   }
 
   // One control, two options, each showing what it costs. Two full-width
-  // cards said the same thing in twice the height.
+  // cards would say the same thing in twice the height.
   function option(key, r, exp, saved, selected) {
     // Each option is named by what it does with the cameras, so the two read
-    // as a choice rather than as two labels with counts bolted on. Naming it
-    // twice ("Avoiding" above "avoiding 1 camera") was the redundancy this
-    // replaces.
+    // as a choice rather than as two labels with counts bolted on, and none
+    // is named twice ("Avoiding" above "avoiding 1 camera").
     //
     // The avoiding route reports how many it DODGES, measured against the
     // fastest route; the fastest reports how many it DRIVES PAST. Where no
@@ -170,7 +170,7 @@
         '</span>' : '';
       var cam = st.cameras.length
         ? '<span class="scam">' + st.cameras.length + ' camera' +
-          (st.cameras.length > 1 ? 's' : '') + '</span>' : '';
+          plural(st.cameras.length) + '</span>' : '';
       return '<li data-i="' + i + '"' + (st.arrive ? ' class="arrive"' : '') +
         ' title="Show this part of the route on the map">' +
         (st.arrive ? '' : '<span class="glyph">' + turnGlyph(st.text) + '</span>') +
@@ -182,7 +182,7 @@
   // than a claim they have to take on trust.
   function unavoidableHtml(count, streets) {
     return '<div class="unavoid">There is no way to reach this destination ' +
-      'without passing ' + count + ' known camera' + (count > 1 ? 's' : '') +
+      'without passing ' + count + ' known camera' + plural(count) +
       ', on ' + esc(streets.join(', ')) + '. This route passes the fewest it can.</div>';
   }
 

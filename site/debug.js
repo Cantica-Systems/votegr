@@ -23,11 +23,14 @@
 
   // The route objects carry the full geometry and the step list; the dump
   // keeps the numbers and the step text and drops the point arrays, which
-  // are hundreds of coordinates that say nothing a map does not.
+  // are hundreds of coordinates that say nothing a map does not. The mile
+  // is the route panel's, read when a route is dumped, so the dump and the
+  // panel cannot disagree about one.
   function summarise(r) {
     if (!r) return null;
+    var mile = root.RoutePanel.METERS_PER_MILE;
     return {
-      meters: Math.round(r.meters), miles: +(r.meters / 1609.344).toFixed(2),
+      meters: Math.round(r.meters), miles: +(r.meters / mile).toFixed(2),
       seconds: Math.round(r.seconds), minutes: +(r.seconds / 60).toFixed(1),
       edges: r.edges.length, nodes: r.nodes.length,
       cameraCount: r.cameraCount, cameras: r.cameras,
