@@ -1809,7 +1809,7 @@
     // same x. The identity names the whole answer, not its first row.
     var html = '<div class="vi-rows"><div class="vi-grid"><div class="vi-rail">' +
       // The jurisdiction first: it is what a precinct number means anything
-      // relative to, since there is a Precinct 1 in twenty-nine places.
+      // relative to, since every one of the thirty jurisdictions has a Precinct 1.
       (r.jurisdiction ? '<div><div class="vi-lbl">Where you vote</div>' +
                         '<div class="vi-name">' + esc(r.jurisdiction) + '</div></div>' : '') +
       // .vi-idn marks the two number rows, Ward and Precinct; the tests find
