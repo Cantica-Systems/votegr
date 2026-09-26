@@ -28,12 +28,15 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import date
+
+from useragent import USER_AGENT
 
 AVAILABILITY = "https://archive.org/wayback/available"
 SAVE = "https://web.archive.org/save/"          # legacy, anonymous, rate limited
 SAVE_API = "https://web.archive.org/save"       # SPN2, requires a key
 STATUS = "https://web.archive.org/save/status/"
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {"User-Agent": USER_AGENT}
 MAX_AGE_DAYS = 7
 TIMEOUT_LOOKUP = 45
 TIMEOUT_SAVE = 120
@@ -105,8 +108,8 @@ def _save_authenticated(url, keys):
     return None
 
 
-def _get(url, timeout, headers=None):
-    request = urllib.request.Request(url, headers={**UA, **(headers or {})})
+def _get(url, timeout):
+    request = urllib.request.Request(url, headers=UA)
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return response
 
@@ -131,14 +134,13 @@ def existing(url):
 def _age_days(timestamp, today):
     """Days between a Wayback timestamp (YYYYMMDDhhmmss) and a date."""
     try:
-        from datetime import date
         stamp = date(int(timestamp[0:4]), int(timestamp[4:6]), int(timestamp[6:8]))
     except Exception:
         return None
     return (today - stamp).days
 
 
-def snapshot(url, today=None, force=False):
+def snapshot(url):
     """Make sure a recent capture of `url` exists, and return it.
 
     Returns {"url", "timestamp", "captured": bool} or None. `captured` says
@@ -146,17 +148,17 @@ def snapshot(url, today=None, force=False):
     reading a log: a run that archived nothing is a run whose sources had all
     been captured this week already.
     """
-    from datetime import date
-    today = today or date.today()
+    today = date.today()
 
-    if not force:
-        have = existing(url)
-        if have and have.get("timestamp"):
-            age = _age_days(have["timestamp"], today)
-            if age is not None and age <= MAX_AGE_DAYS:
-                return {**have, "captured": False}
+    # One lookup serves both questions: is there a recent enough capture to
+    # use as it is, and if not, what timestamp would a new one have to beat.
+    have = existing(url)
+    if have and have.get("timestamp"):
+        age = _age_days(have["timestamp"], today)
+        if age is not None and age <= MAX_AGE_DAYS:
+            return {**have, "captured": False}
 
-    before = have["timestamp"] if (have := existing(url)) else None
+    before = have["timestamp"] if have else None
 
     keys = credentials()
     if keys:
@@ -199,7 +201,6 @@ def cite(url):
     uselessness. So a bulk caller cites what exists and leaves the asking to
     the one-page sources.
     """
-    from datetime import date
     # With keys, bulk stops being a reason to hold back: SPN2's own
     # if_not_archived_within does the deduplicating server-side, so thirty
     # pages cost thirty cheap no-ops on a run where nothing has changed.
@@ -220,7 +221,7 @@ def cite(url):
     return block
 
 
-def snapshot_or_note(url, **kwargs):
+def snapshot_or_note(url):
     """What goes into a provenance block, whether or not archiving worked.
 
     An OLD capture is reported as old. Save Page Now can decline to take a new
@@ -230,8 +231,7 @@ def snapshot_or_note(url, **kwargs):
     shows what we read, when it shows a different version of the page. The
     timestamp is always written down, and a stale one says so.
     """
-    from datetime import date
-    result = snapshot(url, **kwargs)
+    result = snapshot(url)
     if not result:
         return {"archived": None,
                 "archive_note": "No Wayback capture was available or could be "

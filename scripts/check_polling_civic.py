@@ -43,9 +43,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from useragent import USER_AGENT as UA
 
 API = "https://www.googleapis.com/civicinfo/v2"
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 DATA = Path(__file__).resolve().parent.parent / "site" / "data"
 CITY = "Grand Rapids"
 STATE = "MI"
@@ -75,7 +75,10 @@ ABBREV = {
     "NORTHWEST": "NW", "NORTHEAST": "NE", "SOUTHWEST": "SW", "SOUTHEAST": "SE",
     "NORTH": "N", "SOUTH": "S", "EAST": "E", "WEST": "W",
 }
-SUITE = re.compile(r"\b(SUITE|STE|APT|UNIT|RM|ROOM|#)\b.*$")
+# `#` sits outside the word boundaries: "\b#" needs a letter or digit right
+# before the `#`, so "123 MAIN ST #4" would keep its unit and read as a
+# different address.
+SUITE = re.compile(r"(?:\b(?:SUITE|STE|APT|UNIT|RM|ROOM)\b|#).*$")
 
 
 def canon_address(value):
@@ -120,6 +123,10 @@ def get(path, params):
         except Exception:
             message = body[:200]
         return None, f"HTTP {err.code}: {message}"
+    except (urllib.error.URLError, TimeoutError) as err:
+        # No answer at all: DNS, a refused connection, or a timeout. Reported
+        # like any other error rather than as a traceback.
+        return None, f"no answer: {getattr(err, 'reason', err)}"
 
 
 def elections():
@@ -221,10 +228,12 @@ def cmd_elections(_args):
     return 0
 
 
-def cmd_check(args):
-    election = pick_election(args.state)
+def cmd_check(_args):
+    # Michigan only: the representative addresses are Grand Rapids ones, so
+    # checking them against another state's election would be meaningless.
+    election = pick_election(STATE)
     if not election:
-        print(f"No live {args.state} election in VIP today, so there is nothing "
+        print(f"No live {STATE} election in VIP today, so there is nothing "
               f"to check against. This is the normal state outside the two to "
               f"four weeks before an election.")
         return 0
@@ -295,6 +304,7 @@ def cmd_selftest(_args):
         ("977 WEALTHY ST SW, 49504", "977 Wealthy Street Southwest, Grand Rapids", True),
         ("107 LA GRAVE AVE SE, 49503", "107 La Grave Ave SE, Grand Rapids", True),
         ("2505 MADISON AVE SE, 49507", "2505 Madison Avenue SE Suite 3, Grand Rapids", True),
+        ("1430 QUARRY AVE NW, 49504", "1430 Quarry Ave NW #2, Grand Rapids", True),
         ("947 SIBLEY ST NW, 49504", "949 Sibley St NW, Grand Rapids", False),
     ]
     failures = 0
@@ -334,9 +344,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("elections").set_defaults(func=cmd_elections)
-    check = sub.add_parser("check")
-    check.add_argument("--state", default=STATE)
-    check.set_defaults(func=cmd_check)
+    sub.add_parser("check").set_defaults(func=cmd_check)
     proof = sub.add_parser("proof")
     proof.add_argument("--state", default="DE")
     proof.set_defaults(func=cmd_proof)

@@ -34,6 +34,7 @@ import urllib.request
 
 from archive import snapshot_or_note
 from sources import register
+from useragent import USER_AGENT
 
 URL = ("https://www.grandrapidsmi.gov/departments/clerks-office/elections/"
        "current-election-information/")
@@ -67,7 +68,7 @@ OVERRIDES = {
         "src": MVIC_ID,
     },
 }
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {"User-Agent": USER_AGENT}
 OUT = pathlib.Path(__file__).resolve().parent.parent / "site" / "data" / "gr-clerk.json"
 
 MONTHS = ["January", "February", "March", "April", "May", "June", "July",

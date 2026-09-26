@@ -19,9 +19,11 @@ not print. Anything the two disagree about is reported, never silently
 resolved -- a polling place the two levels of government describe differently
 is exactly the thing a voter needs told.
 
-Nothing here is geocoded. The browser already geocodes the address a voter
-types, against the same street chunk it loaded to route them, so it can
-geocode the polling place the same way and there is no coordinate to go stale.
+Nothing here is geocoded, and every run writes these files afresh, so it
+drops the lat and lng that geocode_places.py stamped on each polling place and
+clerk's office (drop boxes carried forward from the state keep theirs). The
+page offers no route to a polling place without a coordinate, so
+geocode_places.py must run after this script, every time.
 
 Verifies before writing: every precinct in the county must gain a polling
 place, and every page's own heading must name the jurisdiction we asked for,
@@ -40,9 +42,10 @@ import urllib.request
 from collections import defaultdict
 
 from archive import cite
+from useragent import USER_AGENT
 
 BASE = "https://www.kentcountymi.gov"
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {"User-Agent": USER_AGENT}
 DELAY_SECONDS = 2.0            # be a polite guest: 30 pages, one at a time
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -53,7 +56,7 @@ OUT_DIR = ROOT / "site" / "data" / "polling"
 # MCD FIPS -> the county's page for that jurisdiction. Hardcoded rather than
 # scraped from the site navigation so a run is deterministic, and checked
 # against each page's own heading so a renumbered id cannot pass silently.
-# Note 34260: the state calls it Grand Rapids Township, the county calls it
+# Note 34020: the state calls it Grand Rapids Township, the county calls it
 # Grand Rapids Charter Township, and they are the same place.
 PAGES = {
     "00240": "324/Ada-Township",   # Ada Township
@@ -90,10 +93,6 @@ PAGES = {
 
 POLLING_HEADING = "Election Day Polling Location"   # some pages drop the plural
 DROPBOX_HEADING = "Absentee Voter Drop Box Locations"
-# The trailing colon is not decoration: about a third of the county's pages
-# write "Precinct 1:" and the rest write "Precinct 1". Both are the same
-# label, and an anchored pattern without the colon silently reads twelve
-# jurisdictions as having no polling places at all.
 # Thirty pages, five ways of writing the same label: "Precinct 1", "Precinct
 # 1:" with a colon, "Precincts 1 and 2" and "Precincts 1, 2 & 3" where several
 # share a venue, and Bowne -- with its single precinct -- dropping the plural
@@ -213,7 +212,7 @@ ADDRESS_OVERRIDES = {
         "source_url": "https://www.algomatwp.org/departments/elections/index.php",
     },
     # Wyoming's own fire station, Wyoming ward 1 precinct 3. The street is
-    # GEZON; the county page writes GENZON, and so did this file until now.
+    # GEZON; the county page writes GENZON.
     # Nothing anywhere else spells it with the N: not one parcel, not one road
     # segment in the graph this site routes on, not Wyoming's own drop box a
     # few rows below in the same file -- "Wyoming Gezon Parkway Station",
@@ -255,7 +254,7 @@ def existing_boxes(mcd):
 
 
 def parse_polling(lines, not_notes=frozenset()):
-    """[{ward, precinct, name, address}] from the Election Day section.
+    """[{ward, precinct, name, address, note}] from the Election Day section.
 
     A ward jurisdiction prints "Ward 1, Precinct 2"; a township prints
     "Precinct 2". Both are followed by the venue name and its street address.
@@ -269,8 +268,8 @@ def parse_polling(lines, not_notes=frozenset()):
     and no route, with nothing downstream saying so. So the address is found
     by its shape and the name is whatever precedes it.
 
-    A note can follow the address, as "(Back entrance)" does in Grand Rapids,
-    and is ignored: the scan stops at the address.
+    A note can follow the address, as "(Back entrance)" does in Grand Rapids.
+    read_note() keeps it, as `note`, when it is about the building.
     """
     try:
         start = next(i for i, line in enumerate(lines)
@@ -488,9 +487,9 @@ def main():
                                  "every election, and MCL 168.662 settles them "
                                  "60 days out, so re-run after that date for "
                                  "each election.",
-                "not_geocoded": "The browser geocodes these against the street "
-                                "chunk it already loaded, so no coordinate here "
-                                "can go stale.",
+                "geocoded_by": "geocode_places.py, which must run after this "
+                               "script: a refresh writes these records without "
+                               "coordinates.",
             },
             "mcd": mcd,
             "jurisdiction": names[mcd],

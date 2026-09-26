@@ -6,7 +6,7 @@ site/data/early-voting.json.
 The county lists early voting for every jurisdiction on one page, which is the
 only place it exists in one piece: the state publishes none, and thirty clerks
 publish thirty formats. Grand Rapids is on it too, with two sites, which makes
-this a second opinion on the city's own elections.json rather than only a
+this a second opinion on the city's own gr-clerk.json rather than only a
 filler for the other twenty-nine.
 
 This is a page written for people, not an interface, and it should be treated
@@ -17,8 +17,7 @@ place Saturday, July 25 - Sunday, August 2", whose year is taken from the
 election because the sentence does not carry one.
 
 So the value here is as a CROSS-CHECK, not as a source of record. It is a
-second opinion on what the clerks publish and on what Google Civic returns
-during the weeks it has Michigan data, and disagreement between the three is
+second opinion on what the clerks publish, and disagreement between the two is
 the signal worth having.
 
 Staleness is not this script's judgement to make. The window it scraped is
@@ -40,35 +39,22 @@ import urllib.request
 import html as html_module
 
 from archive import snapshot_or_note
+from useragent import USER_AGENT
 
 URL = "https://www.kentcountymi.gov/250/Drop-Box-Polling-Locations"
 CITY_URL = ("https://www.grandrapidsmi.gov/departments/clerks-office/"
             "elections/early-voting/")
 UA = {
-    "User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)",
-    # Say what this client can read. urllib sends no Accept header at all,
-    # which is a gap worth closing on its own: a client asking for a document
-    # should state what it can parse, and every other client does.
+    "User-Agent": USER_AGENT,
+    # Say what this client can read: urllib sends no Accept header at all,
+    # and a client asking for a document should state what it can parse.
     #
-    # It was added for a worse reason, and the reason turned out to be wrong.
-    # The county's edge refused the first scheduled run with a 403 in 130
-    # milliseconds, on a URL check_links.mjs had read with a 200 five hours
-    # earlier, and the missing Accept header was the visible difference
-    # between the two requests. It was not the operative one. Adding it
-    # changed nothing -- 403 again -- and running the link checker again
-    # immediately afterwards found it now gets 403 from that host too, on
-    # both county URLs. Node and Python, with the header and without.
-    #
-    # So the county began refusing this project somewhere between 00:21 and
-    # 05:09 UTC on 2026-09-24, and none of it was ever about how this script
-    # asks. The mistake was comparing two requests five hours apart and
-    # treating the gap as immaterial; the server had changed underneath.
-    #
-    # The header stays because it is correct, not because it helps. What is
-    # NOT done, here or anywhere in this project, is claiming to be a browser
-    # to get past that refusal -- check_links.mjs states the reasoning, and a
-    # server that has decided it does not want scripted readers has decided
-    # it, whether or not a lie would work.
+    # It is not a way past the county's refusal. Since 2026-09-24 the
+    # county's edge has answered 403 to every client this project runs, node
+    # and Python, with this header and without. Nothing here or anywhere in
+    # this project claims to be a browser to get past that: check_links.mjs
+    # states the reasoning, and a server that has decided it does not want
+    # scripted readers has decided it, whether or not a lie would work.
     "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
 }
 
@@ -258,11 +244,11 @@ def main():
 
     # A block is: the jurisdiction, "Dates/Times:", ONE OR MORE hours lines,
     # "Location:" (or "Locations:"), then one or more places. The counts vary
-    # per jurisdiction -- East Grand Rapids publishes four different weekday
-    # patterns, Grand Rapids runs two sites -- so this reads until the next
-    # thing rather than assuming a fixed shape. An earlier version walked back
-    # a fixed three lines from "Location:" and silently lost the six
-    # jurisdictions whose hours run to more than one line.
+    # per jurisdiction (East Grand Rapids publishes four different weekday
+    # patterns, Grand Rapids runs two sites), so this reads until the next
+    # thing rather than assuming a fixed shape: walking back a fixed number
+    # of lines from "Location:" silently loses every jurisdiction whose hours
+    # run to more than one line.
     known = set(index)
     sites, unknown = {}, []
     i = 0
@@ -307,12 +293,9 @@ def main():
     # Carry the coordinates forward where the address text is unchanged.
     #
     # This script writes jurisdiction, hours and locations; the `located`
-    # block beside them, with a lat and lng per address, is put there
-    # afterwards by geocode_places.py. So a refresh used to drop all thirty,
-    # and that was tolerable while a person ran this and could run the
-    # geocoder after it. Under a schedule it is not: the job would delete
-    # every coordinate in the file on each run that found a change, weekly,
-    # unattended.
+    # block beside them, with a lat and lng per address, is added afterwards
+    # by geocode_places.py. This runs weekly and unattended, so it must not
+    # delete every coordinate in the file each time the page changes.
     #
     # A `located` entry is a geocode OF the locations text, so it stays valid
     # exactly as long as that text does. Matching the whole list, in order,
@@ -348,8 +331,9 @@ def main():
     document = {
         "provenance": {
             "description": "Kent County early voting sites and hours, one per "
-                           "jurisdiction. Grand Rapids is not on this page and "
-                           "keeps its own sites in elections.json.",
+                           "jurisdiction. Grand Rapids appears too; its source "
+                           "of record is gr-clerk.json, and the city's own "
+                           "page is kept below as grand_rapids_clerk.",
             "source": "Kent County Clerk / Register of Deeds",
             "source_url": URL,
             "generated": datetime.date.today().isoformat(),
@@ -363,8 +347,8 @@ def main():
                             "prose written for people: no election id, no ISO "
                             "dates, no schema. The election, the window and its "
                             "year are all inferred here, and the value is in "
-                            "disagreeing with the clerks and with Google Civic, "
-                            "not in being believed over them.",
+                            "disagreeing with the clerks, not in being believed "
+                            "over them.",
             "staleness": "Not decided here. The window is written down and the "
                          "page applies the same windowState() it applies to "
                          "every other early voting date, so a window that has "

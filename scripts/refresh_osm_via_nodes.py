@@ -3,10 +3,8 @@
 """Fetch the coordinates of every OpenStreetMap via-node the restriction
 relations point at, and write build/osm_via_nodes.json.
 
-This file had no producer. build_restrictions.py and build_graph_osm.py both
-read it, the README says every data file is reproducible, and the script that
-made it was not in the repository -- so a clean checkout could not rebuild the
-graph's turn restrictions at all. This closes that hole.
+build_restrictions.py reads this file; without it a clean checkout cannot
+rebuild the graph's turn restrictions.
 
 A turn restriction is "from this way, via this node, to that way". The ways
 arrive with refresh_osm_roads.py; the via NODES do not, because Overpass
@@ -22,6 +20,7 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from useragent import USER_AGENT as UA
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "build" / "osm_roads.json"
@@ -32,7 +31,6 @@ ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 BATCH = 500               # node ids per query; keeps each URL sane
 DELAY_S = 2.0
 
@@ -55,10 +53,21 @@ def query(ql):
             request = urllib.request.Request(
                 endpoint, data=data, headers={"User-Agent": UA})
             with urllib.request.urlopen(request, timeout=180) as response:
-                return json.loads(response.read().decode("utf-8"))
+                answer = json.loads(response.read().decode("utf-8"))
         except Exception as exc:                     # try the next mirror
             last = exc
             print(f"    failed: {exc}", flush=True)
+            continue
+        # A partial answer still arrives as HTTP 200, with a 'remark': a
+        # timeout, a truncation, or another runtime error such as running out
+        # of memory. Any of them means some nodes are missing, and the batch
+        # would quietly lose their restrictions, so try the next mirror.
+        remark = str(answer.get("remark") or "").lower()
+        if any(s in remark for s in ("runtime error", "timed out", "truncated")):
+            last = f"remark {answer['remark']!r}"
+            print(f"    incomplete: {answer['remark']!r}", flush=True)
+            continue
+        return answer
     raise SystemExit(f"every Overpass endpoint failed, last: {last}")
 
 

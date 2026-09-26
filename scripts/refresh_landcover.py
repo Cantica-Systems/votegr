@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # Released into the public domain under the Unlicense, see UNLICENSE.
-"""Fetch water, parks and railways for Grand Rapids from OpenStreetMap.
+"""Fetch water, parks and railways from OpenStreetMap, over the Grand Rapids
+city limits plus a 0.02 degree pad, about 2 km.
+
+That extent is a known gap. The map covers the whole county, and beyond the
+pad it draws no water, parks or rail. Widening it means taking the extent
+from the precinct polygons, as refresh_osm_roads.py does, and it changes
+landcover.json, so it is a decision rather than a tidy-up.
 
 These are what separate a street diagram from something that reads as a map.
 The Grand River runs straight through the middle of the city and is how most
@@ -16,6 +22,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from provenance import provenance
+from useragent import USER_AGENT as UA
 
 # Paths are anchored to the repository root, one level up from this
 # file, since these scripts live in scripts/ and write into site/data.
@@ -27,7 +34,6 @@ ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 SIMPLIFY_DEG = 0.00004      # ~4m; a basemap needs no more than that
 
 
@@ -51,8 +57,14 @@ def query(ql):
                 "Content-Type": "application/x-www-form-urlencoded"})
             with urllib.request.urlopen(req, timeout=240) as r:
                 j = json.loads(r.read().decode())
-            if "remark" in j and "timed out" in j["remark"].lower():
-                time.sleep(3); continue
+            # A partial answer still arrives as HTTP 200, with a 'remark': a
+            # timeout, a truncation, or another runtime error such as running
+            # out of memory. Any of them means the elements are incomplete.
+            remark = str(j.get("remark") or "").lower()
+            if any(s in remark for s in ("runtime error", "timed out", "truncated")):
+                print(f"    incomplete: {j['remark']!r}")
+                time.sleep(3)
+                continue
             return j
         except Exception as e:  # noqa: BLE001
             print(f"    failed: {e}")

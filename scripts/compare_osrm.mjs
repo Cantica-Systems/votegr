@@ -2,7 +2,7 @@
 // Differential test: our fastest route vs OSRM (the OSM reference router)
 // over the same origin/destination pairs.
 //
-//   node compare_osrm.mjs [tripCount]
+//   node scripts/compare_osrm.mjs [tripCount]
 //
 // OSRM knows nothing about cameras, so only the FASTEST route is compared.
 // The demo profile cannot exclude motorways, so trips where OSRM chose a
@@ -11,7 +11,7 @@
 //
 // The interesting output is the DIVERGENT list. OSRM carries the complete
 // OSM turn-restriction set; every place it detours where we do not is a
-// candidate restriction our 45 are missing.
+// candidate turn restriction our graph lacks.
 //
 // Etiquette: this queries the public OSRM demo server. Small samples, one
 // request at a time, 2.5s apart, identified user agent. Keep N modest.
@@ -24,13 +24,24 @@ const R = require('../site/router.js');
 const { pointInRings } = require('../site/precinct.js');
 const fs = require('fs');
 
-const graph = new R.Graph(JSON.parse(fs.readFileSync('site/data/graph.json')));
+// The county network the page actually loads, built the way the page and
+// tests/audit_routes.mjs build it: the index, then every chunk, then finish.
+// Not site/data/graph.json, which is the city alone, from before the county
+// widening, and is not the graph anybody is routed over.
+const index = JSON.parse(fs.readFileSync('site/data/graph/index.json'));
+const graph = R.Graph.streaming(index);
+for (const chunk of index.chunks) {
+  graph.addChunk(JSON.parse(fs.readFileSync(`site/data/graph/${chunk.mcd}.json`)));
+}
+graph.finish();
 graph.assignCameras([]);
-// boundary.json stores [lng, lat]; the shared ray cast wants [lat, lng].
+// Trips are still sampled inside the city limits: it is a sample, and the
+// county graph contains the city. boundary.json stores [lng, lat]; the shared
+// ray cast wants [lat, lng].
 const cityRings = JSON.parse(fs.readFileSync('site/data/boundary.json'))
   .rings.map(ring => ring.map(p => [p[1], p[0]]));
 const inside = (lat, lng) => pointInRings(lat, lng, cityRings);
-const UA = 'vote-gr/1.0 (+https://github.com/DT616/votegr)';
+const UA = 'vote-gr/1.0 (+https://github.com/Cantica-Systems/votegr)';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function osrm(a, b) {
@@ -68,7 +79,11 @@ function overlap(pts, other, tol) {
 }
 // does the OSRM geometry ride one of OUR freeway edges?
 const fwyPts = [];
-graph.edges.forEach(e => { if (e.c === 1) e.p.forEach(p => fwyPts.push(p)); });
+// The graph is packed into typed arrays, so edges are read through its
+// accessors rather than as objects.
+for (let i = 0; i < graph.edgeCount(); i++) {
+  if (graph.edgeClass(i) === 1) graph.edgePoly(i).forEach(p => fwyPts.push(p));
+}
 function usedFreeway(pts) {
   let run = 0;
   for (const p of pts) {
@@ -99,12 +114,11 @@ for (let i = 0; i < trips.length; i++) {
   if (!ours) continue;
   const ourPts = [];
   ours.edges.forEach((id, k) => {
-    let p = graph.edges[id].p;
-    if (ours.nodes[k] !== graph.edges[id].a) p = p.slice().reverse();
+    const p = graph.edgePoly(id);          // a fresh array, so reversing is safe
+    if (ours.nodes[k] !== graph.edgeA(id)) p.reverse();
     p.forEach(pt => ourPts.push(pt));
   });
-  const theirs = osrm([graph.nodes[a.node][0], graph.nodes[a.node][1]],
-                      [graph.nodes[b.node][0], graph.nodes[b.node][1]]);
+  const theirs = osrm(graph.node(a.node), graph.node(b.node));
   await sleep(2500);
   if (!theirs) continue;
   const ovOurs = overlap(ourPts, theirs.pts, 60);
@@ -133,5 +147,7 @@ for (const d of div.slice(0, 6)) {
   console.log(`    ours: ${d.ourStreets.slice(0, 7).join(' > ')}`);
   console.log(`    OSRM: ${d.osrmStreets.slice(0, 7).join(' > ')}`);
 }
+// build/ is gitignored, so a fresh clone does not have it.
+fs.mkdirSync('build', { recursive: true });
 fs.writeFileSync('build/osrm_comparison.json', JSON.stringify(results, null, 1));
 console.log('\nfull results -> build/osrm_comparison.json');

@@ -3,15 +3,15 @@
 """Fill in the drop boxes Kent County's own pages do not publish, from the
 state's list.
 
-refresh_polling.py reads thirty county pages and gets 24 drop boxes out of
-six jurisdictions. The other twenty-four publish none, and for those the page
+refresh_polling.py reads thirty county pages and gets 23 drop boxes out of
+six jurisdictions, as the committed scrape has it. The other twenty-four publish none, and for those the page
 falls back to the clerk's office, because an absentee ballot has to reach the
 voter's own clerk under MCL 168.764a and the office is somewhere it can go.
 
 That fallback was right when there was nothing better. There is now: the
 Bureau of Elections maintains a statewide drop box report, released under
 FOIA on 2026-09-21, and it carries 53 boxes for Kent County against the
-county's 24 -- a box in all thirty jurisdictions, with the clerk's name and
+county's 23: a box in all thirty jurisdictions, with the clerk's name and
 per-day hours. Twenty-four jurisdictions that the page tells to drive to an
 office during business hours in fact have a box, most of them open all hours.
 
@@ -208,38 +208,10 @@ def main():
                  f"match no polling file: {sorted(set(unmatched))}. A renamed "
                  "jurisdiction would otherwise be dropped silently.")
 
-    # The source goes in the registry; each row points at it with `src`, and
-    # the page resolves that to a publisher, a licence and a date. Registered
-    # as NOT carried, the same as the MVIC reading in refresh_gr_clerk.py: this
-    # arrived as a file in a FOIA response, no script refreshes it, and nothing
-    # here will notice when the Bureau's own data changes. That is a fact about
-    # the source and belongs on the record, not in a commit message.
-    src = register(
-        SOURCE_ID,
-        publisher="Michigan Department of State, Bureau of Elections",
-        url=PUBLISHER_URL,
-        licence="Public record of the State of Michigan.",
-        retrieved=RELEASED,
-        covers="Absentee ballot drop box locations, hours and clerk, statewide, "
-               "for the November 3 2026 general election",
-        carried=False,
-        note=f"Obtained by FOIA request, released {RELEASED} as "
-             f"{REPORT_FILE}; the Bureau publishes it at no URL, so the link "
-             "above is the Bureau rather than the release and there is no "
-             "archive copy to take. The release is committed instead, at "
-             f"records/{RECORDS.name}/, with the request and these findings "
-             "written up beside it. The request asked for three statewide "
-             "records: election day polling places at precinct level, early "
-             "voting sites with their dates and hours, and drop boxes. Only "
-             "the drop box report is read here, and only for the 24 Kent "
-             "County jurisdictions whose county page publishes no box. "
-             "VERIFIED AGAINST THIS PROJECT: the release agrees with "
-             "precincts.json on all 202 Kent precincts, 30 jurisdictions and "
-             "every ward. GAPS IN THE RELEASE, so it is not treated as "
-             "authoritative beyond drop boxes: the early voting file covers "
-             "36 of 83 counties and 375 of 1,521 jurisdictions, omitting "
-             "Oakland County entirely; the polling place file has three Grand "
-             "Rapids ZIPs wrong, checked against USPS (see polling.json).")
+    # Each row points at the registry entry by id. The entry itself is
+    # written after the dry-run exit below, so --dry-run leaves
+    # sources.json alone.
+    src = SOURCE_ID
 
     bboxes = load_bboxes()
     neighbours = neighbours_of(bboxes)
@@ -309,7 +281,6 @@ def main():
                 if b.get("src") != SOURCE_ID]
         if kept:
             skipped.append((where, len(kept)))
-            document["drop_boxes"] = kept
             continue
 
         boxes = []
@@ -388,6 +359,40 @@ def main():
     if args.dry_run:
         print("\n--dry-run: nothing written")
         return
+
+    # The source goes in the registry; each row points at it with `src`, and
+    # the page resolves that to a publisher, a licence and a date. Registered
+    # as NOT carried, the same as the MVIC reading in refresh_gr_clerk.py: this
+    # arrived as a file in a FOIA response, no script refreshes it, and nothing
+    # here will notice when the Bureau's own data changes. That is a fact about
+    # the source and belongs on the record, not in a commit message.
+    register(
+        SOURCE_ID,
+        publisher="Michigan Department of State, Bureau of Elections",
+        url=PUBLISHER_URL,
+        licence="Public record of the State of Michigan.",
+        retrieved=RELEASED,
+        covers="Absentee ballot drop box locations, hours and clerk, statewide, "
+               "for the November 3 2026 general election",
+        carried=False,
+        note=f"Obtained by FOIA request, released {RELEASED} as "
+             f"{REPORT_FILE}; the Bureau publishes it at no URL, so the link "
+             "above is the Bureau rather than the release and there is no "
+             "archive copy to take. The release is committed instead, at "
+             f"records/{RECORDS.name}/, with the request and these findings "
+             "written up beside it. The request asked for three statewide "
+             "records: election day polling places at precinct level, early "
+             "voting sites with their dates and hours, and drop boxes. Only "
+             "the drop box report is read here, and only for the 24 Kent "
+             "County jurisdictions whose county page publishes no box. "
+             "VERIFIED AGAINST THIS PROJECT: the release agrees with "
+             "precincts.json on all 202 Kent precincts, 30 jurisdictions and "
+             "every ward. GAPS IN THE RELEASE, so it is not treated as "
+             "authoritative beyond drop boxes: the early voting file covers "
+             "36 of 83 counties and 375 of 1,521 jurisdictions, omitting "
+             "Oakland County entirely; the polling place file has three Grand "
+             "Rapids ZIPs wrong, checked against USPS (see polling.json).")
+
     for key in sorted(added):
         path, document, _, _ = added[key]
         document["provenance"]["drop_boxes_source"] = (

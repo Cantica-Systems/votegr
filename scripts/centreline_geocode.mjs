@@ -1,6 +1,6 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
 // Geocode addresses the parcel layer does not carry, by interpolating along
-// the street centreline -- exactly what the browser does for Grand Rapids.
+// the street centreline, exactly as the browser does.
 //
 // Called by geocode_places.py for its leftovers. It shells out to node rather
 // than reimplementing the interpolation in Python on purpose: this loads
@@ -14,10 +14,14 @@
 // Writes {key: {lat, lng, street}} on stdout, omitting anything it cannot place.
 import { readFileSync, existsSync } from 'fs';
 import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
 
+// Paths from the repository root, found from this file's own location like
+// the other node tools here, so it does not matter where it is started.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const require = createRequire(import.meta.url);
-const R = require(process.cwd() + '/site/router.js');
-const CHUNKS = process.cwd() + '/site/data/graph';
+const R = require(ROOT + 'site/router.js');
+const CHUNKS = ROOT + 'site/data/graph';
 
 const wanted = JSON.parse(readFileSync(0, 'utf8'));
 

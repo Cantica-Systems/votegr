@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # Released into the public domain under the Unlicense, see UNLICENSE.
-"""Fetch the drivable road network for Grand Rapids from OpenStreetMap.
+"""Fetch OpenStreetMap's drivable ways and turn-restriction relations across
+Kent County into build/osm_roads.json.
 
-An alternative build input to refresh_centerlines.py. OSM carries two things
-the city's own centerline layer does not: turn restrictions (no-left-turn and
-friends, as relations) and a network that exists everywhere, so the same
-pipeline works for any city rather than only where an Act 51 agency publishes
-direction attributes.
+The centerlines carry no turn restrictions at all, so this is where they come
+from: build_restrictions.py matches each OSM restriction to the centerline
+graph by the bearings of these ways at the via node.
 
 Fetched once at build time. Nothing here runs in a browser.
 """
@@ -16,12 +15,12 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from useragent import USER_AGENT as UA
 
 # Paths are anchored to the repository root, one level up from this
 # file, since these scripts live in scripts/ and write into site/data.
 ROOT = Path(__file__).resolve().parent.parent
 PRECINCTS = ROOT / "site" / "data" / "precincts.geojson"
-BOUNDARY = ROOT / "site" / "data" / "boundary.json"
 OUT = ROOT / "build" / "osm_roads.json"
 
 ENDPOINTS = [
@@ -29,11 +28,9 @@ ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 
-# Everything a car may legally drive on. `service` is included because
-# driveways and parking aisles connect real addresses to the street, but it is
-# down-weighted later at graph build time.
+# Everything a car may legally drive on, `service` included, so a restriction
+# whose from- or to-way is a service road still has that way to match against.
 DRIVABLE = ("motorway|trunk|primary|secondary|tertiary|unclassified|residential|"
             "living_street|service|motorway_link|trunk_link|primary_link|"
             "secondary_link|tertiary_link|road")
@@ -73,10 +70,13 @@ def query(ql):
                          "Content-Type": "application/x-www-form-urlencoded"})
             with urllib.request.urlopen(req, timeout=300) as r:
                 j = json.loads(r.read().decode("utf-8"))
-            if "remark" in j and ("timed out" in j["remark"].lower()
-                                  or "truncated" in j["remark"].lower()):
+            # A partial answer still arrives as HTTP 200, with a 'remark': a
+            # timeout, a truncation, or another runtime error such as running
+            # out of memory. Any of them means the elements are incomplete.
+            remark = str(j.get("remark") or "").lower()
+            if any(s in remark for s in ("runtime error", "timed out", "truncated")):
                 print(f"    truncated: {j['remark']!r}")
-                last = None
+                last = f"remark {j['remark']!r}"
                 time.sleep(3)
                 continue
             return j
@@ -115,7 +115,6 @@ def main():
         t = e.get("tags", {})
         slim_ways.append({
             "id": e["id"],
-            "nodes": e.get("nodes") or [],
             "geom": [[round(g["lat"], 6), round(g["lon"], 6)]
                      for g in (e.get("geometry") or [])],
             "highway": t.get("highway"),
@@ -124,7 +123,6 @@ def main():
             "junction": t.get("junction"),
             "maxspeed": t.get("maxspeed"),
             "access": t.get("access"),
-            "service": t.get("service"),
         })
 
     slim_rels = []

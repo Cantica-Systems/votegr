@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Released into the public domain under the Unlicense, see UNLICENSE.
 """Regenerate the per-jurisdiction address chunks under site/data/addresses/.
 
@@ -9,10 +10,9 @@ address never leaves the browser.
 
 One file per jurisdiction, named by its MCD FIPS code, because a county-wide
 index is too much for a phone to parse: 232,000 parcels is about 2.2 MB of
-JSON and tens of megabytes of heap once parsed. Chunked, the worst case is
-Grand Rapids -- which is exactly the payload that already works today -- and
-every other jurisdiction is a fraction of it. Which chunk to load comes from
-the jurisdictions index in precincts.json.
+JSON and tens of megabytes of heap once parsed. Chunked, the largest file is
+Grand Rapids and every other jurisdiction is a fraction of it. Which chunk to
+load comes from the jurisdictions index in precincts.json.
 
 Only three things per address are published: the house number, the precinct,
 and how many metres the parcel sits from the precinct edge. Owner names,
@@ -42,10 +42,12 @@ from shapely.geometry import shape, Point
 from shapely.ops import transform
 from shapely.strtree import STRtree
 
+from useragent import USER_AGENT
+
 PARCELS = ("https://gis.kentcountymi.gov/agisprod/rest/services/"
            "ParcelsWithCondos/FeatureServer/0/query")
 WHERE = "PROPERTYADDRESS IS NOT NULL"
-UA = {"User-Agent": "vote-gr/1.0 (+https://github.com/DT616/votegr)"}
+UA = {"User-Agent": USER_AGENT}
 PAGE = 1000                    # the layer's own maxRecordCount; asking more is clamped
 DELAY_SECONDS = 1.5            # be a polite guest on someone else's server
 
@@ -209,10 +211,12 @@ def main():
         raise SystemExit(f"REFUSING to write: {len(chunks)} jurisdictions got "
                          f"addresses, expected {EXPECTED_JURISDICTIONS}")
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Built in memory and written only after the checks below, so a refusal
+    # leaves the committed chunks as they were.
     total = total_ambiguous = 0
     covered = set()
     table = []
+    pending = []          # (path, body)
     for mcd, streets in sorted(chunks.items()):
         here = [p for p in props if p["mcd"] == mcd]
         codes = sorted(p["code"] for p in here)
@@ -259,9 +263,9 @@ def main():
             "precincts": codes,
             "streets": placed,
         }
-        path = OUT_DIR / f"{mcd}.json"
-        path.write_text(json.dumps(document, separators=(",", ":")) + "\n")
-        table.append((name, count, len(placed), path.stat().st_size))
+        body = json.dumps(document, separators=(",", ":")) + "\n"
+        pending.append((OUT_DIR / f"{mcd}.json", body))
+        table.append((name, count, len(placed), len(body.encode("utf-8"))))
 
     missing = {p["code"] for p in props} - covered
     if missing:
@@ -270,6 +274,10 @@ def main():
     if total < MIN_ADDRESSES:
         raise SystemExit(f"REFUSING to write: only {total:,} addresses placed "
                          f"(expected at least {MIN_ADDRESSES:,})")
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for path, body in pending:
+        path.write_text(body)
 
     print(f"\nplaced {total:,} addresses across {len(chunks)} jurisdictions")
     print(f"  outside every precinct  : {outside:,}")

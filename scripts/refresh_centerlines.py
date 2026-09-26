@@ -6,8 +6,6 @@ build_graph.py.
 Source: the layer published on the City of Grand Rapids ArcGIS Online tenant,
 which is not a city layer at all -- it is the REGIS/Kent County dataset, 39,209
 segments across 48 jurisdictions, and the city's own service simply hosts it.
-That discovery is what made the Kent County widening cheap: the streets were
-already here, behind a filter.
 
 It carries traffic DIRECTION (TRAFFIC_ALIGN) and POSTED_SPEED per segment,
 which is what makes a legal client-side router possible, and address ranges
@@ -30,6 +28,7 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from useragent import USER_AGENT as UA
 
 LAYER = ("https://services2.arcgis.com/L81TiOwAPO1ZvU9b/arcgis/rest/services/"
          "Transport_Street_Centerlines/FeatureServer/6/query")
@@ -43,7 +42,6 @@ OUT_FIELDS = [
 ]
 PAGE = 2000
 DELAY_S = 2.0
-UA = "vote-gr/1.0 (+https://github.com/DT616/votegr)"
 # Build input, NOT a browser asset: it lives outside site/ so the deployed
 # tree does not ship 6 MB nobody downloads.
 OUT = Path(__file__).resolve().parent.parent / "build" / "centerlines.json"
@@ -69,13 +67,6 @@ def main():
         "outSR": "4326",
         "f": "json",
     }
-    # Cheap count first (etiquette: know the size before paging).
-    cnt = _get({**base, "returnCountOnly": "true"})
-    total = cnt.get("count")
-    print(f"upstream reports {total} segments for the region")
-    if total is None:
-        sys.exit("no count returned; aborting")
-
     feats = []
     offset = 0
     while True:

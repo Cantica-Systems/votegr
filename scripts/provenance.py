@@ -2,11 +2,12 @@
 # Released into the public domain under the Unlicense, see UNLICENSE.
 """One shape for the provenance block every generated data file carries.
 
-Four of the ten files under site/data/ recorded where they came from and six
-recorded nothing, and the four that did each invented their own key names:
-`generated`, `retrieved`, `source_last_edited`, `transcribed`, `rechecked`.
-So there was no way to ask "when did we last poll this" without reading each
-file by hand and knowing which word that file happened to use.
+It exists so every generated file can carry the same keys, and "when did we
+last poll this" has one answer per file rather than one per writer's
+vocabulary (`generated`, `retrieved`, `source_last_edited`, `transcribed` and
+`rechecked` have all meant the same thing here). Not every writer uses it
+yet: refresh_precincts.py, refresh_addresses.py, refresh_polling.py,
+refresh_early_voting.py and refresh_gr_clerk.py still build their own block.
 
 The one field that earns the module is `generated`. Without it, a file that
 was polled last week and a file nobody has touched since July look identical,
