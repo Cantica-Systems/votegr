@@ -1,6 +1,6 @@
-/* Grand Rapids Precinct Lookup
-   https://github.com/DT616/votegr
-   Released into the public domain under the Unlicense, see UNLICENSE. */
+/* Released into the public domain under the Unlicense, see UNLICENSE.
+   Kent County Precinct Lookup, the light version of votegr.org.
+   https://github.com/Cantica-Systems/votegr */
 
 :root {
   --bg: #0f1115;
@@ -37,12 +37,12 @@ body {
 main { max-width: 36rem; margin: 0 auto; }
 h1 { margin: 0 0 .3rem; font-size: 1.4rem; letter-spacing: -.01em; }
 
-/* Anything quiet: sub-headings, addresses, notes. */
+/* Anything quiet: sub-headings and addresses. A note is quiet in size only;
+   its colour is set with it below. */
 .sub,
 .lead,
 .lead-2,
 .addr,
-.note,
 label { color: var(--dim); }
 
 .sub, .addr, .note { font-size: .93rem; }
@@ -70,7 +70,6 @@ a, a:visited {
   text-decoration-color: var(--dim); text-underline-offset: 2px;
 }
 a:hover, a:focus-visible { color: var(--accent); text-decoration-color: var(--accent); }
-.disclaimer a, .disclaimer a:visited { color: var(--fg); }
 
 /* Search box and its suggestion list */
 
@@ -212,7 +211,6 @@ a.dir-btn svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
   background: color-mix(in srgb, var(--accent) 8%, var(--panel));
   box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
 }
-.lead-2 .when { color: var(--fg); font-weight: 650; }
 .ev-block .lead-2 { margin-top: 0; }
 /* Only when the uncertainty note is above it, so it does not sit flush on the box. */
 .ev-block .advisory + .lead-2 { margin-top: 1rem; }
@@ -243,9 +241,9 @@ a.dir-btn svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
    grey on every row. */
 .opt-where { color: var(--dim); font-size: .9em; }
 
-/* The out-of-city answer reads like the other advisories, because that is
-   what it is: an honest limit, not an error. */
-.advisory.outside { border-left-color: var(--dim); }
+/* The answer for a street this page cannot look up reads like the other
+   advisories, because that is what it is: an honest limit, not an error. */
+.advisory[data-kind=outside] { border-left-color: var(--dim); }
 
 /* The dates a heading applies to, under it rather than inside it. Quiet
    enough to read as a subtitle, with the dates themselves picked out because

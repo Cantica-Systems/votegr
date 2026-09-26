@@ -1,28 +1,30 @@
-// Grand Rapids Precinct Lookup
-// https://github.com/DT616/votegr
 // Released into the public domain under the Unlicense, see UNLICENSE.
+// VoteGR.org, the light version: where you vote in Kent County, Michigan,
+// with no map and no directions engine.
+// https://github.com/Cantica-Systems/votegr
 
 (function () {
   "use strict";
 
   const NEAR_M = 10;              // how close to a precinct line counts as "too close to be certain"
   const MAX_SUGGESTIONS = 6;
+  const GR_MCD = "34000";         // the state's code for the City of Grand Rapids
 
   const $ = (id) => document.getElementById(id);
   const input = $("addr"), optionList = $("opts"), statusLine = $("status"), resultBox = $("result");
 
-  // The whole lookup is a dictionary hit against a file the page already
+  // The whole lookup is a dictionary hit against files the page already
   // downloaded. There is no geocoder and no request: the address you type is
   // never sent anywhere, and a city or county server going down cannot stop
-  // this working. See refresh_addresses.py for how the index is built.
-  let streets = {};     // { "MONROE AVE NW": [[number, precinct, metresFromEdge, [rivals]?] ] }
-  let streetNames = []; // the keys, for matching what someone types
-  let wards = {};       // { "32": 2 }
-  let polling = {};     // { "43": { name, address, lat, lng, ... } }
-  let election = null;  // the next election, or null once every date has passed
+  // this working. The lookup itself is ../precinct.js, the one the map page
+  // uses, so the two pages cannot give one address two answers.
+  let P = null;           // Precincts.county(): every parcel address in the county
+  let outside = null;     // street -> jurisdictions, for streets the address list cannot answer
+  let clerk = null;       // gr-clerk.json: the city's early voting and drop boxes
+  let election = null;    // the next election, or null once every date has passed
   let calendarElections = [];   // the whole calendar, for the day the line rolls over
   let suggestions = [];
-  let active = -1;      // highlighted suggestion, -1 for none
+  let active = -1;        // highlighted suggestion, -1 for none
 
   // Build an element. Extra arguments become children; strings become text.
   const el = (tag, cls, ...children) => {
@@ -45,16 +47,17 @@
     return response.json();
   };
 
-  let neighbours = null;    // street -> the jurisdictions it is in
-  let clerk = null;         // gr-clerk.json: early voting and drop boxes
-
   // Set by render(); the Directions links start the route here.
-  let typedAddress = null;
+  let typed = null;       // { text, where }
 
-  // "977 WEALTHY ST SW, 49504" -> "977 WEALTHY ST SW, Grand Rapids, MI 49504"
-  const fullAddress = (addr) => {
+  // An address as OpenStreetMap's search box wants it, in the answer's
+  // jurisdiction: "977 WEALTHY ST SW, 49504" and "Grand Rapids" become
+  // "977 WEALTHY ST SW, Grand Rapids, MI 49504". One that already names
+  // its town and state is left as it is.
+  const fullAddress = (addr, where) => {
+    if (/,\s*MI\b/i.test(addr)) return addr;
     const m = addr.match(/^(.*),\s*(\d{5})$/);
-    return m ? `${m[1]}, Grand Rapids, MI ${m[2]}` : `${addr}, Grand Rapids, MI`;
+    return m ? `${m[1]}, ${where}, MI ${m[2]}` : `${addr}, ${where}, MI`;
   };
 
   // Both ends are addresses, not coordinates, so OSM's From and To boxes
@@ -62,94 +65,36 @@
   // page opens; nothing loads until the click, and only the click shares
   // the typed address. A place without an address links by coordinates.
   const osmLink = (place) => {
+    const where = typed ? typed.where : "Kent County";
     const to = place.address
-      ? `to=${encodeURIComponent(fullAddress(place.address))}`
+      ? `to=${encodeURIComponent(fullAddress(place.address, where))}`
       : `to=${place.lat},${place.lng}`;
-    if (!typedAddress) return `https://www.openstreetmap.org/directions?${to}`;
-    const from = encodeURIComponent(`${typedAddress}, Grand Rapids, MI`);
+    if (!typed) return `https://www.openstreetmap.org/directions?${to}`;
+    const from = encodeURIComponent(fullAddress(typed.text, where));
     return `https://www.openstreetmap.org/directions?from=${from}&${to}`;
   };
 
-  // ---- matching what someone types against the index --------------------
-
-  // "250 Monroe Ave. NW" -> { number: 250, rest: "MONROE AVE NW" }
-  // The street index is ALL CAPS because the parcel file is; that is not how
-  // anyone writes an address. parseTyped uppercases whatever it is handed, so
-  // the box can show the readable form without anything downstream noticing.
+  // The index is ALL CAPS because the parcel file is; that is not how anyone
+  // writes an address. The lookup uppercases whatever it is handed, so the
+  // box can show the readable form without anything downstream noticing.
   const cased = (s) => (typeof displayCase === "function" ? displayCase(s) : s);
 
   // The clerk types these however the day went: "gymnasium", "curbside",
-  // "Across from Calder Plaza". Only the first letter moves -- the rest can
+  // "Across from Calder Plaza". Only the first letter moves: the rest can
   // hold names that were capitalised on purpose.
   const sentence = (s) => {
     const text = String(s || "").trim();
     return text ? text[0].toUpperCase() + text.slice(1) : "";
   };
 
-  function parseTyped(text) {
-    const clean = text.toUpperCase().replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
-    const match = clean.match(/^(\d+)\s*(.*)$/);
-    return match ? { number: Number(match[1]), rest: match[2] }
-                 : { number: null, rest: clean };
-  }
+  // The state says "Township" when it means one and nothing for a city, and
+  // "City" is load-bearing: Grand Rapids Township is a real, different place
+  // next door.
+  const placeLabel = (name) => /Township$/i.test(name) ? name : `${name} City`;
 
-  // Every typed word must begin a word of the street name, in order. So
-  // "monroe nw" finds "MONROE AVE NW" without the typist having to know
-  // we spell it AVE, while "se lafayette" does not match SEWARD.
-  function streetMatches(street, tokens) {
-    const words = street.split(" ");
-    let at = 0;
-    for (const token of tokens) {
-      while (at < words.length && !words[at].startsWith(token)) at++;
-      if (at >= words.length) return false;
-      at++;
-    }
-    return true;
-  }
-
-  function matchingStreets(rest) {
-    const tokens = rest.split(" ").filter(Boolean);
-    if (!tokens.length) return [];
-    const hits = streetNames.filter((s) => streetMatches(s, tokens));
-    // A street whose first word is what they started typing comes first;
-    // after that, shorter names, which are the less surprising answer.
-    return hits.sort((a, b) => {
-      const lead = (s) => (s.startsWith(tokens[0]) ? 0 : 1);
-      return lead(a) - lead(b) || a.length - b.length || a.localeCompare(b);
-    });
-  }
-
-  // ---- resolving a house number on a street -----------------------------
-
-  // Addresses come from parcels, so a number can be missing: a new build, or
-  // something that never had its own parcel. Rather than guess, we answer
-  // only when the neighbours on the same side of the street agree, and say so
-  // when they do not. Same side matters because a precinct line often runs
-  // down the middle of a street, putting odd and even in different precincts.
-  function resolve(street, number) {
-    const rows = streets[street];
-    if (!rows) return null;
-
-    const exact = rows.find((r) => r[0] === number);
-    if (exact) {
-      return { precinct: exact[1], edgeMetres: exact[2], rivals: exact[3] || null,
-               inferred: false };
-    }
-
-    const sameSide = rows.filter((r) => r[0] % 2 === number % 2);
-    let below = null, above = null;
-    for (const row of sameSide) {
-      if (row[0] < number) below = row;
-      else if (row[0] > number) { above = row; break; }
-    }
-    if (!below || !above) return null;          // outside the known range: do not extrapolate
-    if (below[1] !== above[1]) {
-      return { precinct: below[1], rivals: [below[1], above[1]], inferred: true,
-               edgeMetres: Infinity };
-    }
-    return { precinct: below[1], edgeMetres: Math.min(below[2], above[2]),
-             rivals: null, inferred: true };
-  }
+  const placeList = (where) =>
+    where.length === 1 ? where[0]
+      : `${where.slice(0, -1).join(", ")} or ${where[where.length - 1]}`;
 
   // ---- rendering --------------------------------------------------------
 
@@ -189,8 +134,8 @@
     return link;
   };
 
-  // One location: the text on the left, directions on the right. Shared by the
-  // voting day location and the early voting sites so they cannot drift apart.
+  // One location: the text on the left, directions on the right. Shared by
+  // every place the card names, so they cannot drift apart.
   function locationRow(place, extraClass) {
     const row = el("div", extraClass ? `loc ${extraClass}` : "loc",
       el("div", "loc-text",
@@ -205,10 +150,11 @@
     return row;
   }
 
-  function pollingPlace(precinct, place) {
+  function pollingPlace(found) {
+    const place = found.place;
     if (!place) {
-      return [el("div", "advisory",
-        `We do not have a polling place listed for precinct ${precinct}. ` +
+      return [advisory("missing",
+        `We do not have a polling place listed for precinct ${found.precinct}. ` +
         "Please check the Michigan Voter Information Center.")];
     }
     const parts = [
@@ -218,9 +164,10 @@
       locationRow(place),
     ];
     if (place.consolidated_with) {
+      const host = P.describe(place.consolidated_with).precinct;
       parts.push(advisory("consolidated",
-        `For this election, precinct ${precinct} votes at precinct ` +
-        `${place.consolidated_with}'s location${place.note ? `. ${place.note}.` : "."}`));
+        `For this election, precinct ${found.precinct} votes at precinct ` +
+        `${host}'s location${place.note ? `. ${place.note}.` : "."}`));
     }
     return parts;
   }
@@ -230,39 +177,36 @@
   // reorders for the same reason.
   const isElectionDay = () => !!election && Elections.todayISO() === election.date;
 
-  function render(found, resolvedAddress) {
-    typedAddress = resolvedAddress;   // Directions links start from here
-    const { precinct, edgeMetres, rivals, inferred } = found;
+  function render(found, text) {
+    typed = { text, where: found.jurisdiction };
+    const { precinct, ward, edgeMetres, rivals, inferred } = found;
     // True when any of the three uncertainty advisories below will fire.
     const uncertain = Boolean(rivals || inferred || edgeMetres <= NEAR_M);
     const body = el("div", "card-body",
-      el("div", "lead", "Address: ", el("span", "addr-quote", cased(resolvedAddress))),
+      el("div", "lead", "Address: ", el("span", "addr-quote", cased(text))),
+      // The map page's words for the same three facts. A township has no
+      // wards, so it gets no Ward rather than a blank one.
       el("div", "ward",
-        el("span", "wp-label", "Ward:"), el("span", "wp-value", String(wards[precinct])),
+        el("span", "wp-label", "Where you vote:"), el("span", "wp-value", found.jurisdiction),
+        ...(ward != null
+          ? [el("span", "wp-label", "Ward:"), el("span", "wp-value", String(ward))]
+          : []),
         el("span", "wp-label", "Precinct:"), el("span", "wp-value", String(precinct))),
       // Same order as the map page: the drop box is usable first and for
-      // longest, early voting comes next, and election day is the deadline --
+      // longest, early voting comes next, and election day is the deadline,
       // except on election day itself, when the deadline is now and the polls
-      // lead. Two pages answering one question should not disagree about the
-      // shape of the answer -- a reader who checks both should recognise the
-      // second one.
+      // lead. A reader who checks both pages should recognise the second.
       ...(isElectionDay()
-        ? [...pollingPlace(precinct, polling[String(precinct)]),
-           ...dropBoxes(),
-           ...earlyVoting(uncertain)]
-        : [...dropBoxes(),
-           ...earlyVoting(uncertain),
-           ...pollingPlace(precinct, polling[String(precinct)])]),
+        ? [...pollingPlace(found), ...dropBoxes(found), ...earlyVoting(found, uncertain)]
+        : [...dropBoxes(found), ...earlyVoting(found, uncertain), ...pollingPlace(found)]),
 
       // Said plainly rather than buried: an address that straddles a line, or
       // that we only inferred from its neighbours, is a guess and should be
-      // checked. This is the whole reason the page exists, so it would be
-      // perverse to hide it. They sit under the polling place because that is
-      // the answer they qualify -- the precinct is what is uncertain, not the
-      // drop box.
+      // checked. They sit under the polling place because that is the answer
+      // they qualify: the precinct is what is uncertain, not the drop box.
       rivals ? advisory("ambiguous",
         `This address sits where precincts ${rivals.join(" and ")} meet, so we ` +
-        "cannot tell which one it votes in. Please check with the city clerk or " +
+        "cannot tell which one it votes in. Please check with your clerk or " +
         "the Michigan Voter Information Center.") : null,
       !rivals && inferred ? advisory("inferred",
         "We do not have this exact address, so this is taken from the addresses " +
@@ -270,7 +214,7 @@
         "worth confirming.") : null,
       !rivals && edgeMetres <= NEAR_M ? advisory("boundary",
         `This address sits about ${Math.round(edgeMetres)} m from the edge of the ` +
-        "precinct, which is too close to be certain. Please check with the city " +
+        "precinct, which is too close to be certain. Please check with your " +
         "clerk or the Michigan Voter Information Center.") : null);
 
     clearResult();
@@ -279,7 +223,7 @@
 
   const failed = (message) => {
     clearResult();
-    say(`${message} You can read the city's precinct directory directly, or check the ` +
+    say(`${message} Check the number and the street, or look it up at the ` +
         "Michigan Voter Information Center.", true);
   };
 
@@ -295,14 +239,11 @@
   function renderList() {
     optionList.textContent = "";
     suggestions.forEach((suggestion, i) => {
-      // Every row names its jurisdiction, not only the ones from outside: a
-      // list where some rows are labelled and some are bare leaves the reader
-      // to work out that bare means answerable. "City" is load-bearing --
-      // Grand Rapids Township is a real, different place next door. Same rule
-      // and same colour for every row as the map page's type-ahead.
-      const option = el("li", null, suggestion.text,
-        el("span", "opt-where",
-           ` ${(suggestion.outside || []).length ? placeList(suggestion.outside.map(placeLabel)) : GR_CITY}`));
+      // Every row names its jurisdiction: a list where some rows are labelled
+      // and some are bare leaves the reader to work out what bare means. Same
+      // rule and same colour for every row as the map page's type-ahead.
+      const option = el("li", null, cased(suggestion.text),
+        el("span", "opt-where", ` ${placeList(suggestion.where.map(placeLabel))}`));
       option.id = `opt-${i}`;
       option.setAttribute("role", "option");
       option.setAttribute("aria-selected", i === active ? "true" : "false");
@@ -316,16 +257,16 @@
   }
 
   function suggest(text) {
-    const { number, rest } = parseTyped(text);
-    const matches = matchingStreets(rest);
+    const { number, rest } = P.parseTyped(text);
 
     // Nothing until the text starts with a house number: a street on its own
-    // is not an address. With one, offer the full address, but only where we
-    // can actually answer it.
+    // is not an address. With one, offer the full address, one row per place
+    // that could hold it, and only where the list can actually answer it.
     suggestions = number === null ? []
-      : matches.filter((street) => resolve(street, number))
-               .slice(0, MAX_SUGGESTIONS)
-               .map((street) => ({ text: `${number} ${street}`, street, number }));
+      : P.suggest(text, MAX_SUGGESTIONS)
+          .filter((s) => s.kind === "exact" || s.kind === "inferred" || s.kind === "quadrant")
+          .map((s) => ({ text: `${s.number} ${s.street}`, street: s.street, number: s.number,
+                         mcd: s.mcd, where: s.where || [], choice: !!s.choice }));
     if (number !== null) {
       suggestions = suggestions.concat(outsideMatches(rest, number, suggestions))
                                .slice(0, MAX_SUGGESTIONS);
@@ -333,74 +274,63 @@
 
     active = -1;
     renderList();
-    say(suggestions.length ? "" : notFoundHint(number, matches.length));
+    say(suggestions.length ? "" : notFoundHint(number, rest));
   }
 
-  // More than half of all Grand Rapids mailing addresses are outside the city
-  // limits. Refusing to list those streets meant a person who typed their own
-  // address correctly got "no address found", which reads as a broken tool
-  // rather than an honest limit. They are offered last, filling only what the
-  // city's own matches leave, and labelled with where they actually are.
+  // A street the address list cannot answer is still a real street, so it is
+  // offered last, filling only what the list's own matches leave, and labelled
+  // with where it actually is: a street in Ottawa County with a Grand Rapids
+  // mailing address, or one in the county with no parcel of its own.
   const outsideMatches = (rest, number, already) => {
-    if (!neighbours || !rest || rest.length < 2) return [];
+    if (!outside || !rest || rest.length < 2) return [];
     const have = new Set(already.map((s) => s.street));
-    return Object.keys(neighbours)
+    return Object.keys(outside)
       .filter((name) => !have.has(name) && name.startsWith(rest))
       .sort()
       .slice(0, MAX_SUGGESTIONS)
-      .map((street) => ({
-        text: number === null ? street : `${number} ${street}`,
-        street, number, outside: neighbours[street] || [],
-      }));
+      .map((street) => ({ text: `${number} ${street}`, street, number,
+                          where: outside[street], outside: true }));
   };
-
-  const GR_CITY = "Grand Rapids City";
-  // The state says "Township" when it means one and nothing for a city.
-  const placeLabel = (name) => /Township$/i.test(name) ? name : `${name} City`;
-
-  const placeList = (where) =>
-    where.length === 1 ? where[0]
-      : `${where.slice(0, -1).join(", ")} or ${where[where.length - 1]}`;
 
   // Picking one is an answer, not a rejection: which jurisdiction it is in,
   // and where to go instead. The address stays in the box, because it is
   // right.
   function renderOutside(picked) {
-    const where = placeList((picked.outside || []).map(placeLabel));
+    const where = placeList(picked.where.map(placeLabel));
+    const covered = picked.where.some((j) => P.coversJurisdiction(j));
     clearResult();
     resultBox.append(el("div", "card", el("div", "card-body",
       el("div", "lead", "Address: ", el("span", "addr-quote", cased(picked.text))),
-      advisory("outside",
-        `This address is in ${where}, not the City of Grand Rapids, so this ` +
-        "page cannot say where you vote. A Grand Rapids mailing address does " +
-        `not always mean you live in the city. Your clerk is the one for ${where}.`),
+      advisory("outside", covered
+        ? `That street is in ${where}, but the county's address list has no ` +
+          "address on it, so this page cannot look it up."
+        : `This address is in ${where}, outside Kent County, so this page ` +
+          "cannot say where you vote. A Grand Rapids mailing address does not " +
+          `always mean you live in Kent County. Your clerk is the one for ${where}.`),
       el("div", "ev-note", "The Michigan Voter Information Center at " +
         "mvic.sos.state.mi.us has the polling place for any Michigan address."))));
   }
 
-  const notFoundHint = (number, streetHits) => {
+  const notFoundHint = (number, rest) => {
     if (number === null) return "Start with the house number, like 300 Monroe Ave NW.";
-    if (streetHits) return `We have no number ${number} on that street. Check the number, ` +
-                           "or look it up at the Michigan Voter Information Center.";
+    if (P.matchingStreets(rest).length) {
+      return `We have no number ${number} on that street. Check the number, ` +
+             "or look it up at the Michigan Voter Information Center.";
+    }
     return "No address found. Try the number and the direction, like 300 Monroe Ave NW. " +
-           "Addresses outside the city are not listed here.";
+           "Addresses outside Kent County are not listed here.";
   };
 
   function choose(index) {
     const picked = suggestions[index];
     if (!picked) return;
-    if (picked.outside) {
-      input.value = cased(picked.text);
-      closeList();
-      renderOutside(picked);
-      return;
-    }
-
     input.value = cased(picked.text);
     closeList();
+    if (picked.outside) { renderOutside(picked); return; }
+
     clearResult();
-    const found = resolve(picked.street, picked.number);
-    if (!found) return failed("We do not have that address.");
+    const found = P.lookup(picked.text, picked.mcd);
+    if (found.error) return failed("We do not have that address.");
     say("");
     // The answer is what matters now, not the box. Dismiss the soft keyboard
     // so the result is not hidden behind it.
@@ -430,19 +360,24 @@
     };
     if (event.key === "ArrowDown") move(1);
     else if (event.key === "ArrowUp") move(-1);
-    else if (event.key === "Enter") { event.preventDefault(); choose(active >= 0 ? active : 0); }
+    else if (event.key === "Enter") {
+      event.preventDefault();
+      // The same address in two places is the reader's to pick, never ours.
+      if (active < 0 && suggestions[0].choice) {
+        say("That address is in more than one place. Pick yours from the list.");
+        return;
+      }
+      choose(active >= 0 ? active : 0);
+    }
     else if (event.key === "Escape") closeList();
   });
 
   // ---- next election ----------------------------------------------------
   // Shows the first date that has not passed and hides the rest, so a stale
-  // entry is harmless while a missing one simply shows nothing.
-
-  // The calendar itself -- today, the next election, the state of the early
-  // voting window, the date formats -- comes from ../elections.js, which the
-  // map page reads too. Both pages once carried their own copy, and this page
-  // went on offering an early voting site for a day after the other had
-  // stopped. Only the wording below is this page's own.
+  // entry is harmless while a missing one simply shows nothing. The calendar
+  // itself (today, the next election, the state of the early voting window,
+  // the date formats) comes from ../elections.js, which the map page reads
+  // too; only the wording below is this page's own.
 
   // On election day itself the line stops naming the date and counts the
   // polls instead, the way the map page's banner does: to 7 AM, then to
@@ -496,31 +431,30 @@
 
     banner.append("Next election: ", el("strong", null, `${next.name}, ${Elections.withWeekday(next.date)}`));
 
+    // The calendar's early voting window is the city clerk's, so it is said
+    // as the city's. Every other clerk sets its own dates. Closed is said,
+    // not left blank: silence reads like an election with no early voting,
+    // on the days most people look. The closed sentence leaves out the site
+    // count, since those doors are shut.
     const state = Elections.windowState(next);
     const { early_voting_from: from, early_voting_to: to } = next;
     if (state !== "none") {
-      // The count, not the addresses. Addresses appear once an address has been
-      // looked up, not to everyone who loads the page.
       const count = (next.early_voting_sites || []).length;
-      const where = count ? `, at ${count} site${count === 1 ? "" : "s"} across the city` : "";
-      // Three states, not two. This used to stop at today <= to and say nothing
-      // once the window closed, which reads the same as an election with no
-      // early voting at all -- and the days it covered are the ones just before
-      // an election, when the most people are looking. The site count is left
-      // off the closed sentence: those doors are shut, and counting them would
-      // be offering somewhere to go.
+      const where = count ? `, at ${count} site${count === 1 ? "" : "s"}` : "";
       banner.append(el("span", "ev",
-        state === "closed" ? `Early voting ended ${Elections.withWeekday(to)}.`
-        : state === "open" ? `Early voting is open now, through ${Elections.withWeekday(to)}${where}.`
-        : `Early voting runs from ${Elections.withWeekday(from)} through ${Elections.withWeekday(to)}${where}.`));
+        state === "closed" ? `Early voting in Grand Rapids ended ${Elections.withWeekday(to)}.`
+        : state === "open" ? `Early voting in Grand Rapids is open now, through ${Elections.withWeekday(to)}${where}.`
+        : `Early voting in Grand Rapids runs from ${Elections.withWeekday(from)} through ${Elections.withWeekday(to)}${where}.`));
     }
     banner.hidden = false;
   }
 
-  // Early voting, shown while the next election carries sites and the window
-  // has not closed. Returns an empty array otherwise, so render can spread it
-  // without a conditional. Once the window passes this goes quiet on its own,
-  // with no edit to make and nothing to remember.
+  // Early voting, for a Grand Rapids address, shown while the next election
+  // carries sites and the window has not closed. Every other clerk sets its
+  // own dates and sites and this page has no current source for them, so
+  // outside the city there is no block rather than the city's. Returns an
+  // empty array otherwise, so render can spread it without a conditional.
+  //
   // The clerk's own dates and sites when the file is about THIS election, the
   // calendar's otherwise. gr-clerk.json names the election it describes, and
   // that is checked rather than assumed: a file about a finished election
@@ -536,8 +470,8 @@
     };
   };
 
-  function earlyVoting(uncertain) {
-    if (!election) return [];
+  function earlyVoting(found, uncertain) {
+    if (!election || found.mcd !== GR_MCD) return [];
     const source = clerkWindow() || election;
     const { early_voting_from: from, early_voting_to: to,
             early_voting_sites: sites, early_voting_hours: hours } = source;
@@ -557,10 +491,8 @@
         "Vote early and verify there. All early voting locations have your information."));
     }
 
-    // The date carries the weight here, so it is the part set in bold.
-    // The heading says what this is; the dates say when, underneath it. Run
-    // together on one line -- "Vote early, Tuesday, October 20, 2026 through
-    // Sunday, November 1, 2026" -- the label was lost inside its own subject.
+    // The heading says what this is; the dates say when, underneath it, and
+    // they are the part set in bold.
     parts.push(el("div", "lead-2 sec-head", "Vote early"));
     parts.push(open
       ? el("div", "sec-sub", "Through ", el("strong", "when", Elections.withWeekday(to)))
@@ -591,12 +523,31 @@
     return [el("div", "ev-block ev-early", ...parts)];
   }
 
-  // Every drop box, with a directions link each. No "nearest": this page does
-  // no geocoding and cannot honestly rank them by distance, so it lists them
-  // and lets the reader pick the one they know.
-  function dropBoxes() {
-    const boxes = (clerk && clerk.drop_boxes) || [];
-    if (!boxes.length || !election || clerk.election !== election.date) return [];
+  // The county and the state write round-the-clock as "24 hours a day, 7 days
+  // a week" where the city clerk writes "24/7"; both are the usual case.
+  const ALWAYS_OPEN = /^24\/7$|24\s*hours?\s*(a|per)\s*day.*7\s*days/i;
+
+  // A jurisdiction's drop boxes: the city clerk's for Grand Rapids, while
+  // that file is about this election; the county's page or the state's
+  // release for everywhere else. Where none is published, the clerk's office,
+  // because an absentee ballot goes only to the voter's own clerk (MCL
+  // 168.764a) and never to a neighbour's box. Every box is listed with its
+  // directions link and no "nearest": this page does no geocoding and cannot
+  // honestly rank them by distance, so the reader picks the one they know.
+  function boxesFor(found) {
+    if (found.mcd === GR_MCD) {
+      return clerk && election && clerk.election === election.date ? clerk.drop_boxes || [] : [];
+    }
+    return P.dropBoxes(found.mcd);
+  }
+
+  function dropBoxes(found) {
+    if (!election) return [];
+    const boxes = boxesFor(found);
+    // Grand Rapids does publish boxes; an empty list there means the clerk's
+    // file is about another election, not that the city has none.
+    const office = boxes.length || found.mcd === GR_MCD ? null : P.clerkOf(found.mcd);
+    if (!boxes.length && !office) return [];
 
     const parts = [el("div", "lead-2 sec-head", "Drop off an absentee ballot")];
     // A box is only useful once there is a ballot to put in it. Michigan
@@ -606,35 +557,48 @@
     start.setDate(start.getDate() - 40);
     const from = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}` +
                  `-${String(start.getDate()).padStart(2, "0")}`;
+    const early = Elections.todayISO() < from;
     parts.push(el("div", "sec-sub",
-      Elections.todayISO() < from
+      early
         ? el("span", null, el("strong", "when", Elections.monthDay(from)),
              " through ", el("strong", "when", Elections.monthDay(election.date)))
         : el("span", null, "Through ",
              el("strong", "when", Elections.monthDay(election.date)))));
-    const odd = boxes.filter((b) => !/^24\/7$/.test(b.hours || "")).length;
-    parts.push(el("div", "ev-note",
-      (Elections.todayISO() < from
-        ? `Ballots are mailed from ${Elections.monthDay(from)}, and boxes ` +
-          "accept them until the polls close on election day. "
-        : "Return it by the time the polls close on election day. ") +
+    const when = early
+      ? `Ballots are mailed from ${Elections.monthDay(from)}, and ` +
+        `${office ? "the clerk accepts" : "boxes accept"} them until the polls close on election day. `
+      : "Return it by the time the polls close on election day. ";
+
+    if (office) {
+      parts.push(el("div", "ev-note", when +
+        `No drop box is published for ${found.jurisdiction}, so an absentee ` +
+        "ballot goes to your clerk's office, during office hours" +
+        (office.phone ? ` (${office.phone}).` : ".")));
+      parts.push(locationRow({
+        name: `${found.jurisdiction} clerk's office`,
+        address: office.address,
+      }, "ev-site"));
+      return [el("div", "ev-block ev-boxes", ...parts)];
+    }
+
+    const odd = boxes.filter((b) => !ALWAYS_OPEN.test(b.hours || "")).length;
+    parts.push(el("div", "ev-note", when +
       // Not our claim: MCL 168.761d requires the clerk to monitor each box.
       "Drop boxes are monitored, as Michigan law requires." +
       (odd ? ` Most are accessible 24/7; ${odd === 1 ? "one is not, and its" : `${odd} are not, and their`}` +
              " hours are listed with it."
-           : " They are accessible 24/7.")));
+           : boxes.length === 1 ? " It is accessible 24/7." : " They are accessible 24/7.")));
 
     for (const box of boxes) {
       parts.push(locationRow({
         name: box.name || box.address || "Drop box",
         address: box.address || "Inside City Hall",
-        // Hours per row ONLY where they differ from the usual 24/7. Eleven
-        // identical lines said nothing; the one different line is the whole
-        // point -- the City Hall box is weekdays 8 to 5.
+        // Hours per row only where they differ from 24/7, so the exception
+        // stands out rather than being one line among many that say the same.
         entrance_note: [box.note,
-                        /^24\/7$/.test(box.hours || "") || !box.hours
+                        ALWAYS_OPEN.test(box.hours || "") || !box.hours
                           ? null : `Open hours: ${box.hours}`]
-          .filter(Boolean).join(" \u00b7 "),
+          .filter(Boolean).join(" · "),
       }, "ev-site"));
     }
     return [el("div", "ev-block ev-boxes", ...parts)];
@@ -653,29 +617,37 @@
     say("Loading...");
     try {
       const optional = (url) => getJSON(url).catch(() => null);
-      const [addresses, places, calendar, neighbourData, clerkData] = await Promise.all([
-        getJSON("../data/addresses.json"),
-        getJSON("../data/polling.json"),
-        getJSON("../data/elections.json"),
-        // Both optional. A copy of this page hosted without them still
-        // answers the question it exists to answer; it just answers less.
-        optional("../data/neighbors.json"),
-        optional("../data/gr-clerk.json"),
-      ]);
-      neighbours = (neighbourData && neighbourData.streets) || null;
+      // The precinct index names the thirty jurisdictions, and each has its
+      // own address and polling file, so the index comes first.
+      const index = await getJSON("../data/precincts.json");
+      const mcds = (index.jurisdictions || []).map((j) => j.mcd);
+      const [addresses, pollingFiles, cityPolling, calendar, neighbourData, clerkData] =
+        await Promise.all([
+          Promise.all(mcds.map((m) => getJSON(`../data/addresses/${m}.json`))),
+          Promise.all(mcds.map((m) => optional(`../data/polling/${m}.json`))),
+          optional("../data/polling.json"),
+          getJSON("../data/elections.json"),
+          // Both optional. A copy of this page hosted without them still
+          // answers the question it exists to answer; it just answers less.
+          optional("../data/neighbors.json"),
+          optional("../data/gr-clerk.json"),
+        ]);
+      P = Precincts.county({
+        index, addresses, polling: pollingFiles.filter(Boolean), cityPolling, cityMcd: GR_MCD,
+      });
+      // neighbors.json is street names around the city in the state's
+      // spelling. Only the ones the address list cannot answer are offered
+      // as such; the rest it answers itself.
+      outside = neighbourData && neighbourData.streets ? P.unindexed(neighbourData.streets) : null;
       clerk = clerkData || null;
 
-      streets = addresses.streets;
-      streetNames = Object.keys(streets);
-      wards = addresses.wards;
-      polling = places.precincts;
       election = Elections.next(calendar.elections);
       calendarElections = calendar.elections;
       showNextElection(election, calendar.election_day_hours || null);
 
       input.disabled = false;
       say("");
-    } catch {
+    } catch (e) {
       say("Could not load the precinct data files. If you are hosting this yourself, " +
           "check that the data folder sits next to this page.", true);
     }
