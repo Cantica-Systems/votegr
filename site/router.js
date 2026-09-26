@@ -1206,50 +1206,81 @@
     return poly[poly.length - 1].slice();
   }
 
-  // number + street text -> {lat,lng,node,edge,street,exact} or null
-  Graph.prototype.geocode = function (number, streetText) {
+  // number + street text -> {lat,lng,edge,street,exact} or null
+  //
+  // `prefer`, when given, is a test a point should pass: the page passes
+  // "inside the jurisdiction the address is in". A street name is no identity
+  // across the county (Rockford and Cedar Springs each have a N Main St NE,
+  // both numbered from 1), so without it the first segment in range anywhere
+  // wins, which puts 113 N Main St NE, a Rockford address, in Cedar Springs.
+  // A segment that passes beats one that does not; with no `prefer`, or when
+  // nothing passes, the answer is the one it has always been.
+  Graph.prototype.geocode = function (number, streetText, prefer) {
     var idx = this._streetIndex();
     var key = canonStreet(streetText);
     var ids = idx[key];
     if (!ids || !ids.length || number == null) return null;
+    var self = this;
 
-    // The first segment whose address range holds the number wins.
-    for (var i = 0; i < ids.length; i++) {
-      var id = ids[i];
-      var lf = this.edgeRange(id, 0), lt = this.edgeRange(id, 1);
-      var rf = this.edgeRange(id, 2), rt = this.edgeRange(id, 3);
+    // A segment whose address range holds the number, interpolated along it.
+    function inRangeHit(id) {
+      var lf = self.edgeRange(id, 0), lt = self.edgeRange(id, 1);
+      var rf = self.edgeRange(id, 2), rt = self.edgeRange(id, 3);
       var onLeft = inRange(number, lf, lt);
       var onRight = inRange(number, rf, rt);
-      if (!onLeft && !onRight) continue;
+      if (!onLeft && !onRight) return null;
       // prefer the side whose parity matches (ranges are odd/even per side)
       var from, to;
       if (onLeft && (!onRight || (lf % 2 === number % 2))) { from = lf; to = lt; }
       else { from = rf; to = rt; }
       var span = (to - from);
       var f = span ? (number - from) / span : 0.5;
-      var pt = pointAtFraction(this.edgePoly(id), f);
-      return { lat: pt[0], lng: pt[1], edge: id, street: this.edgeName(id),
-               exact: true, node: this.nearestNode(pt[0], pt[1]).node };
+      var pt = pointAtFraction(self.edgePoly(id), f);
+      return { lat: pt[0], lng: pt[1], edge: id, street: self.edgeName(id),
+               exact: true };
     }
-    // number outside every known range on that street: fall back to the
-    // midpoint of the nearest-numbered segment, flagged inexact.
-    var closest = -1, bestGap = Infinity;
-    for (var j = 0; j < ids.length; j++) {
-      var ee = ids[j];
-      var pairs = [[this.edgeRange(ee, 0), this.edgeRange(ee, 1)],
-                   [this.edgeRange(ee, 2), this.edgeRange(ee, 3)]];
-      for (var q = 0; q < 2; q++) {
-        var pair = pairs[q];
-        if (pair[0] == null || pair[1] == null) continue;
-        var gap = Math.min(Math.abs(number - pair[0]), Math.abs(number - pair[1]));
-        if (gap < bestGap) { bestGap = gap; closest = ee; }
+
+    // The number outside every known range: the midpoint of the segment
+    // numbered nearest to it, flagged inexact.
+    function nearestNumbered(pool) {
+      var closest = -1, bestGap = Infinity;
+      for (var j = 0; j < pool.length; j++) {
+        var ee = pool[j];
+        var pairs = [[self.edgeRange(ee, 0), self.edgeRange(ee, 1)],
+                     [self.edgeRange(ee, 2), self.edgeRange(ee, 3)]];
+        for (var q = 0; q < 2; q++) {
+          var pair = pairs[q];
+          if (pair[0] == null || pair[1] == null) continue;
+          var gap = Math.min(Math.abs(number - pair[0]), Math.abs(number - pair[1]));
+          if (gap < bestGap) { bestGap = gap; closest = ee; }
+        }
       }
+      if (closest < 0) return null;
+      var mid = pointAtFraction(self.edgePoly(closest), 0.5);
+      return { lat: mid[0], lng: mid[1], edge: -1, street: self.edgeName(closest),
+               exact: false };
     }
-    if (closest < 0) return null;
-    var mid = pointAtFraction(this.edgePoly(closest), 0.5);
-    var n2 = this.nearestNode(mid[0], mid[1]);
-    return { lat: mid[0], lng: mid[1], edge: -1, street: this.edgeName(closest),
-             exact: false, node: n2.node };
+
+    // The first segment whose address range holds the number wins.
+    var hits = [], i, h;
+    for (i = 0; i < ids.length; i++) if ((h = inRangeHit(ids[i]))) hits.push(h);
+    if (!prefer) return hits[0] || nearestNumbered(ids);
+
+    // With a `prefer`, the answer stays on the stretch of street that passes
+    // it: in range there if possible, else the nearest-numbered segment
+    // there. A number the county's ranges leave off one town's stretch is
+    // better placed inexactly in that town than exactly in the wrong one.
+    // Only a street with no stretch that passes falls back to the rest.
+    for (i = 0; i < hits.length; i++) if (prefer(hits[i].lat, hits[i].lng)) return hits[i];
+    var passing = ids.filter(function (e) {
+      var m = pointAtFraction(self.edgePoly(e), 0.5);
+      return prefer(m[0], m[1]);
+    });
+    if (passing.length) {
+      var there = nearestNumbered(passing);
+      if (there) return there;
+    }
+    return hits[0] || nearestNumbered(ids);
   };
 
   // ---- turn-by-turn ----------------------------------------------------

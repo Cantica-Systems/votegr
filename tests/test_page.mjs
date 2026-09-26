@@ -1932,6 +1932,95 @@ for (const w of [390, 1280]) {
   await ctx.close();
 }
 
+// --- one address, two towns ----------------------------------------------
+// Rockford and Cedar Springs each have a N Main St NE, and some numbers are
+// real addresses on both. The page answered those as whichever town sorted
+// first, under one suggestion naming every town with a street of that name.
+// The address is found in the data rather than written here (no house is
+// named in this suite): of those the parcel file has in two places, the one
+// whose two places are farthest apart, so a route from the wrong town cannot
+// pass for a short one.
+{
+  const index = JSON.parse(await readFile(join(ROOT, 'data/precincts.json'), 'utf8'));
+  const centre = {};
+  for (const p of index.precincts) {
+    const c = centre[p.mcd] || (centre[p.mcd] = { lat: 0, lng: 0, n: 0, name: p.jurisdiction });
+    c.lat += p.label[0]; c.lng += p.label[1]; c.n++;
+  }
+  const km = (a, b) => Math.hypot((centre[a].lat / centre[a].n - centre[b].lat / centre[b].n) * 111,
+                                  (centre[a].lng / centre[a].n - centre[b].lng / centre[b].n) * 81.5);
+  const seen = new Map();
+  for (const j of index.jurisdictions) {
+    const doc = JSON.parse(await readFile(join(ROOT, `data/addresses/${j.mcd}.json`), 'utf8'));
+    for (const [street, rows] of Object.entries(doc.streets)) {
+      for (const r of rows) {
+        const k = r[0] + ' ' + street;
+        if (!seen.has(k)) seen.set(k, new Set());
+        seen.get(k).add(j.mcd);
+      }
+    }
+  }
+  let pick = null;
+  for (const [text, set] of seen) {
+    if (set.size !== 2) continue;
+    const [a, b] = [...set];
+    if (!pick || km(a, b) > pick.km) pick = { text, mcds: [a, b], km: km(a, b) };
+  }
+  const label = (m) => /Township$/.test(centre[m].name) ? centre[m].name : centre[m].name + ' City';
+  ok(`an address the parcel file has in two towns ${Math.round(pick.km)} km apart is found`,
+     pick && pick.km > 5);
+
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
+  const rows = async () => {
+    await page.fill('#addr', '');
+    await page.type('#addr', pick.text);
+    await page.waitForSelector('#ac-addr .ac-item', { timeout: 10000 });
+    await page.waitForTimeout(300);
+    return page.evaluate(() => [...document.querySelectorAll('#ac-addr .ac-item')].map((el) => ({
+      num: (el.querySelector('.num') || { textContent: '' }).textContent,
+      where: (el.querySelector('.ac-where') || { textContent: '' }).textContent,
+    })));
+  };
+  const listed = (await rows()).filter((r) => r.num === pick.text.split(' ')[0]);
+  ok('it is offered once per town, each row naming only its own',
+     listed.length === 2 && pick.mcds.every((m) => listed.some((r) => r.where === label(m))));
+  await page.press('#addr', 'Enter');
+  await page.waitForTimeout(500);
+  ok('and Enter does not pick one: the list stays open, with no answer', await page.evaluate(() =>
+    !document.getElementById('ac-addr').hidden && document.getElementById('resultBlock').hidden));
+
+  for (const m of pick.mcds) {
+    await rows();
+    await page.evaluate((want) => {
+      const row = [...document.querySelectorAll('#ac-addr .ac-item')]
+        .find((el) => (el.querySelector('.ac-where') || {}).textContent === want);
+      row.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    }, label(m));
+    await page.waitForFunction(() => !document.getElementById('routeBlock').hidden ||
+      document.querySelector('#precinctInfo .err'), null, { timeout: 15000 });
+    await page.waitForTimeout(500);
+    const got = await page.evaluate(() => ({
+      info: document.getElementById('precinctInfo').innerText,
+      routes: document.getElementById('routes').innerText,
+    }));
+    const mi = /([\d.]+)\s*mi\b/.exec(got.routes), ft = /\bft\b/.test(got.routes);
+    const miles = mi ? Number(mi[1]) : ft ? 0 : Infinity;
+    ok(`picking ${centre[m].name} answers ${centre[m].name}`,
+       got.info.includes(centre[m].name));
+    // A route from the right town stays in it; one from the wrong town has to
+    // cross the distance between them first.
+    ok(`and routes from ${centre[m].name}, not from the other town (${miles} mi)`,
+       miles < pick.km / 1.609 / 2);
+  }
+  ok('no page errors while doing it', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 // --- a page left open across midnight -----------------------------------
 // The countdown re-reads the calendar when the day rolls over under it. That
 // path threw a ReferenceError at midnight, which no other stretch reaches:

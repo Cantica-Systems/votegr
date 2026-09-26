@@ -327,7 +327,7 @@ ok('freeway: snap avoids it', /SURFACE|A ST|B ST/.test(g.edgeName(g.snapToRoad(4
 // suggestion order has to reflect that, and must not bury a good answer under
 // a list of the neighbors' addresses.
 const fs = require('fs');
-const { Precincts } = require('../site/precinct.js');
+const { Precincts, pointInRings } = require('../site/precinct.js');
 const P = new Precincts(
   JSON.parse(fs.readFileSync('./site/data/addresses.json')),
   JSON.parse(fs.readFileSync('./site/data/polling.json')));
@@ -530,6 +530,115 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
     C.covers(k) && U[k].some((j) => C.coversJurisdiction(j)));
   ok(`outside: no street the list answers is offered in a jurisdiction it covers (${mislabelled.length})`,
      mislabelled.length === 0, mislabelled.slice(0, 5).join(', '));
+}
+
+// --- one street name, several places --------------------------------------
+// The county index merges a street name across every jurisdiction that has
+// one, and a shared name is as often two streets as one: Rockford and Cedar
+// Springs each have a N Main St NE, eight miles apart, and the same number
+// is a real address on both. So an address is answered only within one
+// jurisdiction, offered once per place the reader could mean, and placed on
+// that place's own stretch of the street. Every address here is found in the
+// data rather than written down, so no house is named (see the note on
+// fixtures above), and a failure names streets, never numbers.
+{
+  const index = JSON.parse(fs.readFileSync('./site/data/precincts.json', 'utf8'));
+  const mcds = index.jurisdictions.map((j) => j.mcd);
+  const C = Precincts.county({
+    index,
+    addresses: mcds.map((m) => JSON.parse(fs.readFileSync(`./site/data/addresses/${m}.json`, 'utf8'))),
+    polling: [], cityPolling: null, cityMcd: '34000',
+  });
+  const sharedNames = C.streetNames.filter((s) =>
+    new Set(C.streets[s].map((r) => C.mcdOf(r))).size > 1);
+  const shared = [], single = [];
+  for (const s of sharedNames) {
+    const by = new Map();
+    for (const r of C.streets[s]) {
+      if (!by.has(r[0])) by.set(r[0], new Set());
+      by.get(r[0]).add(C.mcdOf(r));
+    }
+    for (const [n, ms] of by) (ms.size > 1 ? shared : single).push([s, n, [...ms]]);
+  }
+  const streetsOf = (list) => [...new Set(list.map(([s]) => s))].slice(0, 5).join(', ');
+
+  ok(`places: the parcel file has addresses in more than one jurisdiction (${shared.length})`,
+     shared.length > 50);
+  const guessed = shared.filter(([s, n]) => C.lookup(`${n} ${s}`).error !== 'several_places');
+  ok('places: none of them is answered until the reader picks a place',
+     guessed.length === 0, streetsOf(guessed));
+  const elsewhere = shared.filter(([s, n, ms]) =>
+    ms.some((m) => C.lookup(`${n} ${s}`, m).mcd !== m));
+  ok('places: each is answered in the place picked', elsewhere.length === 0, streetsOf(elsewhere));
+  const offered = shared.filter(([s, n, ms]) => {
+    const rows = C.suggest(`${n} ${s}`, 8).filter((o) => o.street === s && o.number === n);
+    return rows.length !== ms.length ||
+      new Set(rows.map((o) => o.mcd)).size !== ms.length ||
+      !rows.every((o) => o.choice && o.where.length === 1 &&
+                         o.where[0] === C.jurisdictions[o.mcd]);
+  });
+  ok('places: and offered once per place, each row naming only its own, as a choice',
+     offered.length === 0, streetsOf(offered));
+
+  // A number only one of them has, on a name several share, is one answer:
+  // one row, naming that jurisdiction alone, not "Rockford or Cedar Springs
+  // or Nelson Township". Every fiftieth, which is over a thousand.
+  const sample = single.filter((_, i) => i % 50 === 0);
+  const blurred = sample.filter(([s, n, [m]]) => {
+    const rows = C.suggest(`${n} ${s}`, 8).filter((o) => o.street === s && o.number === n);
+    return rows.length !== 1 || rows[0].choice ||
+      rows[0].where.join() !== C.jurisdictions[m] || C.lookup(`${n} ${s}`).mcd !== m;
+  });
+  ok(`places: an address only one jurisdiction has names that one alone (${sample.length} checked)`,
+     sample.length > 500 && blurred.length === 0, streetsOf(blurred));
+
+  // The street map has the same problem one layer down: geocode() took the
+  // first segment in range anywhere in the county. The page now asks it to
+  // prefer the address's own jurisdiction, give or take 45 m, since a
+  // section-line road is often the line itself.
+  const gi = JSON.parse(fs.readFileSync('./site/data/graph/index.json', 'utf8'));
+  const county = R.Graph.streaming(gi);
+  for (const c of gi.chunks) {
+    county.addChunk(JSON.parse(fs.readFileSync(`./site/data/graph/${c.mcd}.json`, 'utf8')));
+  }
+  county.finish();
+  const tests = {};
+  const within = (m) => tests[m] || (tests[m] = (() => {
+    const mine = index.precincts.filter((p) => p.mcd === m);
+    const nudges = [[0, 0], [4e-4, 0], [-4e-4, 0], [0, 5.5e-4], [0, -5.5e-4]];
+    return (lat, lng) => nudges.some(([a, b]) =>
+      mine.some((p) => pointInRings(lat + a, lng + b, p.rings)));
+  })());
+  // Wherever the street map has a stretch of that street there, that is.
+  // A few shared names have none in one of their places (the map has
+  // Vergennes St SE in Ada and Vergennes townships and not in Lowell
+  // Township), and the neighbour's stretch is the best it has; a few more
+  // are not on the map under that name at all and get no point anywhere.
+  const idx = county._streetIndex();
+  const hasStretch = (s, m) => (idx[R.canonStreet(s)] || []).some((e) => {
+    const p = county.edgePoly(e), mid = p[Math.floor(p.length / 2)];
+    return within(m)(mid[0], mid[1]);
+  });
+  const twice = shared.flatMap(([s, n, ms]) => ms.map((m) => [s, n, m])).filter(([s, n, m]) => {
+    if (!hasStretch(s, m)) return false;
+    const hit = county.geocode(n, s, within(m));
+    return hit && !within(m)(hit.lat, hit.lng);
+  });
+  ok('geocode: an address in two places is put in whichever one was picked',
+     twice.length === 0, streetsOf(twice));
+  let before = 0, after = 0;
+  for (const s of sharedNames) {
+    for (const r of C.streets[s]) {
+      const m = C.mcdOf(r), inside = within(m);
+      const was = county.geocode(r[0], s), now = county.geocode(r[0], s, inside);
+      if (was && !inside(was.lat, was.lng)) before++;
+      if (now && !inside(now.lat, now.lng)) after++;
+    }
+  }
+  // What is left is almost all streets with no stretch in their own
+  // jurisdiction under that name, where the neighbour's is the best there is.
+  ok(`geocode: addresses on a shared name placed outside their own jurisdiction, ${before} without the preference and ${after} with it`,
+     after * 3 < before);
 }
 
 // --- the polls clock ------------------------------------------------------
