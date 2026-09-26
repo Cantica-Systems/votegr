@@ -1,15 +1,13 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
 // The election calendar, shared by both pages.
 //
-// This module exists because the same calendar was being read twice, in
-// app.js and in simple/lookup.js, and the two readings drifted. Both files
-// carried their own month table, their own "today", their own next-election
-// search, and their own three-way branch over the early voting window -- and
-// both used the name prettyDate for a DIFFERENT format, one with the weekday
-// and one without. That is how the /simple page came to say early voting was
-// still available on a day the main page already called it closed.
+// Both pages read the calendar through this module, because two readings of
+// it drift apart: two copies of "today", of the next election and of the
+// early voting window will sooner or later disagree, and a page that calls
+// early voting open on a day the other calls it closed sends someone to a
+// locked door.
 //
-// So the formats are named for what they produce rather than for how pretty
+// The formats are named for what they produce rather than for how pretty
 // they are, and the window's state is decided in ONE place, windowState(),
 // which both pages ask. Wording stays with each page: the two surfaces say
 // different things on purpose, and only the calendar underneath has to agree.
@@ -31,11 +29,13 @@
 
   var ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-  function todayISO() {
-    var d = new Date();
+  // A Date's own local day, as a Y-M-D string.
+  function isoOf(d) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
       '-' + String(d.getDate()).padStart(2, '0');
   }
+
+  function todayISO() { return isoOf(new Date()); }
 
   // Today's weekday abbreviation, for picking today's row out of the hours.
   function todayAbbr() { return DAY_ABBR[new Date().getDay()]; }
@@ -80,6 +80,19 @@
   }
 
   function sites(e) { return (e && e.early_voting_sites) || []; }
+
+  // The first day an absentee ballot can go back for this election, or null
+  // if it has no readable date. Michigan mails absentee ballots 40 days out,
+  // so a drop box standing open before then has nothing to accept. Statute,
+  // not something a clerk publishes, which is why it is one number here and
+  // not a field in the calendar.
+  var ABSENTEE_LEAD_DAYS = 40;
+  function absenteeFrom(e) {
+    var d = dayStart(e && e.date);
+    if (!d) return null;
+    d.setDate(d.getDate() - ABSENTEE_LEAD_DAYS);
+    return isoOf(d);
+  }
 
   // "7:00 AM" / "8:00 PM" -> the instant on that date, local time. The
   // statutory hours are written the way the Secretary of State writes them,
@@ -127,21 +140,12 @@
     return 'open';
   }
 
-  // Open AND somewhere to go. Deliberately separate from windowState: with a
-  // window published and no sites the window is still open and it is our data
-  // that is short, so a caller offering a destination asks this, and a caller
-  // describing the calendar asks windowState.
-  function isOpen(e, today) {
-    return windowState(e, today) === 'open' && sites(e).length > 0;
-  }
-
   var Elections = {
     atTime: atTime, pollsPhase: pollsPhase,
-    MONTHS: MONTHS, WEEKDAYS: WEEKDAYS, DAY_ABBR: DAY_ABBR,
     todayISO: todayISO, todayAbbr: todayAbbr, dayStart: dayStart,
     monthDay: monthDay, withWeekday: withWeekday, dayMonth: dayMonth,
     shortTime: shortTime, next: next, sites: sites,
-    windowState: windowState, isOpen: isOpen
+    absenteeFrom: absenteeFrom, windowState: windowState
   };
 
   root.Elections = Elections;

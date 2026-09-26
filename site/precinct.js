@@ -1,13 +1,12 @@
-/* Precinct + polling-place lookup.
- * Released into the public domain under the Unlicense, see UNLICENSE.
+/* Released into the public domain under the Unlicense, see UNLICENSE.
+ * Precinct + polling-place lookup.
  *
  * The matching logic here (parseTyped / streetMatches / resolve) is carried
  * over from the earlier vote-gr project, so the two tools answer "which
  * precinct is this address in" identically. Keeping it a faithful copy is
  * deliberate: two implementations of the same lookup would eventually
  * disagree, and disagreeing about someone's polling place is the one failure
- * this tool must not have. Like everything else here it is public domain
- * under the Unlicense.
+ * this tool must not have.
  *
  * As in vote-gr, the whole lookup is a dictionary hit against a file the page
  * already downloaded. The address is never sent anywhere.
@@ -19,19 +18,19 @@
   //
   // The original: addresses.json and polling.json, the Grand Rapids files,
   // where a precinct is identified by its bare number ("52") and every row is
-  // [house number, "52", metres from the precinct edge]. /simple and the
-  // tests still build this way, and it keeps working unchanged.
+  // [house number, "52", metres from the precinct edge]. The tests still
+  // build this way. /simple reads the same two files with its own copy of
+  // this lookup and does not load this file.
   //
   // Precincts.county(): all thirty jurisdictions at once. There a bare number
-  // is no identity at all -- there is a Precinct 1 in twenty-nine places --
-  // so every precinct is identified by the state's 13-digit code
+  // is no identity at all (every one of the thirty has a Precinct 1), so
+  // every precinct is identified by the state's 13-digit code
   // ("0814282001001": county 081, Kentwood 42820, ward 01, precinct 001),
   // and the display number, the ward if the jurisdiction has wards, and the
   // jurisdiction's name are looked up from that code. Both modes store rows
   // the same way, [number, id, edge metres, rivals], so every method below
   // works on an `id` and does not know which kind it is holding.
   function Precincts(addresses, polling) {
-    this.county = false;
     this.wards = addresses.wards || {};
     this.streets = addresses.streets || {};
     this.streetNames = Object.keys(this.streets);
@@ -45,7 +44,6 @@
   //         cityPolling: polling.json, cityMcd: '34000' }
   Precincts.county = function (opts) {
     var P = Object.create(Precincts.prototype);
-    P.county = true;
     P.wards = {};
     P.streets = {};
     P.polling = {};
@@ -169,8 +167,9 @@
     return (this._where[street] = names);
   };
 
-  // A jurisdiction's drop boxes, from the county's page. Grand Rapids' own
-  // come from the city clerk's file instead and are not here.
+  // A jurisdiction's drop boxes, from the county's page. The county lists
+  // Grand Rapids' too, but the page answers Grand Rapids from the city
+  // clerk's own file instead (boxesFor in app.js).
   Precincts.prototype.dropBoxes = function (mcd) {
     return (this.boxes && this.boxes[mcd]) || [];
   };
@@ -220,14 +219,14 @@
   // word below folds to one form, on both sides of the comparison, and a lone
   // N, S, E or W moves to the end whether it led or trailed. router.js reads
   // the same leading-or-trailing disagreement between the parcel file and the
-  // centrelines this way.
+  // centerlines this way.
   //
   // Unlike router.js this keeps the street type and the quadrant. The router
   // matches a name against road segments and lets the house number settle
   // the rest; here the name is what picks the street, and a court and a drive
   // of one name are two streets, as is one name in two quadrants. Where the
   // county and the state disagree about those, the disagreement stands and
-  // the street stays unanswered rather than answered as its neighbour.
+  // the street stays unanswered rather than answered as its neighbor.
   var WORDS = {
     STREET: 'ST', SAINT: 'ST', AVENUE: 'AVE', DRIVE: 'DR', ROAD: 'RD',
     COURT: 'CT', LANE: 'LN', PLACE: 'PL', CIRCLE: 'CIR', BOULEVARD: 'BLVD',
@@ -458,8 +457,6 @@
              entrance_note: p.entrance_note };
   };
 
-  Precincts.prototype.ward = function (id) { return this.describe(id).ward; };
-
   // Suggestions for the type-ahead. Returns real addresses that exist in the
   // index, so the person picks a known answer instead of being told after the
   // fact that what they typed is not in it. A house number that is missing
@@ -617,10 +614,11 @@
   };
 
   // ---- point in polygon --------------------------------------------------
-  // The one ray cast in the project. The precinct lookup below, the city
-  // limits check in app.js and the audit scripts all call this rather than
-  // keeping their own copy, so none of them can drift into disagreeing about
-  // which side of a line a point falls on.
+  // The one ray cast in the project. The precinct lookup below, app.js's
+  // "inside this jurisdiction" test that keeps a geocoded address on its own
+  // town's street, scripts/compare_osrm.mjs and the tests all call this
+  // rather than keeping their own copy, so none of them can drift into
+  // disagreeing about which side of a line a point falls on.
   //
   // Rings are [lat, lng] pairs, as precincts.json stores them; a caller
   // holding [lng, lat] rings (boundary.json) swaps them once before calling.

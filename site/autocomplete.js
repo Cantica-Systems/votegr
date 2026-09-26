@@ -77,14 +77,15 @@
       'M12 6.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>';
 
     function itemHtml(it, i) {
-      // A per-item note wins over the per-kind one: a street outside the city
-      // has to name WHICH place it is in, and that differs per street.
-      var why = it.why || SUGGESTION_WHY[it.kind] || '';
+      var why = SUGGESTION_WHY[it.kind] || '';
       return '<button type="button" class="ac-item" role="option" data-i="' + i + '">' +
         '<span class="ac-pin">' + PIN_SVG + '</span>' +
         (it.number != null ? '<span class="num">' + it.number + '</span>' : '') +
         '<span class="st">' + esc(cased(it.street)) + '</span>' +
         (why ? '<span class="why">' + why + '</span>' : '') +
+        // Which place the street is in, per row: one street name can be in
+        // several jurisdictions, and a street outside the index has to name
+        // WHICH place it is in.
         (it.where && it.where.length
           ? '<span class="ac-where">' + esc(it.where.join(' or ')) + '</span>'
           : '') + '</button>';

@@ -2,8 +2,9 @@
 /* Title-case a display string without expanding or rewriting it.
 
    Every street name in the routing graph, every polling place address and
-   every early voting address arrives ALL CAPS, because that is how the city
-   centerline file, the clerk's directory and the state layers publish them.
+   every early voting address arrives ALL CAPS, because that is how the
+   county centerline file, the city clerk's directory, the county's pages
+   and the state layers publish them.
    Shouting an address at a reader is not a decision this project made; it is
    one it inherited and never undid.
 
@@ -16,9 +17,9 @@
 
    Ported from the same function in a sibling project, where it has a fuller
    vocabulary for police agency names. Trimmed here to what this corpus
-   actually contains, counted rather than guessed: US appears 181 times and
-   NB/SB/EB/WB 253 times between them across the graph and the polling data,
-   so the freeway shorthand is real and stays. The agency acronyms and the
+   actually contains, counted rather than guessed: US appears 560 times and
+   NB/SB/EB/WB 733 times between them across the county road graph, so the
+   freeway shorthand is real and stays. The agency acronyms and the
    block-anonymization mask rule appear zero times, because this project
    publishes exact addresses and redacts nothing, so they are left out.
 

@@ -2,10 +2,11 @@
 // What a license plate camera looks like and what it says about itself.
 //
 // Split out of app.js because none of it is about this page: it is the popup
-// table, the robot drawing, and the two date helpers that read an
-// OpenStreetMap timestamp. app.js keeps everything that needs the map, the
-// graph or the current route -- where a camera is drawn, whether cameras are
-// in scope at all, and the layer bookkeeping.
+// table, the robot drawing, and the two small helpers the popup reads with,
+// how long ago an OpenStreetMap timestamp was and a compass point for a
+// bearing. app.js keeps everything that needs the map, the graph or the
+// current route: where a camera is drawn, whether cameras are in scope at
+// all, and the layer bookkeeping.
 //
 // Deliberately no Leaflet in here. The marker comes back as SVG plus the box
 // it wants, and app.js wraps that in L.divIcon, so this file can be read, and
@@ -29,15 +30,16 @@
 
   // Two numbers, not one. BOX is the drawing's own coordinate space, which
   // every coordinate in bodySvg and the view cone is written in; SIZE is the
-  // pixel box the marker is rendered into. They used to be the same 58, so
-  // the robot could only be made smaller by rewriting every coordinate in the
-  // figure. Kept apart, the viewBox scales the whole marker -- cone, pulse
-  // ring and robot together -- by SIZE/BOX, and the art is untouched.
+  // pixel box the marker is rendered into. Kept apart, the viewBox scales the
+  // whole marker (cone, pulse ring and robot together) by SIZE/BOX, so the
+  // robot can be resized without rewriting a coordinate of the figure.
   //
-  // 58px of robot was too much map: in Grand Rapids the 235 cameras overlapped
-  // into a continuous band downtown and buried the precinct fills and the
-  // voting-site pins underneath them. At 38 the figure is still readable and
-  // the cone still points, and the tap target stays well above the 24px floor.
+  // 58px of robot is too much map: downtown the markers overlap into a
+  // continuous band and bury the precinct fills and the voting-site pins
+  // underneath them. At 38 the figure is still readable and the cone still
+  // points, and the tap target stays well above the 24px floor. basemap.js
+  // keeps street names MARKER_R clear of the centre, so a change here is a
+  // change there too.
   var BOX = 58, CENTRE = BOX / 2;
   var SIZE = 38;
 
@@ -70,7 +72,10 @@
   }
 
   // The bearing a camera faces, from OSM's direction tag, or null when it has
-  // none. Read by the popup and by the marker's view cone alike.
+  // none. Read by the popup and by the marker's view cone alike. router.js
+  // assignCameras() reads the facing the same way to seat the marker on the
+  // road it faces; change one and change the other, or the cone points down
+  // a road the marker was not seated on.
   function bearing(c) {
     var f = c.f || {};
     var raw = f.direction != null ? f.direction : f['camera:direction'];
@@ -115,9 +120,9 @@
   // thing that changes with state is the part that watches. Upright at every
   // bearing; the cone alone says which way it looks.
   //
-  // One drawing, two callers: the map marker and the legend key. The key used
-  // to be a separate CSS approximation built from radial-gradients, and it had
-  // drifted into something that plainly did not match the map.
+  // One drawing, two callers: the map marker and the legend key, so the key
+  // cannot drift into something that does not match the map, as a separate
+  // CSS approximation of it would.
   function bodySvg(fill, C, ringColour) {
     // Cap in a real police blue rather than near-black navy; face in a light
     // skin tone (the RoboCop read: human face, machine everything else). The
