@@ -1,4 +1,4 @@
-# MI Bureau of Elections, November 3 2026 general election — FOIA release
+# MI Bureau of Elections, November 3 2026 general election: FOIA release
 
 Three statewide records, released by the Michigan Department of State on
 **2026-09-21** in response to a FOIA request. They are committed here as
@@ -7,7 +7,7 @@ response is a file that arrives once, and a script that reads one is not
 reproducible unless the file travels with it.
 
 Registered as `mdos-dropbox-report-2026-11` in `site/data/sources.json`, with
-`carried: false` — nothing refreshes these and nothing here will notice when
+`carried: false`: nothing refreshes these and nothing here will notice when
 the Bureau's own data changes.
 
 ## Why this is outside `site/`
@@ -57,11 +57,11 @@ it is used here:
 
 | | |
 |---|---|
-| Kent County precincts | **Agrees** — all 202 precincts, 30 jurisdictions and every ward flag match `site/data/precincts.json` |
-| Grand Rapids early voting | **Agrees** — same four sites, same 10/20–11/01 window, same 13 days as the city clerk |
-| Drop boxes | **Better than the county** — 53 for Kent against the county's 24, a box in all thirty jurisdictions |
-| Early voting, statewide | **Badly incomplete** — 375 of 1,521 jurisdictions, Oakland County absent entirely, against a nine-day requirement that Art. II §4 applies everywhere |
-| Grand Rapids ZIPs | **Wrong three times** — precincts 1, 24 and 34, each checked against USPS. See the note in `site/data/polling.json` |
+| Kent County precincts | **Agrees**: all 202 precincts, 30 jurisdictions and every ward flag match `site/data/precincts.json` |
+| Grand Rapids early voting | **Agrees**: same four sites, same 10/20-11/01 window, same 13 days as the city clerk |
+| Drop boxes | **Better than the county**: 53 for Kent against the 23 scraped from the county's pages, a box in all thirty jurisdictions |
+| Early voting, statewide | **Badly incomplete**: 375 of 1,521 jurisdictions, Oakland County absent entirely, against a nine-day requirement that Art. II §4 applies everywhere |
+| Grand Rapids ZIPs | **Wrong three times**: precincts 1, 24 and 34, each checked against USPS. See the note in `site/data/polling.json` |
 
 So: authoritative for drop boxes, a useful cross-check on precincts and on
 Grand Rapids early voting, and not to be trusted for statewide early voting or

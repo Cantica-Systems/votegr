@@ -19,7 +19,10 @@ pip install -r requirements.txt
 
 `scripts/refresh_addresses.py` and `scripts/refresh_precincts.py` need both;
 `scripts/build_precincts.py` and `scripts/build_graph_chunks.py` need `shapely`
-alone. Everything else runs on a bare interpreter.
+alone; `scripts/geocode_places.py` needs `requests` for its parcel pull.
+`geocode_places.py` and `scripts/merge_foia_dropboxes.py` also need `node`, for
+the street centerline pass. Everything else runs on a bare interpreter. Every
+script sends the same User-Agent, defined once in `scripts/useragent.py`.
 
 ## What generates what
 
@@ -28,10 +31,11 @@ alone. Everything else runs on a bare interpreter.
 | `graph/<mcd>.json` | `build_graph.py`, `build_restrictions.py`, then `build_graph_chunks.py` | REGIS/Kent centerlines, OpenStreetMap restrictions |
 | `graph/index.json` | `build_graph_chunks.py` | sizes of every chunk, so the browser allocates once and streams them |
 | `addresses/<mcd>.json` | `refresh_addresses.py` | Kent County parcels, matched to precincts, one file per jurisdiction |
-| `polling/<mcd>.json` | `refresh_polling.py`, then `merge_foia_dropboxes.py`, then `geocode_places.py` | Kent County's polling place and drop box pages, the state's drop box report for the 24 jurisdictions the county publishes none for, then parcel centroids and street centrelines for coordinates |
-| `early-voting.json` | `refresh_early_voting.py`, then `geocode_places.py` | Kent County's early voting page |
-| `cameras.json` | `refresh_cameras.py` — **automated, see below** | OpenStreetMap |
-| `addresses.json` | `refresh_addresses.py` | Kent County parcels, matched to precincts |
+| `polling/<mcd>.json` | `refresh_polling.py`, then `merge_foia_dropboxes.py`, then `geocode_places.py` | Kent County's polling place and drop box pages, the state's drop box report for the 24 jurisdictions the county lists none for, then parcel centroids and street centerlines for coordinates |
+| `early-voting.json` | `refresh_early_voting.py` (weekly, see below), then `geocode_places.py` | Kent County's early voting page, with the city's as a cross-check |
+| `gr-clerk.json` | `refresh_gr_clerk.py` | the Grand Rapids City Clerk's election pages |
+| `sources.json` | `refresh_gr_clerk.py` and `merge_foia_dropboxes.py`, through `sources.py` | the registry that records with a `src` key point at |
+| `cameras.json` | `refresh_cameras.py` (daily, see below) | OpenStreetMap |
 | `precincts.geojson` | `refresh_precincts.py` | Michigan Secretary of State |
 | `precincts.json` | `build_precincts.py` | slimmed from `precincts.geojson`, plus each jurisdiction's outline |
 | `boundary.json` | `refresh_boundary.py` | Michigan Geographic Framework |
@@ -39,24 +43,42 @@ alone. Everything else runs on a bare interpreter.
 | `neighbors.json` | `refresh_neighbors.py` | Michigan Geographic Framework |
 | `polling.json` | **hand-edited, no script** | City Clerk precinct directory PDF |
 | `elections.json` | **hand-edited, no script** | Secretary of State and City Clerk |
+| `graph.json`, `addresses.json` | **no script: frozen** | the city-only files from before the county widening (see below) |
 
 `build/` holds intermediate pulls that are not committed. It is gitignored, and
 the scripts create it as needed.
 
-### Cameras refresh themselves
+### Two files refresh themselves
 
 `.github/workflows/refresh-cameras.yml` runs `scripts/refresh_cameras.py` daily
-at 06:17 UTC, commits `cameras.json` if it changed, and asks the Pages workflow
-to publish. Running it by hand is only for when you want the list updated
-sooner. The job refuses to write a truncated Overpass result, and separately
-refuses any pull that drops more than a fifth of the committed set, on the
-grounds that cameras come off the map in ones and twos rather than in droves.
+at 06:17 UTC and commits `cameras.json` if it changed. The push is made with a
+deploy key, so it fires the Pages workflow like any push to `main`. Running it
+by hand is only for when you want the list updated sooner. The script skips
+any Overpass answer whose remark reports a runtime error, a timeout or
+truncation, and refuses to write when no endpoint gives a complete one or the
+result holds under 20 cameras. It does not refuse a large drop: a genuine
+removal and a bad answer look alike from here, and the page must show the
+latest set, so the change in count is printed in the log and in the commit
+subject instead.
+
+`.github/workflows/refresh-early-voting.yml` runs
+`scripts/refresh_early_voting.py` every Tuesday at 07:43 UTC and commits
+`early-voting.json` if it changed. It does not geocode: the script carries a
+site's coordinates forward while its address text is unchanged, and a new site
+waits for `geocode_places.py`, run by hand. Since 2026-09-24 the county's site
+has answered this project with 403, so the run is expected to fail until that
+changes. Neither page loads the file, so nothing a reader sees depends on it.
 
 ## Where each file came from
 
-Every file under `site/data/` carries a `provenance` block: source, the URL
-actually fetched, licence, the script that writes it, and `generated`, the
-date the source was last read.
+Every file under `site/data/` except `sources.json` carries a `provenance`
+block saying where it came from. The eight scripts that use
+`scripts/provenance.py` (the graph, precinct, boundary, street-name, landcover
+and camera builders) write the same fields: source, the URL actually fetched,
+licence, the script that writes it, and `generated`, the date the source was
+last read. The election scrapers, `refresh_addresses.py` and
+`refresh_precincts.py` write their own blocks, and the two hand-edited files
+name their sources by hand.
 
 `generated` is null on files written before the block existed. That is
 deliberate. It was not back-filled from the git log, because git records when
@@ -66,17 +88,19 @@ the next run of the owning script replaces it with a real date.
 
 The block sits beside `meta` rather than inside it. `meta` carries counts and
 bounding boxes that the browser reads at runtime, so it should not grow
-fields only a maintainer cares about. `scripts/provenance.py` builds the block
-so the eight writers cannot drift apart on field names, which is how four
-files ended up recording the same fact as `generated`, `retrieved`,
-`source_last_edited` and `transcribed`.
+fields only a maintainer cares about.
 
 ## Full rebuild
 
-Order matters in two places, both because a later step writes into an earlier
-step's output.
+Order matters wherever one step reads or rewrites another's output. The
+precincts come first because the graph chunks, the address files and the
+polling scrape are all cut or checked against them.
 
 ```
+# Precincts
+python3 scripts/refresh_precincts.py     # SOS precinct polygons   -> site/data/precincts.geojson
+python3 scripts/build_precincts.py       # slim them + outline each jurisdiction -> site/data/precincts.json
+
 # Routing graph
 python3 scripts/refresh_centerlines.py   # REGIS/Kent centerlines  -> build/
 python3 scripts/build_graph.py           # compile the county graph -> build/graph.json
@@ -85,63 +109,78 @@ python3 scripts/refresh_osm_via_nodes.py # the relations' via nodes -> build/
 python3 scripts/build_restrictions.py    # attach restrictions     -> build/graph.json
 python3 scripts/build_graph_chunks.py    # cut per jurisdiction    -> site/data/graph/ (+ index.json)
 
-# Precincts, addresses, boundaries
-python3 scripts/refresh_precincts.py     # SOS precinct polygons   -> site/data/precincts.geojson
-python3 scripts/build_precincts.py       # slim them + outline each jurisdiction -> site/data/precincts.json
-python3 scripts/refresh_addresses.py     # parcels -> precincts    -> site/data/addresses.json
-python3 scripts/refresh_boundary.py      # city limits             -> site/data/boundary.json
+# Addresses and street names
+python3 scripts/refresh_addresses.py     # parcels -> precincts    -> site/data/addresses/<mcd>.json
 python3 scripts/refresh_neighbors.py     # neighbouring street names -> site/data/neighbors.json
 
 # Places to vote, county-wide
 python3 scripts/refresh_polling.py       # county polling places + drop boxes -> site/data/polling/
 python3 scripts/merge_foia_dropboxes.py  # the state's boxes, where the county lists none
 python3 scripts/refresh_early_voting.py  # county early voting sites -> site/data/early-voting.json
+python3 scripts/refresh_gr_clerk.py      # the city's dates, sites and boxes -> site/data/gr-clerk.json
 python3 scripts/geocode_places.py        # coordinates for all of the above, in place
 
 # Map furniture and cameras
+python3 scripts/refresh_boundary.py      # city limits             -> site/data/boundary.json
 python3 scripts/refresh_landcover.py     # water, parks, rail      -> site/data/landcover.json
 python3 scripts/refresh_cameras.py       # plate readers           -> site/data/cameras.json
 ```
 
-**`merge_foia_dropboxes.py` fills a gap the county leaves.** Kent County's
-thirty pages list 24 drop boxes across six jurisdictions; the Bureau of
-Elections' statewide report lists 53 across all thirty. So twenty-four
-jurisdictions had no box on this site and their voters were sent to the
-clerk's office during business hours, when most of them in fact have a box
-open around the clock. This reads the Bureau's report and fills only that
-silence: a jurisdiction whose county page lists a box is left exactly as
-scraped, and every row this adds carries `src`, pointing at the release
-in `sources.json` so the page can name who published it.
+**`build_restrictions.py` must follow `build_graph.py`.** A graph rebuild
+discards restrictions, so they have to be re-attached afterwards or the router
+silently permits banned turns.
 
-The report arrives as a file, not a URL, so there is nothing to archive with
-`cite()` and no page to re-read -- it is committed instead (see below), and a
-run with no argument reads it. Pass a path when a later release lands, and it
-will replace what it wrote before. `refresh_polling.py` carries
-these rows forward rather than overwriting them, and drops them the moment the
+**`build_precincts.py` must follow `refresh_precincts.py`.** It reads the
+geojson that script writes. Both guard, at different points.
+`refresh_precincts.py` checks that there are 202 precincts in 30
+jurisdictions, and that Grand Rapids' 59 fall in their wards' expected ranges,
+before writing the geojson; `build_precincts.py` re-checks the precinct and
+jurisdiction counts, and that every jurisdiction came out with an outline. A
+bad upstream pull stops at one of them rather than reaching the browser.
+
+**`geocode_places.py` must follow `refresh_polling.py`, every time.** The
+scrape writes the polling files afresh and drops the coordinates on every
+polling place and clerk's office, and the page offers no route to a place
+without one. `geocode_places.py` places every polling place, drop box, clerk's
+office and early voting site from the county parcel layer first and the
+street centerlines second, and the centerline pass runs `site/router.js`
+itself, the same file the page loads, so a coordinate computed at build time
+cannot drift from one the browser would compute. Grand Rapids is skipped:
+`polling.json` carries the city's own coordinates, and the page places the
+clerk's sites and boxes itself. Pass `--parcels FILE` to cache the parcel pull
+(232,000 rows, a few minutes) between runs, and `--dry-run` to see the hit
+rate without writing. Anything it cannot place is listed by name at the end
+rather than guessed.
+
+**`merge_foia_dropboxes.py` fills a gap the county leaves.** The county's
+thirty pages, as scraped into this repository, hold 23 drop boxes across six
+jurisdictions; the Bureau of Elections' statewide report lists 53 across all
+thirty. This reads the Bureau's report and fills only the silence: a
+jurisdiction whose county page lists a box is left exactly as scraped, and
+every row this adds carries `src`, pointing at the release in `sources.json`
+so the page can name who published it. `refresh_polling.py` carries these
+rows forward rather than overwriting them, and drops them the moment the
 county publishes a box of its own for that jurisdiction, because the county is
 the closer source.
 
 ### Where the state's data came from, and how far to trust it
 
-The three files were obtained by **FOIA request to the Michigan Department of
-State**, released 2026-09-21. They are not on a state website, so the usual
-provenance mechanism does not reach them: there is no URL to read and no page
-for the archive to capture. They are recorded instead as
-`mdos-dropbox-report-2026-11` in `site/data/sources.json`, registered
-`carried: false` -- read once, by hand, and not tracked, the same as the MVIC
-reading in `refresh_gr_clerk.py`. Every drop box row this project takes from
-the release points at that entry with `"src"`, so the page can name the Bureau
-rather than the fact living in a commit message.
+The report arrived as a file, not a URL, so there is nothing to archive with
+`cite()` and no page to re-read. The three files were obtained by **FOIA
+request to the Michigan Department of State**, released 2026-09-21, and are
+recorded as `mdos-dropbox-report-2026-11` in `site/data/sources.json`,
+registered `carried: false`: read once, by hand, and not tracked, the same as
+the MVIC reading in `refresh_gr_clerk.py`.
 
 **The release itself is committed, at `records/mdos-foia-2026-09-21/`**, under
-the Bureau's own file names, with the request and the findings below written
-up beside it and a sha256 for each file. It is outside `site/` on purpose:
-`pages.yml` publishes `site/` and nothing else, and 1.3 MB of CSV has no place
-in a bundle whose point is that a lookup needs nothing further from the
-network. Committing it is what makes a run reproducible -- a FOIA response
-arrives once, and a script that reads one cannot be checked by anyone who does
-not have the file. `merge_foia_dropboxes.py` reads that copy when given no
-argument.
+the Bureau's own file names, with the request, a sha256 for each file and the
+findings below written up beside it. A FOIA response arrives once, and a
+script that reads one cannot be checked by anyone who does not have the file.
+It is outside `site/` on purpose: `pages.yml` publishes `site/` and nothing
+else, and 1.3 MB of CSV has no place in a bundle whose point is that a lookup
+needs nothing further from the network. `merge_foia_dropboxes.py` reads that
+copy when given no argument; pass a path when a later release lands, and it
+will replace what it wrote before.
 
 The request asked for three statewide records: election day polling places at
 precinct level, early voting sites with their dates and hours, and drop boxes.
@@ -153,7 +192,7 @@ this project already had is what established how far it can be trusted:
 |---|---|
 | Kent County precincts | **Agrees**: all 202 precincts, 30 jurisdictions and every ward flag match `precincts.json` |
 | Grand Rapids early voting | **Agrees**: same four sites, same 10/20-11/01 window, same 13 days as the city clerk |
-| Drop boxes | **Better than the county**: 53 for Kent against the county's 24, a box in all thirty jurisdictions |
+| Drop boxes | **Better than the county**: 53 for Kent against the 23 scraped from the county's pages, a box in all thirty jurisdictions |
 | Early voting, statewide | **Badly incomplete**: 36 of 83 counties, 375 of 1,521 jurisdictions, Oakland County absent entirely, against a constitutional nine-day requirement everywhere |
 | Grand Rapids ZIPs | **Wrong three times**: precincts 1, 24 and 34, each checked against USPS. See the note in `polling.json` |
 
@@ -162,43 +201,9 @@ precincts and Grand Rapids early voting, and not to be trusted for statewide
 early voting or for Grand Rapids ZIPs. If a later release is used for anything
 beyond drop boxes, check it the same way first and write down what you found.
 
-**`geocode_places.py` runs last and needs `node`.** It places every polling
-place, drop box and early voting site from the county parcel layer first and
-the street centrelines second, and the centreline pass runs `site/router.js`
-itself -- the same file the page loads -- so a coordinate computed at build
-time cannot drift from one the browser would compute. Pass `--parcels FILE` to
-cache the parcel pull (232,000 rows, a few minutes) between runs, and
-`--dry-run` to see the hit rate without writing. Anything it cannot place is
-listed by name at the end rather than guessed.
+## Files no script writes
 
-**How the browser loads the graph.** It reads `graph/index.json`, allocates
-typed arrays once from the totals, then streams the thirty chunks through one
-at a time, a few fetches ahead, dropping each parsed document as it is folded
-in. Every jurisdiction ends up resident, so a route can cross a city line with
-no second fetch, and the peak while loading stays near the 13 MiB steady state
-rather than the 102 MiB that parsing all thirty at once would cost.
-
-**`build_restrictions.py` must follow `build_graph.py`.** A graph rebuild
-discards restrictions, so they have to be re-attached afterwards or the router
-silently permits banned turns.
-
-**`build_precincts.py` must follow `refresh_precincts.py`.** It reads the
-geojson that script writes, and refuses to run if it does not hold exactly 202
-precincts.
-
-Both steps guard, at different points. `refresh_precincts.py` checks the count
-and that each ward's precinct numbers fall in its expected range before writing
-the geojson; `build_precincts.py` re-checks the precinct and jurisdiction
-counts, and that every jurisdiction came out with an outline. A bad upstream
-pull stops at one of them rather than reaching the browser.
-
-`scripts/build_graph_osm.py` is not part of this sequence. It builds the same
-graph from OpenStreetMap instead of the city centerlines, for comparison. The
-shipped `graph.json` is the centerline build.
-
-## The two files with no script
-
-These are transcribed by hand, and they are the ones most likely to be wrong,
+Two are transcribed by hand, and they are the ones most likely to be wrong,
 because nothing recomputes them.
 
 **`polling.json`** comes from the City Clerk's precinct directory PDF. Each
@@ -216,50 +221,34 @@ Garfield and Orthodox across editions. Those are corrected in `polling.json`,
 and two venue names there are deliberately fuller than the PDF prints them.
 Do not "fix" them back.
 
-**`elections.json`** holds election dates, the early voting window, its hours,
-and the early voting sites. Add the next election when it is announced. The
-page shows the first date that has not passed and ignores the rest, so a stale
-entry is harmless and no date at all is better than a wrong one. Early voting
-sites belong to the election they sit in: check them against the clerk's
-posting for that election rather than carrying the previous one's forward.
+**`elections.json`** holds the election dates, and, for an election the City
+Clerk's file does not describe, the early voting window, hours and sites. When
+`gr-clerk.json` names the next election, both pages take the early voting
+window from it instead, which is why the November 2026 entry carries only its
+date and name. Add the next election when it is announced. The page shows the
+first date that has not passed and ignores the rest, so a stale entry is
+harmless and no date at all is better than a wrong one.
+
+**`graph.json`** and **`addresses.json`** are frozen rather than hand-edited:
+the city-only road network and address index from before the county widening.
+No script rebuilds them and neither page loads them. `tests/test_router.mjs`
+still reads both, and `scripts/check_polling_civic.py` reads `addresses.json`.
+`graph.json` also still holds the Grand Rapids sign inventory's turn
+restrictions, which the shipped graph no longer uses (see below).
 
 ## Verifying a rebuild
 
-The suites live in `tests/` and the two network tools in `scripts/`; all of
-them find the repository root from their own location, so they run from any
-directory.
+The suites and the two network tools are listed, with what each checks, in
+the README's "Checking the data". Run them all before committing a rebuild;
+the suites also run on every pull request, so a rebuild that breaks the
+routing or the page is caught before it can be merged and deployed.
 
-```
-node tests/test_display_case.mjs         # display casing invariants over the real corpus
-node tests/test_router.mjs               # routing, chunks, restrictions, addresses, the county index, the polls clock
-node tests/audit_routes.mjs              # drives hundreds of real trips countywide, checks every route
-npm ci && node tests/test_page.mjs       # the page itself, in a browser
-node tests/test_simple_page.mjs          # /simple, in a browser
-node tests/test_early_voting_states.mjs  # the early voting states and election day, from a dated fixture
-node tests/test_check_links.mjs          # what the link checker makes of a response
-node tests/test_check_links_inputs.mjs   # that it can still read every file it names
-node scripts/compare_osrm.mjs 30         # differential check against OSRM
-node scripts/check_links.mjs             # every external link, the provenance URLs included
-```
-
-All but the last two also run on every pull request, so a rebuild that breaks
-the routing or the page is caught before it can be merged and deployed. Those
-two reach other people's servers and gate nothing; the link check runs weekly
-on its own schedule, and after a rebuild changes a provenance URL it is worth
-running by hand.
-
-`audit_routes.mjs` is the one that matters. It routes across the real county,
-every jurisdiction and every one of the 202 polling places, and mechanically
-checks every result: edges join end to end, no edge is driven against its
-one-way, no freeway is used, every turn passes the restriction gate, no
-gratuitous U-turns, and the step distances add up. Its trips are seeded, so a
-failure can be reproduced rather than re-rolled away. It exits non-zero on any
-violation.
-
-`compare_osrm.mjs` sends origin and destination pairs to a public OSRM
-instance as a measuring stick. It is a development tool and is never used at
-run time: sending your trip to a routing server is the thing this project
-exists to avoid.
+After a data refresh the ones that earn their keep are `tests/audit_routes.mjs`,
+which drives real trips across the rebuilt county graph and checks every
+route, and `tests/test_polling_data.mjs`, which fails on any polling place
+left without a street address or a coordinate, and on any drop box outside
+Grand Rapids left the same way. After a rebuild changes a provenance URL, run
+`node scripts/check_links.mjs` by hand rather than waiting for the weekly run.
 
 ## Upstream etiquette
 
@@ -272,16 +261,20 @@ If an endpoint returns 429, back off rather than retrying immediately.
 
 | Data | Endpoint |
 |---|---|
-| Street centerlines, one-ways, speeds | `services2.arcgis.com/L81TiOwAPO1ZvU9b/…/Transport_Street_Centerlines/FeatureServer/6` |
+| Street centerlines, one-ways, speeds | `services2.arcgis.com/L81TiOwAPO1ZvU9b/…/Transport_Street_Centerlines/FeatureServer/6`, the REGIS/Kent dataset, hosted by the City |
 | Voting precincts | `services3.arcgis.com/dxRQUfTDNtfqZ301/…/VotingPrecinct/FeatureServer/0` |
-| Parcel addresses | `gis.kentcountymi.gov/agisprod/…/ParcelsWithCondos/FeatureServer/0` |
+| Parcel addresses, and coordinates for places to vote | `gis.kentcountymi.gov/agisprod/…/ParcelsWithCondos/FeatureServer/0` |
 | City limits, neighbouring streets | `gisagocss.state.mi.us/…/michigan_geographic_framework/MapServer` |
-| Cameras, turn restrictions, water, parks | Overpass API, OpenStreetMap |
-| Polling places | City Clerk precinct directory (PDF) |
+| Cameras, turn restrictions, water, parks, rail | Overpass API, OpenStreetMap |
+| Polling places, drop boxes, clerks | `www.kentcountymi.gov`, one page per jurisdiction; Algoma Township's own elections page for one address |
+| Grand Rapids polling places | City Clerk precinct directory (PDF), by hand |
+| Early voting | `www.kentcountymi.gov/250/Drop-Box-Polling-Locations`, and the City Clerk's early voting page as a cross-check |
+| Grand Rapids early voting and drop boxes | the City Clerk's current-election page |
+| Drop boxes where the county lists none | the Bureau of Elections' FOIA release, committed under `records/` |
 
 The precinct layer is statewide, so `refresh_precincts.py` filters it
-server-side with `CountyFIPS='081' AND MCDFIPS='34000'` and receives 59
-features rather than every precinct in Michigan.
+server-side with `CountyFIPS='081'` and receives Kent County's 202 precincts
+rather than every precinct in Michigan.
 
 ## Archiving the pages we scrape
 
@@ -298,7 +291,7 @@ like it. Measured on 2026-09-08: the county index was captured; the city
 clerk's page was refused and the newest existing capture was 84 days old; of
 the thirty jurisdiction pages, 27 had a capture to cite with a median age of
 306 days and three had none at all. A year-old capture of a polling place page
-is a capture of the wrong election -- it proves the page existed, not that it
+is a capture of the wrong election: it proves the page existed, not that it
 said what we wrote down.
 
 **With keys it becomes reliable.** Sign in at archive.org, generate an S3 key
@@ -311,9 +304,11 @@ export ARCHIVE_S3_SECRET=...
 
 `scripts/archive.py` picks them up from the environment on its own; nothing
 else changes and no script needs an argument. The keys are never read from a
-file in this repository and never written into one -- the only thing that
-reaches a data file is the resulting snapshot URL. In CI they belong in a
-repository secret, like the Civic key.
+file in this repository and never written into one; the only thing that
+reaches a data file is the resulting snapshot URL. In CI they would go in
+repository secrets named `ARCHIVE_S3_KEY` and `ARCHIVE_S3_SECRET`, which the
+early voting workflow already passes through. Neither is set today, so the
+scheduled run cites rather than captures.
 
 With keys present the bulk path changes too: the thirty jurisdiction pages
 stop citing and start capturing, because SPN2's own `if_not_archived_within`
@@ -341,9 +336,10 @@ after it, and again in the last fortnight if anything looked unsettled.
 
 ```bash
 python3 scripts/refresh_polling.py        # county pages -> site/data/polling/
+python3 scripts/merge_foia_dropboxes.py NEWER.csv   # only if a newer release has arrived
 python3 scripts/refresh_early_voting.py   # county + city cross-check
 python3 scripts/refresh_gr_clerk.py       # the city's own dates and sites
-python3 scripts/merge_foia_dropboxes.py NEWER.csv   # only if a newer release has arrived
+python3 scripts/geocode_places.py         # always: refresh_polling.py drops the coordinates
 ```
 
 Then **read what they wrote**. Each script checks shape, never sense: that
@@ -359,30 +355,30 @@ What a person has to do by hand, every election:
    Rapids precincts; `refresh_early_voting.py` prints the county against the
    city. Disagreement is the point of running them: in September 2026 the
    county was still describing the August primary while the city had published
-   November, and it listed three early voting sites where the city had opened
-   four.
+   November.
 2. **Check the election each file names.** `gr-clerk.json` carries `election`,
    `early-voting.json` carries `election`; if either is not the election you
    are publishing for, that source is stale and its contents must not ship.
 3. **Re-transcribe `polling.json` from the clerk's PDF.** The directory moves
    to a new generated filename every election, so the URL in the file's
-   provenance will 404 -- find the current one from the clerk's elections page
+   provenance will 404; find the current one from the clerk's elections page
    rather than assuming it is gone. This is the only source carrying entrance
    notes and the consolidation footnotes, where one precinct votes at
    another's location for a single election.
-4. **Update `elections.json` by hand** with the election date, and with the
-   early voting window and hours read from `gr-clerk.json`. Never derive the
-   window from statute: the minimum is nine days ending the Sunday before, and
-   Grand Rapids opened on the thirteenth day for November 2026.
+4. **Add the election to `elections.json` by hand**, with its date and name.
+   The pages take the early voting window from `gr-clerk.json` while it names
+   that election, so a window here is only a fallback. Never derive one from
+   statute: the minimum is nine days ending the Sunday before, and Grand
+   Rapids opened on the thirteenth day for November 2026.
 5. **Check the archive stamps.** Each scraped file's provenance carries a
    Wayback URL for the page it read. If it says the capture predates the read,
    the archive is showing an older version of the page and the citation is
-   weaker than it looks -- submit one by hand at `web.archive.org/save/`.
+   weaker than it looks; submit one by hand at `web.archive.org/save/`.
 
 None of this is automatable and none of it should be pretended away. The
-durable fix is upstream: a Bureau of Elections records request returns the
-statewide polling list as a spreadsheet, one row per precinct, once per
-election. Until that is a standing arrangement, this checklist is the process.
+durable fix is upstream: the Bureau of Elections holds the statewide polling
+list, and a records request returned it for November 2026 (see `records/`).
+Until that is a standing arrangement, this checklist is the process.
 
 ## Turn restrictions come from OpenStreetMap alone
 
@@ -397,18 +393,19 @@ Anything that cannot be tied to a junction unambiguously is dropped rather
 than guessed, because a wrong restriction silently forbids a legal turn.
 240 attach across Kent County.
 
-The City of Grand Rapids sign inventory was the second source until the county
-widening and is no longer used. It covered one jurisdiction of thirty, had been
-frozen upstream since 2024-03-29, and inferring a ban from a sign's DIRECTION
-column was inference on top of inference. Dropping it cost 45 restrictions in
-Grand Rapids and bought one source, one licence, and the same treatment in
-every jurisdiction. `refresh_signs.py` is deleted; nothing reads
-`build/signs.json`.
+The City of Grand Rapids sign inventory is no longer a source. It covered one
+jurisdiction of thirty, had been frozen upstream since 2024-03-29, and
+inferring a ban from a sign's DIRECTION column was inference on top of
+inference. One source with one licence, applied the same way in every
+jurisdiction, is worth more than the 45 extra restrictions it gave Grand
+Rapids. No script reads it now; only the frozen `site/data/graph.json` still
+holds what it once contributed.
 
 ## Licensing
 
 Code is public domain under the Unlicense. Road geometry, address ranges and
-posted speeds come from the REGIS/Kent County centerlines. **Turn restrictions
-and camera locations come from
-OpenStreetMap and are ODbL**, so `graph.json` and `cameras.json` carry an
-ODbL obligation: keep the attribution and share derivatives alike.
+posted speeds come from the REGIS/Kent County centerlines. **Turn
+restrictions, camera locations, water, parks and rail come from OpenStreetMap
+and are ODbL**, so the graph chunks under `graph/`, `graph.json`,
+`cameras.json` and `landcover.json` carry an ODbL obligation: keep the
+attribution and share derivatives alike.
