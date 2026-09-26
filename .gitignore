@@ -5,6 +5,6 @@ __pycache__/
 .venv/
 .DS_Store
 
-# Ad-hoc probe scripts. Two of these were committed by accident and sat in
-# the repo pointing at a port nothing serves; the real tests live in tests/.
+# Ad-hoc probe scripts: prefix a scratch file with _ and it stays out of the
+# repository. The real tests live in tests/.
 _*.mjs

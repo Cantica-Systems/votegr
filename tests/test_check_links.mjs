@@ -1,6 +1,6 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
 // Plain-assert tests for the link checker's one judgement call: what a
-// response means. Run: node test_check_links.mjs
+// response means. Run: node tests/test_check_links.mjs
 //
 // This runs in checks.yml with the rest of the suite, unlike check_links.mjs
 // itself, because classify() is a pure function over a status code and makes

@@ -3,14 +3,11 @@
 // hundreds of real trips and mechanically checks every safety invariant on
 // every route produced. Run it after any data refresh or router change.
 //
-//   node audit_routes.mjs [tripCount] [seed]
+//   node tests/audit_routes.mjs [tripCount] [seed]
 //
-// It used to drive the city: site/data/graph.json, Grand Rapids' 59 polling
-// places, and cameras clipped to the city rings. The site ships a county
-// network four times that size and sends people to 202 polling places, so
-// three quarters of the roads and 143 of the destinations were never driven
-// by anything. Widening it found no router defect, which is worth saying,
-// but it did find that invariant 5 was wrong.
+// It drives the county network the page ships, every camera in the county,
+// and all 202 polling places: the roads and destinations a voter can
+// actually be sent over and to.
 //
 // Invariants checked on every route:
 //   1. CONTIGUOUS   each edge starts where the previous one ended
@@ -28,10 +25,8 @@ const fs = require('fs');
 
 // The county network the page actually loads, built the way the page builds
 // it: the index, then every chunk, then finish. Not site/data/graph.json,
-// which is the city only. The two are not close -- 44,508 edges against
-// 10,521 -- so auditing the small one left three quarters of the roads this
-// site will route somebody over never driven by any test, and every polling
-// place outside Grand Rapids unvisited.
+// which is the city only: 10,521 edges against the county's 39,164 (the run
+// prints the figure), and no polling place outside Grand Rapids.
 const index = JSON.parse(fs.readFileSync('site/data/graph/index.json'));
 const graph = R.Graph.streaming(index);
 for (const chunk of index.chunks) {
@@ -39,9 +34,8 @@ for (const chunk of index.chunks) {
 }
 graph.finish();
 
-// Every camera in the county. This used to clip to the Grand Rapids city
-// rings, which made the avoidance figures below a statement about the city
-// while the routes ran countywide.
+// Every camera in the county, so the avoidance figures below describe the
+// same area the routes run over.
 const cams = JSON.parse(fs.readFileSync('site/data/cameras.json')).cameras;
 graph.assignCameras(cams);
 
@@ -99,9 +93,8 @@ function auditRoute(r, label, problems) {
     }
     // 5. u-turns only when they buy something
     //
-    // "The node has another exit" is NOT the test, though it was until the
-    // audit started driving the county. Turn restrictions make a u-turn a
-    // legal tool: at 60th St SE and Thornapple River Dr SE, an OSM
+    // "The node has another exit" is NOT the test. Turn restrictions make a
+    // u-turn a legal tool: at 60th St SE and Thornapple River Dr SE, an OSM
     // restriction forbids the turn from Thornapple onto 60th westbound, so
     // the only lawful way onto it is to approach from the east. The router
     // runs 68 m up 60th, turns around and comes back, which is exactly right
@@ -109,7 +102,7 @@ function auditRoute(r, label, problems) {
     //
     // So ask what the u-turn was FOR: could the route have made the move it
     // makes afterwards without it? Arrived at P on W, bounced off U, and
-    // left P on X -- if W to X at P was allowed all along, the detour bought
+    // left P on X: if W to X at P was allowed all along, the detour bought
     // nothing and is a real finding.
     if (i > 0 && r.edges[i - 1] === eid) {
       const P = r.nodes[i + 1], W = r.edges[i - 2], X = r.edges[i + 1];
@@ -130,9 +123,7 @@ function auditRoute(r, label, problems) {
 const N = Number(process.argv[2] || 400);
 
 // Seeded, so a failure can be reproduced and looked at instead of being
-// re-rolled away on the next run. Unseeded this drove a different four
-// hundred trips every time, which on the city graph never failed and so
-// never mattered; over the county it means CI can go red on a trip nobody
+// re-rolled away on the next run: unseeded, CI could go red on a trip nobody
 // can get back. Pass a seed as the second argument to explore other ones.
 const SEED = Number(process.argv[3] || 20260910);
 let _s = SEED >>> 0;
@@ -184,10 +175,9 @@ while (ran < N) {
   if (exp.size > 0) { exposedFast++; if (avoid.cameraCount < exp.size) camAvoidWorked++; }
 }
 
-// Every polling place must be reachable from a spread of origins. The
-// origins were four points inside Grand Rapids, which could not say anything
-// about whether somebody in Sparta can reach their own polling place. They
-// are now spread over the county, snapped once rather than per destination.
+// Every polling place must be reachable from a spread of origins across the
+// county, so that somebody in Sparta is shown to reach their own polling
+// place, not only somebody downtown. Snapped once rather than per destination.
 let pollFail = [], noCoord = [];
 const origins = [
   [42.912, -85.700],   // Wyoming, south west
@@ -200,7 +190,7 @@ const origins = [
 for (const [k, p] of Object.entries(poll)) {
   const lat = p.lat, lng = p.lng;
   // A polling place with no coordinate cannot be routed to at all, which is
-  // a worse failure than an unreachable one and used to pass silently.
+  // a worse failure than an unreachable one, so it fails the run too.
   if (lat == null) { noCoord.push(k); continue; }
   const d = graph.snapToRoad(lat, lng);
   // Nearest origin first. Every origin proves the same thing about
@@ -232,4 +222,9 @@ console.log(`polling places unreachable: ${pollFail.length}` +
 console.log(`fast routes passing >=1 camera: ${exposedFast}; avoidance reduced: ${camAvoidWorked}`);
 console.log(`\nINVARIANT VIOLATIONS: ${problems.length}`);
 problems.slice(0, 20).forEach(p => console.log('  ' + p));
-process.exit(problems.length || pollFail.length || noCoord.length ? 1 : 0);
+// The sampling loop gives up rather than spin on a box with no roads in it,
+// and an audit that ran short of its trips has checked less than it says.
+// Zero trips and zero violations is not a pass.
+const short = ran < N;
+if (short) console.log(`\nONLY ${ran} OF ${N} RANDOM TRIPS COULD BE SAMPLED`);
+process.exit(problems.length || pollFail.length || noCoord.length || short ? 1 : 0);

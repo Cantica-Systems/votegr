@@ -10,10 +10,12 @@
 // The invariants are what actually protect the site. displayCase runs at
 // DISPLAY time over strings that are still matched, geocoded and compared in
 // their original ALL CAPS form, so it may change case and nothing else. They
-// run here over every street name in the graph and every polling and early
-// voting address, several thousand real strings, rather than a handful.
+// run here over every street name in the county graph the page loads, every
+// polling place and drop box in all thirty jurisdictions, and the city
+// clerk's early voting sites: over ten thousand real strings, rather than a
+// handful.
 import { createRequire } from 'module';
-import { readFile } from 'fs/promises';
+import { readFile, readdir } from 'fs/promises';
 const require = createRequire(import.meta.url);
 const D = require('../site/display-case.js');
 
@@ -58,8 +60,22 @@ const elections = await read('../site/data/elections.json');
 for (const el of elections.elections) {
   for (const s of el.early_voting_sites || []) corpus.push(s.name, s.address);
 }
-const graph = await read('../site/data/graph.json');
-for (const e of graph.edges) if (typeof e.n === 'string' && e.n) corpus.push(e.n);
+const clerk = await read('../site/data/gr-clerk.json');
+for (const s of clerk.early_voting_sites || []) corpus.push(s.name, s.address, s.entrance_note || '');
+for (const b of clerk.drop_boxes || []) corpus.push(b.name, b.address);
+// The county graph in its chunks, not graph.json: that is the city alone,
+// under a fifth of the street names the page actually displays.
+const index = await read('../site/data/graph/index.json');
+for (const c of index.chunks) {
+  const chunk = await read(`../site/data/graph/${c.mcd}.json`);
+  for (const e of Object.values(chunk.edges)) if (typeof e.n === 'string' && e.n) corpus.push(e.n);
+}
+const pollingDir = new URL('../site/data/polling/', import.meta.url);
+for (const f of (await readdir(pollingDir)).filter((f) => f.endsWith('.json'))) {
+  const d = await read(`../site/data/polling/${f}`);
+  for (const v of Object.values(d.precincts || {})) corpus.push(v.name, v.address, v.entrance_note || '');
+  for (const b of d.drop_boxes || []) corpus.push(b.name, b.address);
+}
 
 const strings = [...new Set(corpus.filter(Boolean))];
 let badUpper = null, badIdem = null;
@@ -72,7 +88,7 @@ ok(`UPPER-invariant across ${strings.length} real strings`, badUpper === null,
    badUpper ? `${JSON.stringify(badUpper[0])} -> ${JSON.stringify(badUpper[1])}` : '');
 ok(`idempotent across ${strings.length} real strings`, badIdem === null,
    badIdem ? JSON.stringify(badIdem) : '');
-ok('corpus is not vacuously small', strings.length > 1000, `only ${strings.length}`);
+ok('corpus is not vacuously small', strings.length > 8000, `only ${strings.length}`);
 
 console.log(`\n${fails === 0 ? 'display case: all passed' : fails + ' FAILED'}`);
 process.exit(fails ? 1 : 0);
