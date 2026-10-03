@@ -1,44 +1,27 @@
+// The self-drawn basemap and the license plate camera marker and popup.
+
 import { displayCase, esc } from './voting.js';
 
-/* Released into the public domain under the Unlicense, see UNLICENSE.
- * Self-drawn basemap.
- *
- * Draws the map from files the page already holds: the county road graph in
- * data/graph/ (packed by router.js), plus water, parks and rail in
- * landcover.json. No tiles, so no request leaves the browser to draw the
- * map, which is the whole point of the tool and something a raster basemap
- * cannot offer at any quality.
- *
- * Rendered to two canvases, the ground and the labels above the route, via
- * Leaflet's Layer API rather than as SVG paths: 39,164 street segments as
- * DOM nodes would crawl on a phone.
- */
+// ---- Basemap layer ----
+// No tiles: a tile server would see every pan. Drawing from data the page already holds
+// is what lets the site say nothing leaves the browser.
+// Canvas, not SVG: about 39k street segments as DOM nodes would crawl on a phone.
 
-// Cartographic hierarchy, keyed by the class stamped in build_graph.py.
-// Width is in screen pixels and grows with zoom, so the map thins out when
-// you pull back instead of turning into a solid mat of lines.
+// Keyed by the road class scripts/build_graph.py stamps. w: screen px at each of STOPS.
 const CLASS = {
   1: { name: 'motorway', w: [1.6, 2.6, 5.0, 7.0], minZ: 9,  casing: 1.6 },
   2: { name: 'primary',  w: [1.0, 2.0, 3.6, 5.4], minZ: 10, casing: 1.3 },
   3: { name: 'arterial', w: [0.7, 1.4, 2.8, 4.2], minZ: 11, casing: 1.1 },
   4: { name: 'collector',w: [0.5, 1.0, 2.2, 3.4], minZ: 12, casing: 1.0 },
   5: { name: 'local',    w: [0,   0.6, 1.6, 2.6], minZ: 13, casing: 0.9 },
-  // Class 6 is "private" in the city, where it is a driveway or an alley
-  // and can wait for z15. In the townships it is 30% of every road there
-  // is -- gravel section roads carry the same class -- and drawn at zero
-  // width until z15 they left whole townships looking empty. So it gets a
-  // width from z13, thinner than a local street, and a casing so it reads
-  // as a road rather than a scratch on the land.
+  // Class 6: a driveway in the city, but 30% of township roads, so it is drawn from z13.
   6: { name: 'private',  w: [0,   0.5, 1.2, 1.9], minZ: 13, casing: 0.6  }
 };
 
-// Street names the label pass skips. Alleys are not worth naming; ramps
-// have long distinct names ("US-131 NB TO I-196 EB RAMP") that carpet
-// every interchange while telling a reader nothing a freeway label has not.
+// Names the label pass skips: alleys, and ramps, whose long names carpet every interchange.
 const ALLEY = /\bALY\b|\bALLEY\b/i;
 const RAMP = /\bRAMP\b/i;
 
-// Interpolate a width across zoom stops 10 / 13 / 15 / 17.
 const STOPS = [10, 13, 15, 17];
 function widthFor(cls, z) {
   const w = CLASS[cls] ? CLASS[cls].w : CLASS[5].w;
@@ -60,16 +43,11 @@ function palette(dark) {
     green:  '#1e2a24',
     rail:   '#333a45',
     casing: '#161a21',
-    // Local and private lifted off the land: at #2e343e on #20242c a local
-    // street was a rumour, and in a township that is most of the map.
+    // Local and private are lifted off the land: in a township they are most of the map.
     road: { motorway: '#4a5361', primary: '#3e4652', arterial: '#373e49',
             collector: '#353c48', local: '#38404d', private: '#333a46' },
     label:  '#c3ccd8', labelHalo: '#12161d', labelRoute: '#ffffff',
-    // Three hues because no jurisdiction in the county has a fourth ward:
-    // Grand Rapids, East Grand Rapids, Walker and Wyoming have three,
-    // Kentwood two, and every township none. A fourth would fall through to
-    // scopeHue and paint as a township, so check this list before trusting
-    // it on new data.
+    // No jurisdiction in the county has a fourth ward; a ward 4 would paint as a township.
     wardHue: { '1': 265, '2': 190, '3': 32 },
     wardSat: 54, wardL: 50, wardLStep: 6, wardAlpha: .26,
     scopeHue: 210, scopeBorder: '#ffd76a',
@@ -78,8 +56,7 @@ function palette(dark) {
     precinctFill: 'rgba(139,131,176,.12)',
     boundary: '#4a5361'
   } : {
-    // The land tone is pulled down from near-white so white roads actually
-    // register against it; at #f4f3ef the local streets disappeared.
+    // Land is kept off white so the white roads register against it.
     land:   '#e9e6df',
     water:  '#bcd6e6',
     green:  '#d7e3cf',
@@ -98,9 +75,6 @@ function palette(dark) {
   };
 }
 
-// Highways read as shields on a real map, not as words. "I-196 FWY" and
-// "US-131 FWY" set in the same type as a residential street is why they
-// disappear into the network. Returns null for an ordinary street.
 function shieldFor(name) {
   const m = String(name || '').toUpperCase()
     .match(/^(I|US|M)[-\s]?(\d+)\b/);
@@ -108,8 +82,6 @@ function shieldFor(name) {
   return { kind: m[1], num: m[2] };
 }
 
-// Draw a route shield centred on x,y. Interstates get the blue and red
-// marker, US routes a white escutcheon, state routes a plain square.
 function drawShield(ctx, sh, x, y, dark) {
   const num = sh.num, wide = num.length > 2;
   const w = wide ? 26 : 21, h = 17, r = 3;
@@ -147,29 +119,17 @@ function drawShield(ctx, sh, x, y, dark) {
   ctx.restore();
 }
 
-// How far street names and precinct numbers keep from a camera marker's
-// centre, in CSS pixels. The marker is 38x38 (cameras.js SIZE, a box that
-// includes the direction cone), so half its footprint is 19 and this
-// leaves 10 more of clear margin around it. Both things drawn on the label
-// canvas read it from here so the two passes cannot drift apart.
+// Labels keep this far (CSS px) from a camera's centre: half the marker SIZE below, plus 10.
 const MARKER_R = 29;
 
-// Does block x deserve its cell's name more than block y? Route proximity
-// first, then the longest run, then the edge index. The last term is what
-// makes it TOTAL: without it two equally good blocks are ordered by whichever
-// the loop met first, and that is not a property of the map.
+// The edge index tie-break makes the order total, so the same block wins every redraw.
 function betterBlock(x, y) {
   if (x.rd !== y.rd) return x.rd < y.rd;
   if (x.len !== y.len) return x.len > y.len;
   return x.idx < y.idx;
 }
 
-// Which occupancy cells a rotated text run covers. Sampled along the
-// baseline rather than computed as a rotated rectangle: the sampling is
-// cheap, and a label only needs to reserve roughly what it covers.
-// wx/wy shift canvas pixels into WORLD pixels so the cell boundaries are
-// fixed to the ground. Keyed on canvas pixels the whole lattice slid with
-// every pan, which changed who won a contested cell and moved names about.
+// wx/wy turn canvas px into world px, so the cells stay put on the ground during a pan.
 function spanCells(mx, my, ang, tw, fontPx, CELL, wx, wy) {
   const out = [], seen = {};
   const half = tw / 2, cosA = Math.cos(ang), sinA = Math.sin(ang);
@@ -187,10 +147,7 @@ function spanCells(mx, my, ang, tw, fontPx, CELL, wx, wy) {
   return out;
 }
 
-// Street names arrive in the data as ALL CAPS, which shouts on a map.
-// display-case.js knows this corpus's hard cases (10TH, MCREYNOLDS, US-131
-// NB), so the map spells a street the way the step list does. The raw name
-// is the fallback rather than nothing, should that script ever be missing.
+// Names arrive in ALL CAPS; displayCase (voting.js) spells them as the step list does.
 function labelText(name) {
   return displayCase(name);
 }
@@ -206,25 +163,13 @@ const BasemapLayer = L.Layer.extend({
 
   setDark(d) { this._dark = !!d; this._redraw(); },
 
-  // Precinct boundaries, drawn by default. This is a voting tool: the lines
-  // that decide where you vote should be visible before you have asked
-  // anything, not only after a lookup.
   setPrecincts(list) {
     this._precincts = list || null;
     this._redraw();
   },
 
-  // Every jurisdiction's own outline, by MCD code, as precincts.json ships
-  // them. They are computed there, by build_precincts.py, as the union of
-  // each jurisdiction's precincts.
-  //
-  // They are not derived here by keeping the precinct edges seen only
-  // once, on the reasoning that a shared border is seen twice. That is true
-  // of the ground and false of the file: each precinct polygon is thinned
-  // on its own upstream, so the two sides of a shared border keep
-  // different vertices off the same line and neither edge matches its
-  // twin. Derived that way, the outlines carry 263 km of interior precinct
-  // border wearing the jurisdiction border's colour.
+  // Outlines ship in precincts.json (scripts/build_precincts.py). They cannot be derived here
+  // from edges seen once: each precinct is thinned separately, so shared borders never match.
   setJurisdictions(list) {
     this._outlines = {};
     for (const j of list || []) {
@@ -238,62 +183,38 @@ const BasemapLayer = L.Layer.extend({
     return mcd == null ? null : (this._outlines || {})[String(mcd)] || null;
   },
 
-  // The jurisdiction the current answer is in, by MCD code. Only its
-  // precincts are tinted and only its outer border is drawn: an address
-  // in Solon Township lights Solon Township, and the rest of the county
-  // stays plain land with faint precinct lines for context. Nothing is
-  // tinted until there is an answer. Colouring all thirty jurisdictions at
-  // once makes everything outside the one you are looking at read as a
-  // darker, busier region rather than as not-in-scope.
   setScope(mcd) {
     this._scopeMcd = mcd == null ? null : String(mcd);
     this._scopeBorder = this._outline(this._scopeMcd);
     this._redraw();
   },
 
-  // What identifies a precinct: the state's 13-digit code, which every
-  // precinct in precincts.json carries. On a county map the number alone
-  // matches "Precinct 2" in every jurisdiction at once, and the fill that
-  // means "this one is yours" would light up all over the county.
+  // The state's 13-digit code: precinct numbers repeat across jurisdictions.
   _pid(pr) {
     return String(pr.code);
   },
 
-  // Which of the precinct overlays are drawn. Two hundred precinct
-  // outlines is a lot of ink for someone who only wants the route, so
-  // every piece of it can be switched off.
   setLayerOpts(o) {
     this._opts = o || {};
     this._redraw();
   },
 
-  // The precinct the current answer belongs to, filled so it reads as
-  // "this one is yours" among two hundred identical outlines.
   setActivePrecinct(id) {
     this._activePrecinct = id == null ? null : String(id);
     this._redraw();
   },
 
-  // Points the label grid must keep clear. Camera markers are DOM elements
-  // sitting on top of this canvas, so the grid cannot see them and would
-  // happily place a street name directly under one. Feeding their positions
-  // in lets the names avoid them the same way they avoid each other.
+  // Camera markers are DOM elements above the canvas, so labels learn their [lat, lng] here.
   setObstacles(pts) {
     this._obstacles = pts?.length ? pts : null;
     this._redraw();
   },
 
-  // Street names used by the current route. They are labelled before
-  // anything else, because a step that says "turn right onto Jefferson"
-  // is worthless if Jefferson is the one street on screen without a name.
   setRouteStreets(names, pts) {
     this._routeStreets = {};
     (names || []).forEach((n) => {
       if (n) this._routeStreets[String(n).toUpperCase()] = 1;
     });
-    // The route's own geometry, so a route street can be named ON the
-    // stretch actually driven. Naming the right street on a block a
-    // quarter mile past the turn is technically correct and no help.
     this._routePts = pts || null;
     this._redraw();
   },
@@ -304,16 +225,10 @@ const BasemapLayer = L.Layer.extend({
   onAdd(map) {
     this._map = map;
 
-    // Ground goes in the tile pane, BELOW the route. Labels go in a pane of
-    // their own above the overlay pane, so the route cannot paint over the
-    // street names. Drawing both on one canvas is what made the names
-    // vanish under the green line, which is also the answer to "is the
-    // route helping": it was hiding the thing you were reading.
+    // Ground goes under the route; labels get their own pane over it so the route cannot hide them.
     this._canvas = L.DomUtil.create('canvas', 'basemap-canvas');
     this._canvas.style.position = 'absolute';
-    // Top left, not the middle: _onZoom scales these, and setTransform
-    // writes only a transform. Left at the default the canvas would grow
-    // about its own centre and slide off the geography it is drawn on.
+    // Origin top left: _onZoom scales this canvas, and about its centre it would slide away.
     this._canvas.style.transformOrigin = '0 0';
     map.getPane('tilePane').appendChild(this._canvas);
 
@@ -327,20 +242,12 @@ const BasemapLayer = L.Layer.extend({
     this._labelCanvas.style.transformOrigin = '0 0';
     map.getPane('basemapLabels').appendChild(this._labelCanvas);
 
-    // Only redraw when the map SETTLES, and at most once per animation
-    // frame. During a drag Leaflet translates the pane, and these canvases
-    // are children of panes, so they move with it for free; redrawing on
-    // every `move` event repaints the whole road network per frame, which
-    // held panning to about 20fps when the network was the city alone.
-    //
-    // The canvases are drawn PADDED beyond the viewport so a pan reveals
-    // ground that is already there instead of blank edges. Same approach as
-    // Leaflet's own canvas renderer.
+    // Redraw only when the map settles, once per frame: a drag already moves the canvases with
+    // their pane, and repainting on every `move` held panning to about 20fps.
     this._schedule = this._schedule.bind(this);
     map.on('zoomend moveend viewreset resize', this._schedule, this);
     map.on('zoomanim', this._onZoomAnim, this);
-    // Every zoom, which in practice means every frame of a pinch. See
-    // _onZoom for why a pinch needs its own handling and a drag does not.
+    // Fires on every frame of a pinch; see _onZoom.
     map.on('zoom', this._onZoom, this);
     this._redraw();
   },
@@ -355,14 +262,11 @@ const BasemapLayer = L.Layer.extend({
     });
   },
 
-  // Group edges by class once, so each frame is a few long paths per class
-  // rather than 39,164 individual strokes with style changes between them.
+  // Edges grouped by class once, so a frame strokes a few long paths, not 39k short ones.
   _bucket() {
     if (!this._graph) return {};
     if (this._buckets) return this._buckets;
     const b = {};
-    // Built once and kept: this is the only place the whole county's
-    // geometry is materialized as arrays, and it is what gets drawn.
     const g = this._graph, n = g.edgeCount();
     for (let i = 0; i < n; i++) {
       const c = g.edgeClass(i) || 5;
@@ -372,31 +276,15 @@ const BasemapLayer = L.Layer.extend({
     return b;
   },
 
-  // A zoom animation scales the pane under us; hide until the redraw lands
-  // rather than showing stretched roads.
+  // A zoom animation would show stretched roads, so hide until the redraw lands.
   _onZoomAnim() {
     if (this._canvas) this._canvas.style.opacity = '0';
     if (this._labelCanvas) this._labelCanvas.style.opacity = '0';
   },
 
-  // A PINCH is not a zoom animation and gets no zoomanim. Leaflet runs it
-  // by calling _move on every frame with a fractional zoom: the pixel
-  // origin changes, so every layer that positions itself from it -- the
-  // markers, the route -- moves under the fingers, but nothing transforms
-  // the pane, so these canvases stayed exactly where they were. Measured
-  // over one pinch: the canvas transform never changed while a marker
-  // travelled 8,500px. The streets stood still and the pins flew off them.
-  //
-  // So the canvas has to follow the fractional zoom itself, which is what
-  // Leaflet's own tile layer does with its retained levels: scale the
-  // picture we already drew and let the redraw at zoomend replace it with
-  // a sharp one. The canvas was drawn centred on _drawnCenter at
-  // _drawnZoom, so under scale s its middle belongs at that latlng's
-  // current layer point.
-  //
-  // Zoom only. A drag translates the map pane, and these canvases are
-  // children of panes, so they come along for free -- reapplying a
-  // transform on move would fight that.
+  // A pinch fires no zoomanim and transforms no pane: markers follow the fractional zoom,
+  // these canvases do not. So scale the last picture about _drawnCenter until zoomend.
+  // Zoom only: a drag already moves the canvases with their pane.
   _onZoom() {
     const map = this._map, cv = this._canvas, lc = this._labelCanvas;
     if (!map || !cv || this._drawnCenter == null) return;
@@ -435,8 +323,7 @@ const BasemapLayer = L.Layer.extend({
     });
     const tl = map.containerPointToLayerPoint([0, 0]);
     const origin = L.point(tl.x - padX, tl.y - padY);
-    // setPosition writes a transform with no scale, which is also how the
-    // scale a pinch left behind gets cleared.
+    // setPosition also clears any scale a pinch left behind.
     L.DomUtil.setPosition(cv, origin);
     if (lc) L.DomUtil.setPosition(lc, origin);
 
@@ -452,20 +339,13 @@ const BasemapLayer = L.Layer.extend({
 
     const P = palette(this._dark), z = map.getZoom();
 
-    // What _onZoom scales against: the centre, zoom and CSS size of the
-    // picture about to be drawn. The canvas is padded symmetrically, so
-    // its middle IS the map centre in layer coordinates.
+    // For _onZoom. The padding is symmetric, so the canvas middle is the map centre.
     this._drawnCenter = map.getCenter();
     this._drawnZoom = z;
     this._drawnW = cw; this._drawnH = ch;
 
-    // Publish the swatch colours the legend needs, from the palette the map
-    // is about to draw with. Reading them from here is the only way the key
-    // and the map cannot disagree across themes: a hardcoded key shows one
-    // theme's purple on the other's background. Wards are published solid:
-    // on the map they are translucent fills lying over streets, but a key
-    // has nothing beneath it and the map alpha renders as a washed-out
-    // smear at swatch size.
+    // The legend swatches (--lg-* in style.css) read these, so key and map match in both themes.
+    // Wards are published solid: the map's alpha would be a washed-out smear at swatch size.
     try {
       const rs = document.documentElement.style;
       rs.setProperty('--lg-precinct', P.precinct);
@@ -475,20 +355,12 @@ const BasemapLayer = L.Layer.extend({
       }
       rs.setProperty('--lg-scope', `hsl(${P.scopeHue},${P.wardSat}%,${P.wardL}%)`);
       rs.setProperty('--lg-border', P.scopeBorder);
-      // The land tone the ward fills lie over. Nothing in the legend uses
-      // it; it is published so that a reader of these colours -- the tint
-      // test above all -- can compose them the way the map does instead of
-      // keeping its own copy of the backdrop and drifting from it.
+      // Unused by the legend: tests/test_page.mjs composes the ward tints over it.
       rs.setProperty('--lg-land', P.land);
     } catch (e) {}
 
-    // Project [lat,lng] -> canvas px with a precomputed linear transform.
-    //
-    // Leaflet's latLngToLayerPoint was the single biggest cost in the whole
-    // page: it re-derives the projection and allocates a Point for every
-    // coordinate, and a redraw touches roughly 60,000 of them. At a fixed
-    // zoom the transform is constant, so it is computed once per frame and
-    // each point becomes a multiply and a subtract.
+    // [lat, lng] to canvas px by Web Mercator, precomputed per frame: latLngToLayerPoint
+    // allocates a Point per coordinate and was the page's biggest cost.
     const ctr = map.getCenter();
     const halfX = cw / 2, halfY = ch / 2;
     const RAD = Math.PI / 180;
@@ -505,10 +377,8 @@ const BasemapLayer = L.Layer.extend({
     ctx.fillStyle = P.land;
     ctx.fillRect(0, 0, cw, ch);
 
-    // Before the data arrives there is nothing to draw but the ground.
     if (!this._graph) return;
 
-    // ---- landcover ----
     if (this._land) {
       this._fillRings(ctx, this._land.green, P.green, pt);
       this._fillRings(ctx, this._land.water, P.water, pt);
@@ -520,16 +390,12 @@ const BasemapLayer = L.Layer.extend({
       }
     }
 
-    // ---- roads: casing pass, then fill pass, so junctions look joined ----
+    // Casings first, then fills, so junctions look joined.
     const buckets = this._bucket();
     const order = [6, 5, 4, 3, 2, 1];
     for (let i = 0; i < order.length; i++) {
       const cls = order[i], w = widthFor(cls, z);
       if (w <= 0 || z < CLASS[cls].minZ) continue;
-      // NOT `cw`: that is the canvas width, and `var` hoists to function
-      // scope, so reusing the name here silently overwrote it. Every label
-      // on the map then failed its bounds check against a 5px-wide
-      // viewport and nothing was drawn.
       const casingW = w + (CLASS[cls].casing || 0) * 2;
       this._strokeLines(ctx, buckets[cls], P.casing, casingW, pt);
     }
@@ -540,56 +406,14 @@ const BasemapLayer = L.Layer.extend({
                         P.road[CLASS[cls].name] || P.road.local, w, pt);
     }
 
-    // ---- precinct boundaries, OVER the roads ----
-    // Precinct lines follow streets, so drawing them beneath the road
-    // fill hid them completely: the casing painted straight over every
-    // boundary. They belong above the roads and below the route.
+    // Precinct lines go over the roads: they follow streets, and the casings hid them.
     const O = this._opts || {};
     if (this._precincts && (O.wards || O.precincts !== false)) {
       const act = this._activePrecinct;
 
-      // Ward colour first, precinct shade within it, for the jurisdiction
-      // in scope only.
-      //
-      // A city has at most three wards, so each gets a hue of its own and
-      // they are told apart at a glance; a township, having none, takes one
-      // hue. There are dozens of precincts, which is far too many for
-      // distinct colours, so each takes a lightness step off its ward's hue
-      // instead. A precinct then reads as different from the one beside it
-      // while the ward still reads as one area.
-      //
-      // The step is keyed on the precinct number rather than its position in
-      // the ward, because precincts are numbered in blocks per ward and
-      // consecutive numbers tend to sit next to each other. Stepping by
-      // number is therefore what makes NEIGHBOURS differ, which is the whole
-      // point.
-      //
-      // The step has to stay SMALL. A big one spans more lightness inside
-      // one ward than lies between the three ward hues, so the fill reports
-      // precinct % 5 rather than ward (at 10 points, measured in CIELAB over
-      // the land tone, two precincts in ONE ward reach dE 25.9 while the
-      // closest pair from DIFFERENT wards sits at 4.8), and the top of the
-      // range washes out towards white. 6 points is the largest step that
-      // keeps the worst same-ward pair under half the closest cross-ward
-      // pair in BOTH themes. The lift is centred on wardL rather than
-      // climbing from it, so the range is wardL +/- 2 steps, the legend
-      // swatch at --lg-wardN is the middle of what gets painted rather than
-      // the darkest corner of it, and no precinct approaches white.
-      // tests/test_page.mjs asserts the ordering rather than these numbers,
-      // reading the tints off this renderer.
-      //
-      // WHICH step a number takes matters as much as how big the step is.
-      // `n % 5` hands consecutive numbers CONSECUTIVE steps, so two
-      // precincts side by side differ by the smallest gap the scheme has:
-      // dE 1.26 in the light theme, under the threshold for telling two
-      // greys apart across a dashed line, against dE 13.7 between wards.
-      // Doubling before the modulus permutes the same five steps into the
-      // order 0, +2, -1, +1, -2, which puts every consecutive pair at least
-      // TWO steps apart: neighbours at dE 3.15 light / 3.76 dark. The set of
-      // steps is unchanged, so the widest same-ward pair and the closest
-      // cross-ward pair stay at 5.70 vs 13.74 light and 8.28 vs 18.74 dark
-      // (same-ward worst 42-44% of the nearest cross-ward pair): the fill
-      // still reports ward first.
+      // Hue per ward, one for a township (the legend's "Wards, or your township"). Lightness
+      // steps by (precinct * 2) % 5 around wardL, so consecutive numbers, usually neighbours,
+      // differ by 2+ steps. tests/test_page.mjs checks the contrasts; keep wardLStep small.
       const scope = this._scopeMcd;
       const inScope = (p) => String(p.mcd) === scope;
       if (O.wards && scope) {
@@ -609,18 +433,11 @@ const BasemapLayer = L.Layer.extend({
           this._fillRings(ctx, this._precincts[pi].rings, P.precinctFill, pt);
         }
       }
-      // Drawn to actually be seen. At 1px and 55% alpha these were present
-      // in the canvas and invisible on the screen, which is the same thing
-      // as missing. A light halo underneath lifts them off the roads they
-      // run along.
       ctx.save();
       ctx.setLineDash([7, 5]);
       ctx.lineCap = 'butt';
       for (let pj = 0; O.precincts !== false && pj < this._precincts.length; pj++) {
         const isAct = act && this._pid(this._precincts[pj]) === act;
-        // Outside the jurisdiction in scope the lines stay, faint, so the
-        // county still reads as precincts; inside it they are drawn to be
-        // seen. With no scope yet, everything is drawn to be seen.
         const dim = scope && !inScope(this._precincts[pj]);
         if (!dim) {
           ctx.globalAlpha = 0.9;
@@ -635,9 +452,6 @@ const BasemapLayer = L.Layer.extend({
       }
       ctx.restore();
 
-      // The jurisdiction's own border, solid, over everything else in
-      // this pass: the line that says "this is the city or township your
-      // address is in", which is what a reader asked when they typed it.
       if (this._scopeBorder?.length) {
         ctx.save();
         ctx.setLineDash([]);
@@ -651,35 +465,15 @@ const BasemapLayer = L.Layer.extend({
       }
     }
 
-    // Where a precinct number sits, in screen pixels, for _labels to avoid.
-    // Cleared on EVERY render and outside the guard below, so it never
-    // describes the previous view.
-    //
-    // It records where a number WOULD go, not only where one was painted,
-    // and the difference is the point. Street names avoid these boxes, so
-    // when the list emptied on switching numbers off, every street name on
-    // the map re-placed into the freed space at once -- the map stayed
-    // still and all of its text jumped, which reads as the whole view
-    // lurching. Reserving the space either way costs a few good blocks
-    // while numbers are hidden and buys a layout that does not move when
-    // they are toggled, which is the better trade: the reflow was jarring
-    // precisely because it was everywhere at once.
-    //
-    // Only the toggle is treated this way. A label skipped for any other
-    // reason -- no anchor, off the canvas, or clashing with a marker --
-    // still reserves nothing, because with numbers ON nothing would occupy
-    // that space either, and a box there would push street names off good
-    // blocks for no reason at all.
+    // Where precinct numbers sit, for _labels to avoid. Reset every render, outside the guard
+    // below, and recorded even while numbers are toggled off, so toggling them does not
+    // reflow every street name on the map.
     this._precinctBoxes = [];
 
-    // Precinct numbers go on the LABEL canvas, above the route, so the
-    // green line cannot cover the number of the precinct it runs through.
     if (lctx && this._precincts && z >= 12) {
       const showNumbers = (this._opts || {}).numbers !== false;
       const actP = this._activePrecinct;
-      // Precinct numbers share the label canvas with the street names, and
-      // this pass runs BEFORE _labels, so it cannot inherit that pass's
-      // collision work and has to clear the markers itself.
+      // This pass runs before _labels, so it checks the camera markers itself.
       const obsN = (this._obstacles || []).map(pt);
       lctx.save();
       lctx.textAlign = 'center';
@@ -691,18 +485,10 @@ const BasemapLayer = L.Layer.extend({
         const lp = pt(pr.label);
         if (lp[0] < 12 || lp[0] > cw - 12 || lp[1] < 12 || lp[1] > ch - 12) continue;
         const isA = actP && this._pid(pr) === actP;
-        // The word, not just the digit: a bare "15" floating on a map
-        // could be anything; "Precinct 15" says what it is. Smaller than
-        // the digits were, since the word carries more ink. From z14 the
-        // word fits; wider out, the label would shout over whole blocks,
-        // so it stays a digit there.
         const txt = z >= 14 ? `Precinct ${pr.precinct}` : String(pr.precinct);
         const fs = z >= 15 ? 13 : z >= 13 ? 12 : 11;
         lctx.font = `${isA ? 800 : 700} ${isA ? fs + 1 : fs}px ` +
           '"Hanken Grotesk", system-ui, sans-serif';
-        // Box test against the markers: the label is centred, so its reach
-        // is half its own width, and a distance test around the anchor
-        // alone would let a long word bleed into a marker sideways.
         const tw = lctx.measureText(txt).width;
         let nClash = false;
         for (let oq = 0; oq < obsN.length; oq++) {
@@ -717,56 +503,24 @@ const BasemapLayer = L.Layer.extend({
           lctx.fillStyle = isA ? P.precinctActive : P.precinct;
           lctx.fillText(txt, lp[0], lp[1]);
         }
-        // Recorded whether or not it was painted, and only here, past every
-        // test that decides a number belongs at this spot at all. The size
-        // is the same either way: the font is set above from the zoom and
-        // the active flag, neither of which the toggle touches, so the
-        // space held with numbers off is exactly the space filled with
-        // them on, and the street names do not move.
         this._precinctBoxes.push({ x: lp[0], y: lp[1], hw: tw / 2, hh: fs * 0.7 });
       }
       lctx.restore();
     }
 
-    // Canvas pixel -> world pixel, constant for this redraw. Layer point
-    // plus the map's pixel origin is fixed to the ground at a given zoom,
-    // which is what lets the label pass be pan-invariant.
+    // Canvas px to world px: fixed to the ground at this zoom, so names hold still on a pan.
     const worldOff = origin.add(map.getPixelOrigin());
     if (lctx) this._labels(lctx, P, z, { x: cw, y: ch }, pt, worldOff);
   },
 
-  // Street names. Without them this is a diagram rather than a map: you can
-  // see the shape of the city but cannot tell anyone which road to take.
-  //
-  // One label per street name per geographic cell, placed on the cell's
-  // best block (nearest the route, then the longest run) and rotated to
-  // follow it, with a coarse occupancy grid so names do not pile up on
-  // each other. Which classes get labelled rises with zoom.
+  // Street names: one per street per geographic cell, on that cell's best block.
   _labels(ctx, P, z, size, pt, worldOff) {
     if (z < 10 || !this._graph) return;
-    // Local streets are named from z14: at street zoom a reader expects
-    // every road they can see to be named. Collectors from z13, arterials
-    // and up from z10.
     const maxCls = z >= 14 ? 5 : z >= 13 ? 4 : 3;
     const g = this._graph, edgeTotal = g.edgeCount();
     const best = {};
-    // ONE NAME PER GEOGRAPHIC CELL, not one per screen. Ranking blocks by
-    // how close they sit to the SCREEN centre re-ranks them on every pan
-    // and re-places the name: a 150px drag moved 14 of 51 visible names,
-    // one of them 756m down the road. A cell keyed on world pixels cannot
-    // move under a pan, so the same block wins every redraw and the name
-    // stays on the road it names.
-    //
-    // 300 world px, chosen by measuring: a cell the size of the canvas gave
-    // 42 distinct names on a downtown view, 560 gave 46, 400 gave 47, 300
-    // gave 50 and 220 fell back to 45 as the extra winners began crowding
-    // each other out of the occupancy grid. Smaller cells also waste fewer
-    // of them, since a cell whose winner lands outside the drawable canvas
-    // contributes nothing.
-    //
-    // A long avenue earns a name in each cell it crosses, so it is labelled
-    // wherever you are on it rather than only when its best block happens
-    // to be near the middle of the view.
+    // Cells are keyed on world px so a pan cannot move a name. 300 placed the most names in
+    // a downtown sweep of sizes from 220 px to the whole canvas.
     const wx = worldOff ? worldOff.x : 0, wy = worldOff ? worldOff.y : 0;
     const LCELL = 300;   // world px; see the sweep above
     const route = this._routeStreets || {};
@@ -779,45 +533,29 @@ const BasemapLayer = L.Layer.extend({
     }
 
     for (let i = 0; i < edgeTotal; i++) {
-      // Endpoints only: a label needs where the block starts and ends, not
-      // its shape, so this reads two coordinate pairs out of the packed
-      // arrays rather than building the polyline on every pan.
+      // Endpoints only, from the packed arrays: building every polyline per pan is too slow.
       const en = g.edgeName(i), ec = g.edgeClass(i) || 5;
       if (!en || ec > maxCls || ALLEY.test(en) || RAMP.test(en)) continue;
       const lastPt = g.edgePointCount(i) - 1;
       if (lastPt < 1) continue;
       const a = pt([g.edgePointLat(i, 0), g.edgePointLng(i, 0)]);
       const b = pt([g.edgePointLat(i, lastPt), g.edgePointLng(i, lastPt)]);
-      // Collected a whole cell BEYOND the canvas on each side, not just
-      // what is drawable. The cell decides which block carries the name, so
-      // every block in a cell that touches the canvas has to compete for it.
-      // Clipped to the canvas, a block sliding into view became a new
-      // candidate and could take the name off the block that had it, which
-      // is the drag-and-it-moved this is about: the cell was stable, the
-      // pool inside it was not.
+      // Collect a whole cell beyond the canvas: clipped to it, a block sliding into view
+      // could take the name from the block that had it.
       if ((a[0] < -LCELL && b[0] < -LCELL) ||
           (a[0] > size.x + LCELL && b[0] > size.x + LCELL) ||
           (a[1] < -LCELL && b[1] < -LCELL) ||
           (a[1] > size.y + LCELL && b[1] > size.y + LCELL)) continue;
       const dx = b[0] - a[0], dy = b[1] - a[1];
       const len = Math.sqrt(dx * dx + dy * dy);
-      // How much on-screen road a name needs before it is worth trying.
-      // A shield only has to fit across the road, and ramps chop a freeway
-      // into short pieces, so freeway blocks qualify at the shortest run.
-      // Bigger roads earn a label on a shorter run than smaller ones,
-      // because naming the arterial matters more than naming the side
-      // street beside it; and everything relaxes as you zoom in. One flat
-      // 42px leaves US-131 unlabelled zoomed out and z13-15 almost entirely
-      // anonymous.
+      // Px of road a name needs: least for freeways, which ramps chop into short blocks.
       let minRun;
       if (ec === 1) minRun = 18;
       else if (ec <= 3) minRun = z >= 15 ? 22 : 28;
       else minRun = z >= 17 ? 22 : z >= 16 ? 26 : z >= 15 ? 30 : z >= 14 ? 34 : 40;
       if (len < minRun) continue;
       const mx0 = (a[0] + b[0]) / 2, my0 = (a[1] + b[1]) / 2;
-      // For a street the route uses, still prefer the block that hugs the
-      // route line: a distance between two canvas points does not change
-      // when the canvas moves, so this stays pan-invariant.
+      // A route street prefers the block on the route line, where it is actually driven.
       let rd = 0;
       if (routeScreen && route[en]) {
         let near = Infinity;
@@ -833,24 +571,15 @@ const BasemapLayer = L.Layer.extend({
       const cand = { len, a, b, cls: ec, rd, idx: i };
       const key = `${en}\u0000${cellX},${cellY}`;
       const slot = best[key];
-      // ONE winner per cell, decided on the geography alone: route
-      // proximity, then the longest run, then the edge's own index so the
-      // comparison is total and two equal blocks cannot swap. There is
-      // deliberately no bench behind it. A list would let the drawing pass
-      // walk down to a different block when the first was off screen or
-      // blocked, and "which block is on screen" is exactly the thing that
-      // changes when you drag. A cell whose winner is not drawable yields
-      // no label, and the street is named in the next cell along instead.
+      // One winner per cell and deliberately no runner-up: falling back when the winner is
+      // off screen or blocked would move the name whenever the view changed.
       if (!slot) best[key] = { name: en, best: cand };
       else if (betterBlock(cand, slot.best)) slot.best = cand;
     }
 
     const names = Object.keys(best);
     names.sort((x, y) => {
-      // Route streets first, then bigger roads, then longer runs. Ends on
-      // the edge index so the order is total: two names that tie on every
-      // other term must still resolve the same way on every redraw, or the
-      // occupancy contest hands the cell to a different one each pan.
+      // Ends on the edge index so the order is total and stable across redraws.
       const X = best[x], Y = best[y];
       const rx = route[X.name] ? 0 : 1, ry = route[Y.name] ? 0 : 1;
       if (rx !== ry) return rx - ry;
@@ -861,16 +590,9 @@ const BasemapLayer = L.Layer.extend({
       return X.best.idx - Y.best.idx;
     });
 
-    // The collision grid tightens with zoom. With one fixed cell size the
-    // spacing that keeps a city-wide view readable would also throttle a
-    // street view, where there is room for far more names.
     const CELL = z >= 17 ? 34 : z >= 16 ? 40 : z >= 15 ? 46 : z >= 14 ? 54 : 62;
     const taken = {};
 
-    // Claim the footprint of every visible marker BEFORE any name is placed,
-    // so a street name is never drawn under a camera. A name whose cell
-    // winner is blocked is simply not drawn in that cell; the street is
-    // named in the next cell along.
     const obstacles = this._obstacles || [];
     const obsPx = [];                    // on-screen obstacle centres, in pixels
     const OB = MARKER_R;
@@ -887,11 +609,7 @@ const BasemapLayer = L.Layer.extend({
         }
       }
     }
-    // Precinct numbers are drawn on this same canvas by the pass that runs
-    // just before this one, and it cannot see the names that do not exist
-    // yet. So the avoidance has to happen from this side: reserve what it
-    // drew before a single name is placed, or the two passes each behave
-    // correctly on their own and still print over each other.
+    // Reserve the precinct numbers: that pass ran first, so it could not avoid the names.
     const preBoxes = this._precinctBoxes || [];
     for (let pb = 0; pb < preBoxes.length; pb++) {
       const B = preBoxes[pb];
@@ -908,17 +626,10 @@ const BasemapLayer = L.Layer.extend({
     ctx.lineJoin = 'round';
 
     for (let k = 0; k < names.length; k++) {
-      // best is keyed by name and cell, so the display name comes off the
-      // slot rather than out of the key.
+      // Keys include the cell, so the name comes from the slot.
       const slotK = best[names[k]], streetName = slotK.name;
       const onRoute = !!route[streetName];
-      // Exactly one attempt: this cell's winner, or nothing. Every reason
-      // to give up on a block, off screen or cell already claimed, is a
-      // fact about the current view, so falling back to another block would
-      // move the name whenever the view changed. A street that loses one
-      // cell is still named in the next, and a name that cannot be drawn
-      // here simply is not drawn here. The loop runs once; it is there so
-      // each test below can give up with `continue`.
+      // Runs once: the loop is there so each test below can give up with `continue`.
       const cands = [slotK.best];
       for (let q = 0; q < cands.length; q++) {
         const it = cands[q];
@@ -930,20 +641,11 @@ const BasemapLayer = L.Layer.extend({
 
         const sh = it.cls <= 2 ? shieldFor(streetName) : null;
         if (sh) {
-          // A shield sits upright across the road rather than running along
-          // it, which is how every road map does it and how a driver reads
-          // it at a glance. Freeways are split at every ramp, so their
-          // on-screen blocks are short when zoomed out, and a shield needs
-          // far less room than a name would.
           if (it.len < 22) continue;
           const shx = Math.round((mx + wx) / CELL), shy = Math.round((my + wy) / CELL);
-          // A shield is a solid badge, so it must not land on a name that is
-          // already there. Claim the centre cell and its four neighbours,
-          // which is roughly the badge's footprint.
+          // A shield claims its cell and the four neighbours, roughly the badge's footprint.
           if (taken[`${shx}:${shy}`]) continue;
-          // A shield is drawn on this same canvas, so it can cover a camera
-          // exactly like a name can. It takes the same exact test, since the
-          // single-cell check above is far coarser than the marker.
+          // Exact marker test too: one cell is far coarser than the marker's radius.
           let shClash = false;
           for (let so = 0; so < obsPx.length; so++) {
             const sdx = mx - obsPx[so][0], sdy = my - obsPx[so][1];
@@ -962,18 +664,10 @@ const BasemapLayer = L.Layer.extend({
         const size_px = it.cls <= 2 ? 13.5 : it.cls === 3 ? 12.5 : 12;
         ctx.font = `600 ${size_px}px "Hanken Grotesk", system-ui, sans-serif`;
         const label = labelText(streetName);
-        // The name may overrun the block it is anchored to. A block is an
-        // arbitrary slice of a street that keeps going, so demanding the
-        // text fit inside one was rejecting nearly every label at mid
-        // zooms: "Plainfield Ave NE" is ~100px of text and a block at z13
-        // is ~40px of road. Overflow is what every road map does.
+        // Names may overrun their block: demanding a fit rejected nearly every mid-zoom label.
         const tw = ctx.measureText(label).width;
         if (tw > it.len * 2.6 + 40) continue;
 
-        // Reserve every cell the text actually covers, not just the one it
-        // is anchored in. A label may overrun its block, so a single-cell
-        // claim does not describe the space it occupies, and downtown names
-        // would print over each other.
         const cells = spanCells(mx, my, ang, tw, size_px, CELL, wx, wy);
         let clash = false;
         for (let ci = 0; ci < cells.length; ci++) {
@@ -981,14 +675,7 @@ const BasemapLayer = L.Layer.extend({
         }
         if (clash) continue;
 
-        // Exact test against the markers, on top of the grid one.
-        //
-        // The grid works in cells of 34 to 62 pixels and a marker's clearance
-        // is 58 across (MARKER_R each way), so reserving whole cells cannot
-        // express it precisely: a name placed in the next cell along still bled into
-        // the marker. Measured, that left two markers in eleven covered.
-        // Walking the label's own baseline and rejecting any candidate that
-        // passes within the marker's radius closes the gap exactly.
+        // Exact test against the markers: grid cells (34 to 62 px) are too coarse for them.
         if (obsPx.length) {
           const half = tw / 2, ca = Math.cos(ang), sa = Math.sin(ang);
           const reach = OB + size_px * 0.6;
@@ -1004,12 +691,7 @@ const BasemapLayer = L.Layer.extend({
           if (clash) continue;
         }
 
-        // Exact test against the precinct words, on top of the grid one,
-        // for the reason the markers need one: "Precinct 15" is about 75px
-        // of text and a cell is 34 to 62, so whole-cell reservation cannot
-        // describe the box. A rectangle rather than a radius, because this
-        // label is a horizontal word and a circle round its centre would
-        // both miss its ends and over-reserve above and below it.
+        // Same against the precinct numbers, as boxes, since they are horizontal words.
         if (preBoxes.length) {
           const phalf = tw / 2, pca = Math.cos(ang), psa = Math.sin(ang);
           const psamples = Math.max(2, Math.ceil(tw / 12));
@@ -1029,8 +711,6 @@ const BasemapLayer = L.Layer.extend({
         ctx.save();
         ctx.translate(mx, my);
         ctx.rotate(ang);
-        // A fat halo is what lets a name stay readable over a park, a
-        // parking lot, or the route line now passing beneath it.
         ctx.strokeStyle = P.labelHalo || P.land;
         ctx.lineWidth = 4.5;
         ctx.strokeText(label, 0, 0);
@@ -1095,19 +775,8 @@ const BasemapLayer = L.Layer.extend({
   }
 });
 
-// Released into the public domain under the Unlicense, see UNLICENSE.
-// What a license plate camera looks like and what it says about itself.
-//
-// Split out of app.js because none of it is about this page: it is the popup
-// table, the robot drawing, and the two small helpers the popup reads with,
-// how long ago an OpenStreetMap timestamp was and a compass point for a
-// bearing. app.js keeps everything that needs the map, the graph or the
-// current route: where a camera is drawn, whether cameras are in scope at
-// all, and the layer bookkeeping.
-//
-// Deliberately no Leaflet in here. The marker comes back as SVG plus the box
-// it wants, and app.js wraps that in L.divIcon, so this file can be read, and
-// tested, without a map.
+// ---- Camera marker and popup ----
+// SVG and HTML strings, no Leaflet: app.js wraps markerSvg() in an L.divIcon.
 
 const FIELD_LABELS = {
   manufacturer: 'Made by', model: 'Model', brand: 'Brand',
@@ -1123,18 +792,8 @@ const FIELD_ORDER = ['manufacturer', 'model', 'brand', 'operator', 'operator:typ
   'electricity', 'height', 'level', 'start_date', 'survey:date', 'check_date',
   'ref', 'note', 'description'];
 
-// Two numbers, not one. BOX is the drawing's own coordinate space, which
-// every coordinate in bodySvg and the view cone is written in; SIZE is the
-// pixel box the marker is rendered into. Kept apart, the viewBox scales the
-// whole marker (cone, pulse ring and robot together) by SIZE/BOX, so the
-// robot can be resized without rewriting a coordinate of the figure.
-//
-// 58px of robot is too much map: downtown the markers overlap into a
-// continuous band and bury the precinct fills and the voting-site pins
-// underneath them. At 38 the figure is still readable and the cone still
-// points, and the tap target stays well above the 24px floor. basemap.js
-// keeps street names MARKER_R clear of the centre, so a change here is a
-// change there too.
+// BOX is the drawing's own units, SIZE the rendered px (keep the tap target over 24 px).
+// MARKER_R above is half of SIZE plus a margin; change them together.
 const BOX = 58, CENTRE = BOX / 2;
 const SIZE = 38;
 
@@ -1157,11 +816,8 @@ function compass(deg) {
   return pts[Math.round((deg % 360) / 22.5) % 16];
 }
 
-// The bearing a camera faces, from OSM's direction tag, or null when it has
-// none. Read by the popup and by the marker's view cone alike. router.js
-// assignCameras() reads the facing the same way to seat the marker on the
-// road it faces; change one and change the other, or the cone points down
-// a road the marker was not seated on.
+// Degrees from OSM's direction tag, or null. router.js assignCameras() reads it the same
+// way to seat the marker; change both, or the cone points down a road it was not seated on.
 function bearing(c) {
   const f = c.f || {};
   const raw = f.direction ?? f['camera:direction'];
@@ -1171,8 +827,6 @@ function bearing(c) {
 function popupHtml(c) {
   const f = c.f || {};
   let rows = '';
-  // Direction first: what a camera points at is the thing that matters most
-  // for whether you drive past it.
   const d = bearing(c);
   if (d != null) {
     rows += '<div class="cf"><span class="ck">Faces</span>' +
@@ -1184,9 +838,7 @@ function popupHtml(c) {
     rows += `<div class="cf"><span class="ck">${esc(FIELD_LABELS[k] || k)}</span>` +
       `<span class="cv">${esc(val)}</span></div>`;
   });
-  // Version 1 means the object has never been edited, so its timestamp is
-  // genuinely when the camera was first mapped. Past v1 all we honestly know
-  // is when someone last touched it, and saying otherwise would overstate it.
+  // OSM version 1 is unedited, so only then is the timestamp when it was first mapped.
   const seen = c.t ? String(c.t).slice(0, 10) : null;
   if (seen) {
     const label = c.v === 1 ? 'First mapped' : 'Last edited';
@@ -1199,20 +851,9 @@ function popupHtml(c) {
   return `<div class="campop"><div class="ctitle">License plate camera</div>${rows}${foot}</div>`;
 }
 
-// A robot officer: pale metal head under a police peaked cap, and two red
-// glowing eyes. The eyes carry the state colour, which is the honest
-// mapping: the glow IS the plate reader, and it burns brighter when this
-// camera sits on your route. Cap and head are fixed colours so the only
-// thing that changes with state is the part that watches. Upright at every
-// bearing; the cone alone says which way it looks.
-//
-// One drawing, two callers: the map marker and the legend key, so the key
-// cannot drift into something that does not match the map, as a separate
-// CSS approximation of it would.
+// The robot officer, shared by the marker and the legend key so the two cannot drift.
+// Only the eyes take the state colour (fill). C is the centre, in BOX units.
 function bodySvg(fill, C, ringColour) {
-  // Cap in a real police blue rather than near-black navy; face in a light
-  // skin tone (the RoboCop read: human face, machine everything else). The
-  // ear bolts stay pale metal so the hardware still shows.
   const dark = '#0e1116', cap = '#2a52c8', skin = '#f0c8a2';
   return `<g stroke-linejoin="round" transform="translate(${C},${C}) ` +
       `scale(1.15) translate(-${C},-${C})">` +
@@ -1221,40 +862,37 @@ function bodySvg(fill, C, ringColour) {
       `fill="${ringColour}" stroke="${dark}" stroke-width="1.2"/>` +
     `<rect x="${C + 7.6}" y="${C - 1}" width="3" height="4.6" rx="1" ` +
       `fill="${ringColour}" stroke="${dark}" stroke-width="1.2"/>` +
-    // head: squarer block; the small radius is the robot tell
+    // head
     `<rect x="${C - 8.5}" y="${C - 4}" width="17" height="13.5" rx="2.2" ` +
       `fill="${skin}" stroke="${dark}" stroke-width="1.6"/>` +
-    // faceplate seam under the eyes
+    // faceplate seam
     `<path d="M${C - 8.5},${C + 3.6} H${C + 8.5}" ` +
       `stroke="${dark}" stroke-width=".9" opacity=".45"/>` +
-    // mouth grille: three teeth, not lips
+    // mouth grille
     `<rect x="${C - 4.2}" y="${C + 5.2}" width="2.2" height="1.8" rx=".5" ` +
       `fill="${dark}" opacity=".8"/>` +
     `<rect x="${C - 1.1}" y="${C + 5.2}" width="2.2" height="1.8" rx=".5" ` +
       `fill="${dark}" opacity=".8"/>` +
     `<rect x="${C + 2}" y="${C + 5.2}" width="2.2" height="1.8" rx=".5" ` +
       `fill="${dark}" opacity=".8"/>` +
-    // eye glow, then the eyes themselves
+    // eye glow, then eyes
     `<circle cx="${C - 3.8}" cy="${C + 1.2}" r="4.4" fill="${fill}" opacity=".3"/>` +
     `<circle cx="${C + 3.8}" cy="${C + 1.2}" r="4.4" fill="${fill}" opacity=".3"/>` +
     `<circle cx="${C - 3.8}" cy="${C + 1.2}" r="2.1" fill="${fill}" ` +
       `stroke="${dark}" stroke-width=".8"/>` +
     `<circle cx="${C + 3.8}" cy="${C + 1.2}" r="2.1" fill="${fill}" ` +
       `stroke="${dark}" stroke-width=".8"/>` +
-    // peaked cap: crown, then the brim across the brow
+    // cap: crown, then brim
     `<path d="M${C - 8.5},${C - 4.5} Q${C - 8},${C - 11} ${C},${C - 11}` +
       ` Q${C + 8},${C - 11} ${C + 8.5},${C - 4.5} Z" ` +
       `fill="${cap}" stroke="${dark}" stroke-width="1.4"/>` +
     `<rect x="${C - 10}" y="${C - 5.4}" width="20" height="2.6" rx="1.3" ` +
       `fill="${cap}" stroke="${dark}" stroke-width="1.2"/>` +
-    // badge on the crown
+    // cap badge
     `<circle cx="${C}" cy="${C - 7.8}" r="1.3" fill="#f0ad2d"/>` +
     '</g>';
 }
 
-// The marker: a view cone pointing the way the camera faces, the convention
-// DeFlock and the OSM surveillance renderers use, with the robot on top.
-// Returns the drawing and the box it wants; the caller makes it a marker.
 function markerSvg(c, flagged, ringColour) {
   const deg = bearing(c);
   const fill = flagged ? '#ff2d2d' : '#ff4d4d';
@@ -1272,21 +910,16 @@ function markerSvg(c, flagged, ringColour) {
       ' stroke-width="2.5" opacity=".9" class="cam-pulse"/>'
     : '';
   return {
-    // The hover title. RoboCop is what he is.
     html: '<span title="RoboCop" style="display:block;width:100%;height:100%">' +
       `<svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${BOX} ${BOX}">` +
       `${cone}${ring}${bodySvg(fill, CENTRE, ringColour)}</svg></span>`,
     size: SIZE,
-    // In PIXELS, so the caller can anchor the marker on the camera. CENTRE
-    // is in drawing units and is the wrong number once the two differ.
+    // In px, for the caller's anchor; CENTRE is in BOX units.
     centre: SIZE / 2
   };
 }
 
-// The same robot for the legend key, cropped to the figure rather than the
-// marker's full BOX, which is mostly empty space held for the direction cone
-// the key does not show. Its own size, unaffected by SIZE: the key is read
-// at arm's length in a legend row, not picked out of a crowd on a map.
+// The legend key: the robot alone, cropped out of BOX, at its own size rather than SIZE.
 function legendSvg(ringColour) {
   return '<svg viewBox="16 15 26 26" width="18" height="18" style="display:block">' +
     `${bodySvg('#ff4d4d', 29, ringColour)}</svg>`;

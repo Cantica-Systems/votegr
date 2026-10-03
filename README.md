@@ -306,7 +306,7 @@ Two third-party pieces ship with the site and keep their own licences:
 with its `LICENSE`; and the Hanken Grotesk typeface, SIL Open Font License 1.1,
 in `site/fonts/` with its `OFL.txt`. The address-matching logic in
 `site/voting.js` is carried over from the earlier vote-gr project and says so
-at the top of the file.
+where the precinct lookup begins.
 
 The data is not ours to license. Streets and address ranges are public
 records of Kent County and the City of Grand Rapids; precinct boundaries are a

@@ -1,31 +1,18 @@
-import { displayCase } from './voting.js';
+// The routing engine's debug panel. app.js imports it only when the URL has ?debug,
+// and it reaches the engine only through the object passed to mount().
+//
+//   /?debug                                                the panel, empty
+//   /?debug&from=602 Alexander St SE&to=355 48th St SE     filled and run
+//   /?debug&from=42.9276,-85.6353&to=42.878,-85.6565       coordinates work too
 
-// Released into the public domain under the Unlicense, see UNLICENSE.
-//
-// The routing engine's debug panel. Loaded by app.js only when the URL
-// carries ?debug, and mounted with one object of engine hooks; nothing else
-// in the page knows this file exists.
-//
-//   /?debug                                      the panel, empty
-//   /?debug&from=602 Alexander St SE&to=355 48th St SE   filled and run
-//   /?debug&from=42.9276,-85.6353&to=42.878,-85.6565     coordinates work too
-//
-// Each end is resolved the way the page resolves it -- parse, geocode off
-// the street centrelines, precinct by point-in-polygon, snap to the road --
-// and both routes are computed by the same computeRoutes the answer uses.
-// Every number the engine has is dumped as JSON, and the pair is drawn on the
-// map through the page's own rendering, so what you see is what a voter sees.
+import { displayCase } from './voting.js';
 
 function $(id) { return document.getElementById(id); }
 function param(name) {
   try { return new URLSearchParams(location.search).get(name) || ''; } catch (e) { return ''; }
 }
 
-// The route objects carry the full geometry and the step list; the dump
-// keeps the numbers and the step text and drops the point arrays, which
-// are hundreds of coordinates that say nothing a map does not. The mile
-// is the route panel's, read when a route is dumped, so the dump and the
-// panel cannot disagree about one.
+// mile is the route panel's metersPerMile, so the dump and the panel agree on miles.
 function summarise(r, mile) {
   if (!r) return null;
   return {
@@ -39,9 +26,7 @@ function summarise(r, mile) {
   };
 }
 
-// The text a chosen suggestion puts in the box, written the way somebody
-// writes an address rather than the way the parcel file stores it. Mirrors
-// what choose() does on the main search box.
+// The same text choose() in app.js puts in the main search box.
 function label(item) {
   if (!item) return '';
   const street = displayCase(item.street);
@@ -75,11 +60,8 @@ function mount(api) {
   from.value = param('from');
   to.value = param('to');
 
-  // Both ends get the page's own address picker. Typing a house number
-  // offers real addresses out of the index, and picking one fills the box,
-  // which is the same widget and the same suggestions a visitor gets. A
-  // lat,lng pair still works: the picker offers nothing for text with no
-  // house number in it, so coordinates fall straight through to run().
+  // The page's own address picker. It offers nothing for text without a house number, so
+  // lat,lng pairs fall straight through to run().
   const pickers = [];
   if (typeof api.suggest === 'function') {
     [from, to].forEach((el) => {
@@ -90,8 +72,7 @@ function mount(api) {
           el.value = label(item);
           ac.close();
         },
-        // Nothing to say here. The panel dumps whatever resolve() makes of
-        // the text, which is more use to somebody debugging than a message.
+        // Silent on purpose: the dump shows what resolve() made of the text.
         onMiss() {}
       });
       pickers.push(ac);
@@ -160,9 +141,7 @@ function mount(api) {
       status.textContent = url;
     }
   };
-  // Deferred by a tick on purpose: Enter with a suggestion highlighted is
-  // the picker's key first, and running before its onChoose lands would
-  // route the half-typed text the reader was replacing.
+  // Deferred a tick: Enter on a highlighted suggestion must let onChoose fill the box first.
   [from, to].forEach((el) => {
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') setTimeout(run, 0);

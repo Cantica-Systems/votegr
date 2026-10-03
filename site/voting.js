@@ -1,52 +1,28 @@
-// Released into the public domain under the Unlicense, see UNLICENSE.
-/* Title-case a display string without expanding or rewriting it.
+// What both pages share: address -> precinct -> polling place, the election
+// calendar, and display casing.
 
-   Every street name in the routing graph, every polling place address and
-   every early voting address arrives ALL CAPS, because that is how the
-   county centerline file, the city clerk's directory, the county's pages
-   and the state layers publish them.
-   Shouting an address at a reader is not a decision this project made; it is
-   one it inherited and never undid.
+// ---- Display case ----
+// Only case changes: displayCase(x).toUpperCase() === x.toUpperCase(), and it is
+// idempotent, so it is safe at display time over data still matched in its
+// original form. A port of the same function in a sibling project, trimmed to
+// this corpus's vocabulary; tests/test_display_case.mjs shares its vectors with
+// that project, so a rule change here means checking there.
 
-   THE INVARIANT, and the reason this is not a one-line regex: case is the
-   only thing that changes. displayCase(x).toUpperCase() === x.toUpperCase()
-   for every input. No character, digit or space is inserted, removed or
-   substituted, and running it twice changes nothing. That is what makes it
-   safe to apply at DISPLAY time over data that is still matched, geocoded and
-   compared in its original form.
-
-   Ported from the same function in a sibling project, where it has a fuller
-   vocabulary for police agency names. Trimmed here to what this corpus
-   actually contains, counted rather than guessed: US appears 560 times and
-   NB/SB/EB/WB 733 times between them across the county road graph, so the
-   freeway shorthand is real and stays. The agency acronyms and the
-   block-anonymization mask rule appear zero times, because this project
-   publishes exact addresses and redacts nothing, so they are left out.
-
-   The hard cases are all real streets here: 10TH ST NW must not become
-   "10Th", MCREYNOLDS must not become "Mcreynolds", O'BRIEN must not become
-   "O'brien", and NW must never become "Nw". */
-
-// Abbreviated directionals stay UPPER as standalone tokens. The full words
-// (NORTH, EAST) deliberately are not here: "North Park Street" is a name.
+// Directionals stay upper. Not NORTH or EAST: "North Park Street" is a name.
 const DIR = { N: 1, S: 1, E: 1, W: 1, NE: 1, NW: 1, SE: 1, SW: 1 };
 
-// Freeway-bound and ramp-locator shorthand. Title-casing these produces
-// gibberish ("Nb So"), and they read as codes rather than words.
-// GR is the city's own shorthand and appears in venue names the clerk
-// publishes ("GR Fire Department Division Station", "GRPS University").
-// Without it here, displayCase renders the city's name as "Gr".
+// Freeway-bound and ramp shorthand, plus GR and GRPS from the clerk's venue
+// names ("GRPS University").
 const ACRONYMS = { US: 1, NB: 1, SB: 1, EB: 1, WB: 1,
                    SO: 1, NO: 1, EO: 1, WO: 1, GR: 1, GRPS: 1 };
 
-// UPPER when immediately followed by a number: US 131, M 6, I 196.
+// Upper only when followed by a number: US 131, M 6, I 196.
 const HWY = { US: 1, M: 1, I: 1 };
 
 // Lowercase unless they open the string.
 const MINOR = { OF: 1, AND: 1, THE: 1, AT: 1, IN: 1, ON: 1, FOR: 1 };
 
 const ORDINAL = /^(\d+)(ST|ND|RD|TH)$/;
-// Alternating word and non-word runs, both preserved exactly.
 const RUN = /[A-Za-z0-9]+|[^A-Za-z0-9]+/g;
 
 function isWordRun(run) {
@@ -97,36 +73,21 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 }
 
-// Released into the public domain under the Unlicense, see UNLICENSE.
-// The election calendar, shared by both pages.
-//
-// Both pages read the calendar through this module, because two readings of
-// it drift apart: two copies of "today", of the next election and of the
-// early voting window will sooner or later disagree, and a page that calls
-// early voting open on a day the other calls it closed sends someone to a
-// locked door.
-//
-// The formats are named for what they produce rather than for how pretty
-// they are, and the window's state is decided in ONE place, windowState(),
-// which both pages ask. Wording stays with each page: the two surfaces say
-// different things on purpose, and only the calendar underneath has to agree.
-//
-// Every date here is a local Y-M-D string. Never new Date(iso): that parses
-// as UTC midnight and lands on the previous day for anyone west of
-// Greenwich, which prints the wrong weekday for an election.
+// ---- Election calendar ----
+// Both pages read the calendar here, so they cannot disagree about it.
+// Dates are local Y-M-D strings. Never new Date(iso): that is UTC midnight,
+// which lands on the previous day west of Greenwich.
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
                 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
                   'Friday', 'Saturday'];
-// The clerk publishes early voting hours as a weekday pattern rather than as
-// dated rows, so a rule is matched by weekday. Indexes line up with the
-// abbreviations the data file uses.
+// The clerk publishes early voting hours by weekday; the data file uses these.
 const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-// A Date's own local day, as a Y-M-D string.
+// The local day, not toISOString's UTC one.
 function isoOf(d) {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
@@ -135,41 +96,35 @@ function isoOf(d) {
 
 function todayISO() { return isoOf(new Date()); }
 
-// Today's weekday abbreviation, for picking today's row out of the hours.
 function todayAbbr() { return DAY_ABBR[new Date().getDay()]; }
 
-// Local midnight starting the given date, or null if it is not a date.
 function dayStart(iso) {
   const m = ISO.exec(String(iso || ''));
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
 }
 
-// "2026-11-03" -> "November 3, 2026". Falls back to what it was handed,
-// since this also formats dates read out of a data file.
+// "2026-11-03" -> "November 3, 2026"; anything unparseable comes back as given.
 function monthDay(iso) {
   const m = ISO.exec(String(iso || ''));
   return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}` : (iso || '');
 }
 
-// "2026-11-03" -> "Tuesday, November 3, 2026". The weekday leads because it
-// is what people plan around; a bare date sends the reader to a calendar.
+// "2026-11-03" -> "Tuesday, November 3, 2026".
 function withWeekday(iso) {
   const d = dayStart(iso);
   return d ? `${WEEKDAYS[d.getDay()]}, ${monthDay(iso)}` : (iso || '');
 }
 
-// "2026-11-03" -> "Tuesday, November 3". For use next to another date that
-// already carries the year, where repeating it adds nothing.
+// "2026-11-03" -> "Tuesday, November 3".
 function dayMonth(iso) { return withWeekday(iso).replace(/, \d{4}$/, ''); }
 
-// "7:00 AM" -> "7 AM". Only on the hour: the clerk publishes half hours for
-// early voting and those keep their minutes.
+// "7:00 AM" -> "7 AM"; half hours keep their minutes.
 function shortTime(t) {
   return String(t || '').replace(/:00(?=\s*[AP]M\b)/i, '');
 }
 
-// The next election on or after today. Sorted rather than trusting file
-// order, so an out-of-order entry cannot hide the election that is next.
+// Sorted rather than trusting file order, so an out-of-order entry cannot hide
+// the next election.
 function next(list, today) {
   const t = today || todayISO();
   const future = (list || []).filter((e) => e && e.date >= t);
@@ -179,11 +134,7 @@ function next(list, today) {
 
 function sites(e) { return e?.early_voting_sites || []; }
 
-// The first day an absentee ballot can go back for this election, or null
-// if it has no readable date. Michigan mails absentee ballots 40 days out,
-// so a drop box standing open before then has nothing to accept. Statute,
-// not something a clerk publishes, which is why it is one number here and
-// not a field in the calendar.
+// Statute, not a clerk's choice: Michigan mails absentee ballots 40 days out.
 const ABSENTEE_LEAD_DAYS = 40;
 function absenteeFrom(e) {
   const d = dayStart(e?.date);
@@ -192,10 +143,7 @@ function absenteeFrom(e) {
   return isoOf(d);
 }
 
-// "7:00 AM" / "8:00 PM" -> the instant on that date, local time. The
-// statutory hours are written the way the Secretary of State writes them,
-// so this reads that form and nothing else; anything it cannot read is
-// null, and the caller falls back to knowing only that it is election day.
+// "8:00 PM" on a Y-M-D date -> that local instant, or null if unreadable.
 const CLOCK = /^\s*(\d{1,2})(?::(\d{2}))?\s*([AP])\.?M\.?\s*$/i;
 function atTime(iso, clock) {
   const day = dayStart(iso);
@@ -206,9 +154,8 @@ function atTime(iso, clock) {
   return day;
 }
 
-// Where election day stands right now: 'before' the polls open, 'open',
-// or 'closed'. null on any other day, or when the hours cannot be read.
-// Takes the instant as an argument so it can be tested at fixed times.
+// 'before', 'open' or 'closed' on election day; null on any other day or when
+// the hours cannot be read.
 function pollsPhase(e, hours, now) {
   if (!e || !hours) return null;
   const open = atTime(e.date, hours.open);
@@ -221,17 +168,8 @@ function pollsPhase(e, hours, now) {
   return 'closed';
 }
 
-// The four states of the early voting window, decided once.
-//
-//   'none'    the clerk has published nothing, or only half a window. A
-//             start with no end is not a window a voter can act on.
-//   'before'  published, not started.
-//   'open'    today falls inside it.
-//   'closed'  it has been and gone. Since the election this belongs to is
-//             always the NEXT one, 'closed' means exactly "over, with the
-//             election still ahead" -- the state that matters most, because
-//             a reader who saw a site listed last week would otherwise
-//             drive to a locked door.
+// The early voting window: 'none' (nothing, or only half a window, published),
+// 'before', 'open', or 'closed' (over, with the election still ahead).
 function windowState(e, today) {
   if (!e || !e.early_voting_from || !e.early_voting_to) return 'none';
   const t = today || todayISO();
@@ -245,38 +183,18 @@ const Elections = {
   next, sites, absenteeFrom, atTime, pollsPhase, windowState
 };
 
-/* Released into the public domain under the Unlicense, see UNLICENSE.
- * Precinct + polling-place lookup.
- *
- * The matching logic here (parseTyped / streetMatches / resolve) is carried
- * over from the earlier vote-gr project, so the two tools answer "which
- * precinct is this address in" identically. Keeping it a faithful copy is
- * deliberate: two implementations of the same lookup would eventually
- * disagree, and disagreeing about someone's polling place is the one failure
- * this tool must not have.
- *
- * As in vote-gr, the whole lookup is a dictionary hit against a file the page
- * already downloaded. The address is never sent anywhere.
- */
+// ---- Precinct lookup ----
+// The address matching (parseTyped / streetMatches / resolve) is carried over
+// from the earlier vote-gr project so the two answer identically; keep it a
+// faithful copy. The lookup reads files already downloaded: the address is
+// never sent anywhere.
 
 const QUADRANT = { NE: 1, NW: 1, SE: 1, SW: 1 };
 
-// Two ways to build one.
-//
-// The original: addresses.json and polling.json, the Grand Rapids files,
-// where a precinct is identified by its bare number ("52") and every row is
-// [house number, "52", metres from the precinct edge]. The tests still
-// build this way. /simple reads the same two files with its own copy of
-// this lookup and does not load this file.
-//
-// Precincts.county(): all thirty jurisdictions at once. There a bare number
-// is no identity at all (every one of the thirty has a Precinct 1), so
-// every precinct is identified by the state's 13-digit code
-// ("0814282001001": county 081, Kentwood 42820, ward 01, precinct 001),
-// and the display number, the ward if the jurisdiction has wards, and the
-// jurisdiction's name are looked up from that code. Both modes store rows
-// the same way, [number, id, edge metres, rivals], so every method below
-// works on an `id` and does not know which kind it is holding.
+// Two modes: the constructor takes the Grand Rapids files, where a precinct id
+// is its bare number ("52"); Precincts.county() takes all thirty jurisdictions,
+// where it is the state's 13-digit code (county 081, MCD 42820, ward 01,
+// precinct 001). Rows are [house number, id, metres to precinct edge, rivals].
 class Precincts {
   constructor(addresses, polling) {
     this.wards = addresses.wards || {};
@@ -300,7 +218,6 @@ class Precincts {
     P.byCode = {};
     P.jurisdictions = {};
 
-    // Identity, from the precinct index: what each code means.
     const list = opts.index?.precincts || [];
     for (const pr of list) {
       P.byCode[pr.code] = { mcd: pr.mcd, jurisdiction: pr.jurisdiction,
@@ -309,15 +226,9 @@ class Precincts {
       P.jurisdictions[pr.mcd] = pr.jurisdiction;
     }
 
-    // Addresses. A chunk stores its precincts as a list and each row points
-    // at a position in it, so 227,000 rows do not repeat a 13-digit string;
-    // here the position becomes the code. A street name found in more than
-    // one jurisdiction merges into one list, sorted by number, and each row's
-    // code says which jurisdiction it is in. Sometimes that is one street
-    // crossing a line (28th St SE runs through three); as often it is two
-    // streets that share a name (Rockford and Cedar Springs each have a N
-    // Main St NE), so an address is answered within one jurisdiction: see
-    // places() below.
+    // A chunk's rows point into its own precinct list. A street name found in
+    // several jurisdictions merges into one list sorted by number; two towns
+    // can share a name, so places() keeps an answer within one jurisdiction.
     const docs = opts.addresses || [];
     const dirty = {};
     for (const doc of docs) {
@@ -344,10 +255,9 @@ class Precincts {
     }
     P.streetNames = Object.keys(P.streets);
 
-    // Polling places, keyed by code. The county's scrape supplies every
-    // jurisdiction; Grand Rapids is then overwritten from polling.json, the
-    // hand transcription with coordinates, entrance notes and the one
-    // consolidation the county page does not know about.
+    // The county's scrape covers every jurisdiction; Grand Rapids is then
+    // overwritten from polling.json, which adds coordinates, entrance notes
+    // and a consolidation the county page does not know about.
     const pdocs = opts.polling || [];
     for (const pd of pdocs) {
       const recs = pd.precincts || {};
@@ -381,7 +291,6 @@ class Precincts {
     return P;
   }
 
-  // What an id means for display. In the city files the id IS the number.
   describe(id) {
     if (this.byCode) {
       const d = this.byCode[id];
@@ -393,13 +302,11 @@ class Precincts {
              jurisdiction: null, mcd: null };
   }
 
-  // The id a polygon carries, in whichever mode this index is in.
   idOf(polygon) {
     return this.byCode ? polygon.code : String(polygon.precinct);
   }
 
-  // Which jurisdictions a street's rows fall in. Cached: the type-ahead asks
-  // for every suggestion on every keystroke.
+  // Cached: the type-ahead asks for every suggestion on every keystroke.
   whereIs(street) {
     if (!this.byCode) return null;
     this._where ||= {};
@@ -414,17 +321,12 @@ class Precincts {
     return (this._where[street] = names);
   }
 
-  // A jurisdiction's drop boxes, from the county's page. The county lists
-  // Grand Rapids' too, but the page answers Grand Rapids from the city
-  // clerk's own file instead (boxesFor in app.js).
+  // For Grand Rapids the page uses the city clerk's own file (boxesFor in app.js).
   dropBoxes(mcd) {
     return this.boxes?.[mcd] || [];
   }
 
-  // The jurisdiction's own clerk: address, phone, and a coordinate where the
-  // build could place it. Where no drop box is published this is where an
-  // absentee ballot goes, because under MCL 168.764a it has to reach the
-  // voter's own clerk and nobody else's.
+  // Where an absentee ballot goes when no drop box is published (MCL 168.764a).
   clerkOf(mcd) {
     return this.clerks?.[mcd] || null;
   }
@@ -437,9 +339,8 @@ class Precincts {
     return m ? { number: Number(m[1]), rest: m[2] } : { number: null, rest: clean };
   }
 
-  // Every street in the list in its canonical form, built once. `bare` has
-  // every name with its quadrant left out; `unquartered` only the names that
-  // never had one.
+  // `bare` holds every name without its quadrant; `unquartered` only the names
+  // that never had one.
   _canon() {
     if (this._canonCache) return this._canonCache;
     const list = [];
@@ -468,19 +369,15 @@ class Precincts {
         return lead(a) - lead(b) || a.length - b.length || a.localeCompare(b);
       });
     }
-    // Nothing under the county's spelling, so try it under everyone's. This
-    // runs only when the match above found nothing, so no answer that match
-    // gives can change: the lookup it was copied from still holds.
+    // Only when the county's spelling found nothing, so vote-gr's answers hold.
     let q = canonQuery(rest);
     const { list: canon, quartered } = this._canon();
     const names = this.streetNames;
     if (!q.length) return [];
     const at = [];
     for (let i = 0; i < canon.length; i++) if (streetMatches(canon[i], q)) at.push(i);
-    // Still nothing, and the text names a quadrant: try it against the
-    // streets the county writes with none. The state writes E FULTON ST SE in
-    // Ada where the county writes FULTON ST E, and covers() already counts
-    // those as one street, so the match has to be able to find it too.
+    // Still nothing: drop the quadrant and try streets the county writes
+    // without one (E FULTON ST SE is FULTON ST E in Ada), as covers() does.
     if (!at.length) {
       const unq = q.filter((t) => !QUADRANT[t]);
       if (unq.length && unq.length < q.length) {
@@ -497,11 +394,7 @@ class Precincts {
     }).map((k) => names[k]);
   }
 
-  // Whether the address list has this street, under any spelling of it. A
-  // quadrant on one side and none on the other is not a disagreement: the
-  // state writes ARBOR CHASE CT where the county writes ARBOR CHASE CT NE,
-  // and E FULTON ST SE in Ada where the county writes FULTON ST E. Two
-  // different quadrants are, and stay two streets.
+  // A quadrant on one side only still matches; two different ones are two streets.
   covers(name) {
     const c = canonName(name);
     const k = this._canon();
@@ -510,8 +403,7 @@ class Precincts {
               (c.quad && k.unquartered[c.bare]));
   }
 
-  // Whether the address list has any addresses in this jurisdiction, by the
-  // name the precinct index gives it ("Walker", "Grand Rapids Township").
+  // By the name the precinct index gives it ("Grand Rapids Township").
   coversJurisdiction(name) {
     if (!this._jset) {
       this._jset = {};
@@ -524,10 +416,7 @@ class Precincts {
     return !!this._jset[name];
   }
 
-  // Of a street -> [jurisdiction] map, the part this index cannot answer. A
-  // street it has under any spelling is dropped, except in a jurisdiction it
-  // has no addresses for; a street it does not have is kept whole. What is
-  // left is what the page may truthfully call a street it cannot look up.
+  // Of a street -> [jurisdiction] map, the part this index cannot answer.
   unindexed(streets) {
     const out = {};
     for (const name in streets || {}) {
@@ -541,21 +430,15 @@ class Precincts {
     return out;
   }
 
-  // ---- one street name, several places -------------------------------------
-  //
-  // 25 N Main St NE is a real address in Rockford and in Cedar Springs, eight
-  // miles apart. Read off the merged list, it was answered as whichever town
-  // sorted first, and a number between two of one town's houses could be
-  // inferred from the other town's. So the jurisdiction comes first: which
-  // ones could hold this address, and then the answer within one of them.
+  // ---- One street name, several places ----
+  // 25 N Main St NE exists in Rockford and in Cedar Springs, so the
+  // jurisdiction is settled first and the address answered within it.
 
-  // The jurisdiction a row is in, by its code. Null in the city files.
   mcdOf(row) {
     const d = this.byCode?.[row[1]];
     return d ? d.mcd : null;
   }
 
-  // A street's rows, or only those in one jurisdiction.
   _rows(street, mcd) {
     const rows = this.streets[street];
     if (!rows || !mcd || !this.byCode) return rows || null;
@@ -563,11 +446,8 @@ class Precincts {
     return mine.length ? mine : null;
   }
 
-  // Every jurisdiction that could hold this address: those with the number on
-  // file, or failing that, those whose own rows on the street bracket it.
-  // Usually one. Empty in the city files, and when a number falls between two
-  // jurisdictions' rows on a street that crosses the line, which resolve()
-  // then answers from the merged list as the boundary case it is.
+  // Empty in the city files, and for a number between two jurisdictions' rows,
+  // which resolve() then answers from the merged list.
   places(street, number) {
     const rows = this.streets[street];
     if (!rows || !this.byCode || number == null) return [];
@@ -583,10 +463,8 @@ class Precincts {
     return mcds.filter((mcd) => !!this.resolve(street, number, mcd));
   }
 
-  // Resolve a house number on a street. Answers only when the neighbors on
-  // the SAME SIDE agree, because a precinct line often runs down the middle of
-  // a street, putting odd and even in different precincts. With `mcd`, only
-  // that jurisdiction's rows are read.
+  // Infers only from same-side neighbors: a precinct line often runs down the
+  // middle of a street, putting odd and even in different precincts.
   resolve(street, number, mcd) {
     const rows = this._rows(street, mcd);
     if (!rows) return null;
@@ -612,9 +490,8 @@ class Precincts {
              rivals: null, inferred: true };
   }
 
-  // Where a precinct actually votes. Honors `consolidated_with`, which is how
-  // the clerk records a precinct voting at another precinct's location for one
-  // election -- it appears only in the directory's FOOTNOTES.
+  // consolidated_with: a precinct voting at another's location for one
+  // election, which the clerk records only in the directory's footnotes.
   pollingPlace(precinct) {
     const p = this.polling[precinct];
     if (!p) return null;
@@ -628,17 +505,12 @@ class Precincts {
              entrance_note: p.entrance_note };
   }
 
-  // Suggestions for the type-ahead. Returns real addresses that exist in the
-  // index, so the person picks a known answer instead of being told after the
-  // fact that what they typed is not in it. A house number that is missing
-  // stops being an error and becomes "did you mean one of these".
   suggest(text, limit) {
     limit = limit || 8;
     const t = this.parseTyped(text);
     const streets = this.matchingStreets(t.rest);
     if (!streets.length) return [];
 
-    // No number yet: offer streets, so the next keystroke has somewhere to go.
     const tag = (o) => {
       const w = o.mcd ? [this.jurisdictions[o.mcd]] : this.whereIs(o.street);
       if (w && w.length) o.where = w;
@@ -650,9 +522,6 @@ class Precincts {
     }
 
     const out = [];
-    // Exact hits first, across every matching street, then inferred ones
-    // (between known neighbors on the same side). One row per jurisdiction
-    // that could hold the address, each naming only that jurisdiction.
     ['exact', 'inferred'].forEach((kind) => {
       streets.forEach((s) => {
         if (out.some((o) => o.street === s)) return;
@@ -668,19 +537,11 @@ class Precincts {
         }
       });
     });
-    // Nearby house numbers are a LAST RESORT, offered only when the number
-    // typed matches nothing anywhere. Listing a street's other addresses
-    // beside a perfectly good answer just makes the reader pick their own
-    // address out of a lineup of their neighbors'.
+    // Nearby house numbers are a last resort, only when nothing above matched.
     if (out.length) return markChoices(out).slice(0, limit).map(tag);
 
-    // Before falling back to neighbors, try the SAME number on the same
-    // street in another quadrant. Grand Rapids numbers radiate from Fulton
-    // and Division, so each quadrant starts its own count and the same low
-    // number can exist in one quadrant and not the other: there is no 15
-    // Burton St SE, though 15 Burton St SW is a real address. A quadrant slip
-    // is a far likelier mistake than being three houses out, so it is offered
-    // first.
+    // Then the same number in another quadrant: each Grand Rapids quadrant
+    // counts from Fulton and Division, so 15 Burton St SW exists and SE does not.
     const base = strippedQuadrant(t.rest);
     if (base) {
       this.streetNames.forEach((s) => {
@@ -730,17 +591,14 @@ class Precincts {
     return false;
   }
 
-  // Full lookup: typed text -> everything the page needs, or a reason it can't.
   // `mcd` is the jurisdiction the reader picked. Without one, an address
-  // more than one jurisdiction could hold is not answered: the error names
-  // the places, and the reader chooses.
+  // several jurisdictions could hold returns 'several_places' to choose from.
   lookup(text, mcd) {
     const t = this.parseTyped(text);
     if (t.number == null) return { error: 'no_number', rest: t.rest,
                                    suggestions: this.matchingStreets(t.rest).slice(0, 6) };
     const candidates = this.matchingStreets(t.rest);
     if (!candidates.length) return { error: 'no_street', rest: t.rest };
-    // exact name wins; otherwise the best-ranked match
     const street = candidates.includes(t.rest) ? t.rest : candidates[0];
     const places = mcd ? [mcd] : this.places(street, t.number);
     if (places.length > 1) {
@@ -754,11 +612,9 @@ class Precincts {
     const who = this.describe(res.precinct);
     return {
       number: t.number, street,
-      // `precinct` is the number a voter recognises; `code` is the identity.
-      // In the city files they are the same string.
+      // `precinct` is the number a voter knows; `code` is the identity.
       code: who.code, precinct: who.precinct, ward: who.ward,
       jurisdiction: who.jurisdiction, mcd: who.mcd, place,
-      // Rivals as display numbers, since that is what the reader is shown.
       rivals: res.rivals ? res.rivals.map((id) => this.describe(id).precinct) : null,
       inferred: res.inferred, edgeMetres: res.edgeMetres,
       ambiguousStreet: candidates.length > 1 && !candidates.includes(t.rest)
@@ -774,19 +630,9 @@ class Precincts {
     return null;
   }
 
-  // An inferred address has no parcel of its own, so its precinct is read off
-  // the neighbors either side of it. That breaks where a precinct line runs
-  // down the middle of a street: 401 Ionia Ave SW has 400, 404 and 408 sitting
-  // across the road in precinct 6, while 401 itself is in 15. Where such an
-  // address geocodes and the boundary disagrees with the neighbors, the
-  // boundary wins, and both precincts are still named so the reader can see
-  // the call was close.
-  //
-  // INFERRED ADDRESSES ONLY. An exact parcel match already got its precinct
-  // from the parcel point itself; geocoding it lands on the street centerline
-  // instead, which disagrees with the polygon for about 1 in 15 of them.
-  // Letting the polygon win there would trade a handful of real corrections
-  // for hundreds of fresh errors.
+  // For an inferred address only, the precinct polygon at its geocoded point
+  // overrides the neighbors. An exact match geocodes to the street centerline,
+  // which disagrees with the polygon for about 1 in 15 of them.
   refineWithPolygon(r, geocodeFn, polygons) {
     if (!r || r.error || !r.inferred || !geocodeFn || !polygons) return r;
     const pt = geocodeFn(r.number, r.street);
@@ -818,32 +664,18 @@ function streetMatches(street, tokens) {
   return true;
 }
 
-// "BURTON ST SE" -> "BURTON ST". Used to find the same street in a different
-// quadrant; returns null when there is no quadrant to strip.
+// "BURTON ST SE" -> "BURTON ST"; null when there is no quadrant.
 function strippedQuadrant(name) {
   const m = String(name || '').toUpperCase().trim()
     .match(/^(.*?)\s+(NE|NW|SE|SW)$/);
   return m ? m[1] : null;
 }
 
-// ---- two spellings of one street --------------------------------------
-//
-// The address list is the county's parcel file, and nobody else writes a
-// street quite the way it does. A reader types "E Fulton St" where the
-// county writes FULTON ST E, and "Saint Andrews" or "Street" where it
-// writes ST. The state road layer that neighbors.json comes from writes
-// HOLW for HOLLOW, RDG for RIDGE and E BELTLINE for EAST BELTLINE. So every
-// word below folds to one form, on both sides of the comparison, and a lone
-// N, S, E or W moves to the end whether it led or trailed. router.js reads
-// the same leading-or-trailing disagreement between the parcel file and the
-// centerlines this way.
-//
-// Unlike router.js this keeps the street type and the quadrant. The router
-// matches a name against road segments and lets the house number settle
-// the rest; here the name is what picks the street, and a court and a drive
-// of one name are two streets, as is one name in two quadrants. Where the
-// county and the state disagree about those, the disagreement stands and
-// the street stays unanswered rather than answered as its neighbor.
+// ---- Two spellings of one street ----
+// Readers and the state road layer spell streets differently from the
+// county's parcel file (E FULTON ST for FULTON ST E, HOLW for HOLLOW), so both
+// sides fold to one form. Unlike router.js this keeps the street type and the
+// quadrant: a court and a drive of one name are two streets.
 const WORDS = {
   STREET: 'ST', SAINT: 'ST', AVENUE: 'AVE', DRIVE: 'DR', ROAD: 'RD',
   COURT: 'CT', LANE: 'LN', PLACE: 'PL', CIRCLE: 'CIR', BOULEVARD: 'BLVD',
@@ -865,9 +697,7 @@ function foldWords(text) {
     .map((t) => WORDS[t] || t);
 }
 
-// A whole street name: "E BELTLINE AVE NE" and "EAST BELTLINE AVE NE" both
-// come out as BELTLINE AVE NE E. `bare` leaves the quadrant out, for a name
-// the state wrote without one.
+// "E BELTLINE AVE NE" and "EAST BELTLINE AVE NE" -> "BELTLINE AVE NE E".
 function canonName(name) {
   const w = foldWords(name);
   let dir = null, quad = null;
@@ -879,18 +709,15 @@ function canonName(name) {
            bare: bare.join(' '), quad };
 }
 
-// What a reader has typed so far, which may stop halfway through a word.
-// Only a LEADING direction moves: a trailing S may be the start of ST, and
-// left where it is it still lines up with the end of the name.
+// Only a leading direction moves: in partial input a trailing S may begin ST.
 function canonQuery(rest) {
   const w = foldWords(rest);
   if (w.length > 1 && CARDINAL[w[0]]) w.push(w.shift());
   return w;
 }
 
-// The same number and street offered in more than one jurisdiction is a
-// question only the reader can answer, so each such row says so. Enter
-// then opens the list rather than taking the first of them.
+// An address offered in several jurisdictions is marked, so Enter opens the
+// list rather than taking the first.
 function markChoices(list) {
   const count = {};
   list.forEach((o) => {
@@ -901,16 +728,10 @@ function markChoices(list) {
   return list;
 }
 
-// ---- point in polygon --------------------------------------------------
-// The one ray cast in the project. The precinct lookup below, app.js's
-// "inside this jurisdiction" test that keeps a geocoded address on its own
-// town's street, scripts/compare_osrm.mjs and the tests all call this
-// rather than keeping their own copy, so none of them can drift into
-// disagreeing about which side of a line a point falls on.
-//
-// Rings are [lat, lng] pairs, as precincts.json stores them; a caller
-// holding [lng, lat] rings (boundary.json) swaps them once before calling.
-// A polygon with several rings toggles across all of them, so holes work.
+// ---- Point in polygon ----
+// The project's one ray cast: app.js, scripts/compare_osrm.mjs and the tests
+// call this rather than keep a copy. Rings are [lat, lng] pairs, so swap
+// boundary.json's [lng, lat] first. Every ring toggles, so holes work.
 function pointInRings(lat, lng, rings) {
   let inside = false;
   for (const ring of rings) {
