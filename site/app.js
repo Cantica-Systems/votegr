@@ -1,4 +1,4 @@
-import { displayCase, Elections, Precincts } from './voting.js';
+import { displayCase, esc, Elections, Precincts } from './voting.js';
 import { basemapLayer, Cameras } from './map.js';
 import { Graph, haversine, bearing } from './router.js';
 
@@ -9,28 +9,30 @@ import { Graph, haversine, bearing } from './router.js';
 // One address in. The destination is never asked for: it is derived
 // (address -> precinct -> polling place), which is the point of the tool.
 
-var map, graph, P, cameras;
-var pollLayer, siteLayer, camLayer, routeLayer, pinLayer;
-var current = null;
-var activeEl = null, destChoice = null, electionDayHours = null;
+let map, graph, P, cameras;
+let pollLayer, siteLayer, camLayer, routeLayer, pinLayer;
+let current = null;
+let activeEl = null, destChoice = null, electionDayHours = null;
 // Kept beside activeEl because the countdown re-asks the calendar when the
 // day rolls over under a page nobody has reloaded.
-var electionList = null;
-var ownBase = null;
-var neighbors = null, precincts = null;
-var pinArmed = false;
-var ac = null;            // the suggestion list, from autocomplete.js
-var clerk = null;         // gr-clerk.json: early voting sites and drop boxes
-var sources = {};         // sources.json: every upstream this site reads, by id
+let electionList = null;
+let ownBase = null;
+let neighbors = null, precincts = null;
+let pinArmed = false;
+let ac = null;            // the suggestion list, from autocomplete.js
+let clerk = null;         // gr-clerk.json: early voting sites and drop boxes
+let sources = {};         // sources.json: every upstream this site reads, by id
 // Which place, within a kind, the reader picked from its list. The nearest
 // is only the default: someone drops a ballot on the way to somewhere else,
 // and the box outside the library they were visiting beats the one four
 // streets closer to home. Reset whenever a new address is looked up, since
 // "the third nearest" means something different from a different doorstep.
-var chosen = { dropbox: 0, early: 0 };
-var routes = null, selected = 'avoid';
-var originArrow = null;   // the blue you-are-here arrow; steps advance it
-var GR = [42.9634, -85.6681];
+let chosen = { dropbox: 0, early: 0 };
+let routes = null, selected = 'avoid';
+let originArrow = null;   // the blue you-are-here arrow; steps advance it
+const GR = [42.9634, -85.6681];
+const GR_MCD = '34000';      // the state's MCD code for the City of Grand Rapids
+const METERS_PER_MILE = 1609.344;       // the international mile, exactly
 
 // There is deliberately no tile layer. Tiles would be fetched from a third
 // party on every pan, which is the one thing that stopped this page being
@@ -39,11 +41,10 @@ var GR = [42.9634, -85.6681];
 // The roads are the REGIS/Kent County street centerlines, whichever
 // server happens to host them. Kept to one line: on a card-sized map a
 // two-line attribution eats the bottom of it.
-var ATTR = 'Roads: Kent County (REGIS) · ' +
+const ATTR = 'Roads: Kent County (REGIS) · ' +
            '\u00a9 OpenStreetMap contributors (ODbL)';
 
 function $(id) { return document.getElementById(id); }
-function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
 function getVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#000';
 }
@@ -66,32 +67,31 @@ function setHint(text) { $('hint').textContent = text || ''; }
 // it is stored as a choice rather than as the absence of one.
 function themeChoice() {
   try {
-    var t = localStorage.getItem('theme');
+    const t = localStorage.getItem('theme');
     return (t === 'light' || t === 'dark' || t === 'system') ? t : 'dark';
   } catch (e) { return 'dark'; }
 }
 
 // What is actually on screen, which is what the map has to match.
 function prefersDark() {
-  var c = themeChoice();
+  const c = themeChoice();
   if (c === 'dark') return true;
   if (c === 'light') return false;
-  return !!(window.matchMedia &&
-            window.matchMedia('(prefers-color-scheme: dark)').matches);
+  return !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 }
 
 function applyTheme(choice) {
-  var root = document.documentElement;
+  const root = document.documentElement;
   if (choice === 'system') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', choice);
   try {
     localStorage.setItem('theme', choice);
   } catch (e) { /* private mode: the page still works, it just forgets */ }
 
-  var sw = $('themeSwitch');
+  const sw = $('themeSwitch');
   if (sw) {
-    Array.prototype.forEach.call(sw.querySelectorAll('button'), function (b) {
-      var on = b.dataset.themeChoice === choice;
+    sw.querySelectorAll('button').forEach((b) => {
+      const on = b.dataset.themeChoice === choice;
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
@@ -118,57 +118,55 @@ function onSchemeChanged() {
 // it rather than behind it. Shared by the About panel and the place list.
 function openModal(wrap) {
   wrap.hidden = false;
-  var x = wrap.querySelector('.modal-x');
-  if (x) x.focus();
+  wrap.querySelector('.modal-x')?.focus();
 }
 
 function initAbout() {
-  var wrap = $('aboutModal');
+  const wrap = $('aboutModal');
   if (!wrap) return;
   function open() { openModal(wrap); }
   function close() { wrap.hidden = true; }
 
   // The footer's About opens it. The header carries just the wordmark, and
   // the theme switch holds the other end of the footer.
-  var btnF = $('aboutBtnFoot');
+  const btnF = $('aboutBtnFoot');
   if (btnF) btnF.onclick = open;
   // The intro's How? opens the same panel. Two openers, one concept: the
   // intro scrolls away once a result renders, and the footer is what stays
   // reachable at the point someone is looking at a route and wondering how
   // it was worked out.
-  var howL = $('howLink');
-  if (howL) howL.onclick = function (e) { e.preventDefault(); open(); };
-  wrap.addEventListener('click', function (e) {
+  const howL = $('howLink');
+  if (howL) howL.onclick = (e) => { e.preventDefault(); open(); };
+  wrap.addEventListener('click', (e) => {
     if (e.target.closest('[data-close]')) close();
   });
   // Escape closes whichever sheet is open, this one or the place list.
   // Bound once, here: the place list is rewired on every answer, and a
   // listener added there piled up one per lookup.
-  document.addEventListener('keydown', function (e) {
+  document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    Array.prototype.forEach.call(document.querySelectorAll('.modal-wrap'),
-      function (w) { w.hidden = true; });
+    document.querySelectorAll('.modal-wrap').forEach((w) => { w.hidden = true; });
   });
 }
 
 // ---- map layers ------------------------------------------------------
-var LAYER_KEYS = { lyrPrecincts: 'precincts', lyrNumbers: 'numbers',
+const LAYER_KEYS = { lyrPrecincts: 'precincts', lyrNumbers: 'numbers',
                    lyrWards: 'wards', lyrPolling: 'polling',
                    lyrCameras: 'cameras' };
 
 function layerState() {
-  var o = {};
-  Object.keys(LAYER_KEYS).forEach(function (id) {
-    var el = $(id);
+  const o = {};
+  Object.keys(LAYER_KEYS).forEach((id) => {
+    const el = $(id);
     o[LAYER_KEYS[id]] = el ? el.checked : true;
   });
   return o;
 }
 
 function applyLayers() {
-  var o = layerState();
+  const o = layerState();
   ownBase.setLayerOpts(o);
-  [pollLayer, siteLayer].forEach(function (layer) {
+  [pollLayer, siteLayer].forEach((layer) => {
     if (!layer) return;
     if (o.polling) { if (!map.hasLayer(layer)) layer.addTo(map); }
     else map.removeLayer(layer);
@@ -182,10 +180,10 @@ function applyLayers() {
 }
 
 function initLayers() {
-  var saved = null;
+  let saved = null;
   try { saved = JSON.parse(localStorage.getItem('layers') || 'null'); } catch (e) { saved = null; }
-  Object.keys(LAYER_KEYS).forEach(function (id) {
-    var el = $(id);
+  Object.keys(LAYER_KEYS).forEach((id) => {
+    const el = $(id);
     if (!el) return;
     if (saved && typeof saved[LAYER_KEYS[id]] === 'boolean') el.checked = saved[LAYER_KEYS[id]];
     el.addEventListener('change', applyLayers);
@@ -194,10 +192,10 @@ function initLayers() {
 }
 
 function initTheme() {
-  var sw = $('themeSwitch');
+  const sw = $('themeSwitch');
   if (sw) {
-    sw.addEventListener('click', function (e) {
-      var b = e.target.closest('button[data-theme-choice]');
+    sw.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-theme-choice]');
       if (b) applyTheme(b.dataset.themeChoice);
     });
   }
@@ -224,21 +222,21 @@ function isPhone() { return window.matchMedia('(max-width: 700px)').matches; }
 // which precinct was tapped. Without the distinction the county map, where
 // nearly every tap lands in some precinct, could never close a camera's
 // detail by tapping away; it only swapped it for a precinct's.
-var detailKind = null;
+let detailKind = null;
 
 function showDetail(html, kind) {
-  var d = $('mapDetail');
+  const d = $('mapDetail');
   detailKind = kind || 'precinct';
   $('mapDetailBody').innerHTML = html;
   d.hidden = false;
   // Only chase it into view if it actually sits off the bottom, so a click
   // on a marker does not yank a map the reader is looking at.
-  var r = d.getBoundingClientRect();
+  const r = d.getBoundingClientRect();
   if (r.bottom > window.innerHeight) d.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function hideDetail() {
-  var d = $('mapDetail');
+  const d = $('mapDetail');
   if (d) { d.hidden = true; $('mapDetailBody').innerHTML = ''; }
   detailKind = null;
 }
@@ -249,15 +247,15 @@ function hideDetail() {
 // bounds AFTER this, since fitting against the stale size picks the wrong
 // zoom.
 function revealMap() {
-  var b = $('mapBlock'), rb = $('routeBlock');
+  const b = $('mapBlock'), rb = $('routeBlock');
   if (!b) return;
   // The map lives INSIDE the route section, so revealing the map block
   // alone does nothing while its parent is still hidden. When the section
   // is being opened just for the map (pin picking, no route yet), map-only
   // hides the section's own chrome so a "Directions" heading does not float
   // over an empty pick-a-spot view.
-  if (rb && rb.hidden) { rb.hidden = false; rb.classList.add('map-only'); }
-  var wasHidden = b.hidden;
+  if (rb?.hidden) { rb.hidden = false; rb.classList.add('map-only'); }
+  const wasHidden = b.hidden;
   b.hidden = false;
   // Re-measure on any reveal path: either hidden flag may have left it 0x0.
   if (map && (wasHidden || map.getSize().x === 0)) map.invalidateSize(false);
@@ -274,10 +272,10 @@ function revealMap() {
 // stays a single short answer: a wide view can straddle a dozen precincts,
 // and listing them would be noise rather than orientation.
 function updateMapScope() {
-  var el = $('mapScope');
+  const el = $('mapScope');
   if (!el) return;
   if (!map || !precincts || $('mapBlock').hidden) { el.textContent = ''; return; }
-  var c = map.getCenter();
+  const c = map.getCenter();
   el.textContent = scopeText(c.lat, c.lng);
 }
 
@@ -286,7 +284,7 @@ function updateMapScope() {
 // it is following the view centre or the cursor, so the two cannot word
 // one spot differently.
 function scopeText(lat, lng) {
-  var pr = precinctAt(lat, lng);
+  const pr = precinctAt(lat, lng);
   return pr ? placeLine(pr) : 'Outside Kent County';
 }
 
@@ -299,10 +297,10 @@ function scopeText(lat, lng) {
 // says Ward 3 above it, "precinct 45" is the ward's own number, and only a
 // number from some OTHER ward has to say so.
 function precinctNumber(id, context) {
-  var d = P && P.describe ? P.describe(id) : null;
+  const d = P?.describe ? P.describe(id) : null;
   if (!d || d.precinct == null || String(d.precinct) === String(id)) return String(id);
-  var ward = d.ward == null || d.ward === '' || String(d.ward) === String(context)
-    ? '' : d.ward + '-';
+  const ward = d.ward == null || d.ward === '' || String(d.ward) === String(context)
+    ? '' : `${d.ward}-`;
   return ward + d.precinct;
 }
 
@@ -313,20 +311,21 @@ function precinctNumber(id, context) {
 // a fact about the township. Plain text: the status bar sets it as
 // textContent, and the detail card escapes it like any other title.
 function placeLine(pr) {
-  return (pr.jurisdiction ? pr.jurisdiction + ' \u00b7 ' : '') +
-    (pr.ward != null && pr.ward !== '' ? 'Ward ' + pr.ward + ' \u00b7 ' : '') +
-    'Precinct ' + pr.precinct;
+  return (pr.jurisdiction ? `${pr.jurisdiction} \u00b7 ` : '') +
+    (pr.ward != null && pr.ward !== '' ? `Ward ${pr.ward} \u00b7 ` : '') +
+    `Precinct ${pr.precinct}`;
 }
 
 // Named at the moment the panel opens, not when the page loads: the
 // jurisdiction is whichever one the current answer is in, and at load
 // there is no answer yet.
 function listTitle(kind) {
-  var where = (current && current.jurisdiction) || 'your area';
+  const where = current?.jurisdiction || 'your area';
   if (kind === 'dropbox' && officeOnly(boxesFor(current))) {
-    return 'Returning an absentee ballot in ' + where;
+    return `Returning an absentee ballot in ${where}`;
   }
-  return (kind === 'dropbox' ? 'Ballot drop boxes in ' : 'Early voting sites in ') + where;
+  const what = kind === 'dropbox' ? 'Ballot drop boxes' : 'Early voting sites';
+  return `${what} in ${where}`;
 }
 
 // The full list of somewhere-to-go, for either kind, in a panel rather than
@@ -340,26 +339,26 @@ function listTitle(kind) {
 // Picking sets the choice for that kind, which the card then shows and the
 // router then drives to, so the two cannot disagree.
 function wirePlaceLists(r) {
-  var wrap = $('placeModal'), body = $('placeModalBody'), title = $('placeTitle');
+  const wrap = $('placeModal'), body = $('placeModalBody'), title = $('placeTitle');
   if (!wrap || !body) return;
-  var opts = destinations(r);
+  const opts = destinations(r);
 
   function close() { wrap.hidden = true; }
 
-  ['dropbox', 'early'].forEach(function (kind) {
-    var btn = $(kind === 'dropbox' ? 'boxListBtn' : 'evListBtn');
-    var opt = opts.filter(function (o) { return o.kind === kind; })[0];
+  ['dropbox', 'early'].forEach((kind) => {
+    const btn = $(kind === 'dropbox' ? 'boxListBtn' : 'evListBtn');
+    const opt = opts.find((o) => o.kind === kind);
     if (!btn || !opt) return;
-    btn.onclick = function () {
+    btn.onclick = () => {
       title.textContent = listTitle(kind);
       body.innerHTML = placeListHtml(kind, opt);
       openModal(wrap);
     };
   });
 
-  wrap.onclick = function (e) {
+  wrap.onclick = (e) => {
     if (e.target.closest('[data-close]')) { close(); return; }
-    var li = e.target.closest('li[data-pick]');
+    const li = e.target.closest('li[data-pick]');
     if (!li || !current) return;
     chosen[li.dataset.kind] = Number(li.dataset.pick);
     close();
@@ -371,36 +370,35 @@ function wirePlaceLists(r) {
     // one only won by arriving later.
     show(current, li.dataset.kind, isPhone() ? 'routeBlock' : null);
   };
-  body.onkeydown = function (e) {
-    var li = e.target.closest && e.target.closest('li[data-pick]');
+  body.onkeydown = (e) => {
+    const li = e.target.closest?.('li[data-pick]');
     if (li && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); li.click(); }
   };
 }
 
 function placeListHtml(kind, opt) {
-  var html = '<ul class="box-list">';
-  opt.all.forEach(function (b, i) {
-    html += '<li data-pick="' + i + '" data-kind="' + kind + '"' +
-      ' role="button" tabindex="0" title="Get directions here"' +
-      (i === chosen[kind] ? ' class="is-chosen"' : '') + '>' +
-      '<span class="bx-name">' + esc(boxLabel(b)) +
-      (b.metres != null
-        ? '<span class="bx-dist">' + fmtMi(b.metres) + '</span>'
-        : '') + '</span>' +
-      '<span class="bx-addr">' + esc(addressForDisplay(b.address)) + '</span>' +
-      (b.entrance_note || b.note
-        ? '<span class="bx-where"><span class="pp-loc-l">Location:</span> ' +
-          esc(sentenceCase(b.entrance_note || b.note)) + '</span>' : '') +
+  let html = '<ul class="box-list">';
+  opt.all.forEach((b, i) => {
+    const picked = i === chosen[kind] ? ' class="is-chosen"' : '';
+    const dist = b.metres != null ? `<span class="bx-dist">${fmtMi(b.metres)}</span>` : '';
+    const loc = b.entrance_note || b.note
+      ? '<span class="bx-where"><span class="pp-loc-l">Location:</span> ' +
+        `${esc(sentenceCase(b.entrance_note || b.note))}</span>`
+      : '';
+    html += `<li data-pick="${i}" data-kind="${kind}"` +
+      ` role="button" tabindex="0" title="Get directions here"${picked}>` +
+      `<span class="bx-name">${esc(boxLabel(b))}${dist}</span>` +
+      `<span class="bx-addr">${esc(addressForDisplay(b.address))}</span>` +
+      loc +
       boxHoursHtml(b, 'span', { open: 'bx-hours', phone: 'bx-addr' }) +
       '</li>';
   });
   // A box published with no street address cannot be driven to, so it is
   // listed and plainly not offered as a destination.
   if (kind === 'dropbox' && inGrandRapids(current)) {
-    ((clerk && clerk.unrouted) || []).forEach(function (b) {
-      html += '<li class="bx-noroute"><span class="bx-name">' +
-        esc(boxLabel(b)) + '</span><span class="bx-where">' +
-        esc(sentenceCase(b.note || '')) + '</span>' +
+    (clerk?.unrouted || []).forEach((b) => {
+      html += `<li class="bx-noroute"><span class="bx-name">${esc(boxLabel(b))}</span>` +
+        `<span class="bx-where">${esc(sentenceCase(b.note || ''))}</span>` +
         '<span class="bx-addr">Inside the building, so there is no address ' +
         'to route to.</span></li>';
     });
@@ -408,7 +406,7 @@ function placeListHtml(kind, opt) {
   // No caption under the list. Every row already carries its own distance,
   // and every row is visibly a button, so a paragraph explaining the order
   // and the click was telling the reader what they could see.
-  return html + '</ul>' + provenanceHtml(opt);
+  return `${html}</ul>${provenanceHtml(opt)}`;
 }
 
 // Where this list came from, said in the panel that shows it rather than
@@ -430,25 +428,26 @@ function placeListHtml(kind, opt) {
 // wrong office. The drop boxes read from the county's own page carry no
 // `src` yet; giving them one belongs with refresh_polling.py.
 function provenanceHtml(opt) {
-  var ids = [], seen = {};
-  ((opt && opt.all) || []).forEach(function (r) {
-    var id = r && r.src;
+  const ids = [], seen = {};
+  (opt?.all || []).forEach((r) => {
+    const id = r?.src;
     if (id && sources[id] && !seen[id]) { seen[id] = 1; ids.push(id); }
   });
   if (!ids.length) return '';
 
-  return '<p class="bx-prov">' + ids.map(function (id) {
-    var s = sources[id];
-    var bits = ['Source: <a href="' + esc(s.url) + '" target="_blank" ' +
-      'rel="noopener">' + esc(s.publisher) + '</a>'];
-    if (s.retrieved) bits.push('read ' + esc(Elections.monthDay(s.retrieved)));
+  const credits = ids.map((id) => {
+    const s = sources[id];
+    const bits = [`Source: <a href="${esc(s.url)}" target="_blank" ` +
+      `rel="noopener">${esc(s.publisher)}</a>`];
+    if (s.retrieved) bits.push(`read ${esc(Elections.monthDay(s.retrieved))}`);
     if (s.archived) {
-      bits.push('<a href="' + esc(s.archived) + '" target="_blank" ' +
+      bits.push(`<a href="${esc(s.archived)}" target="_blank" ` +
         'rel="noopener">archived copy</a>');
     }
     return bits.join(' \u00b7 ') +
-      (s.archive_note ? '<br>' + esc(s.archive_note) : '');
-  }).join('<br>') + '</p>';
+      (s.archive_note ? `<br>${esc(s.archive_note)}` : '');
+  });
+  return `<p class="bx-prov">${credits.join('<br>')}</p>`;
 }
 
 // The dates cell of a row: what the window is called, its dates, and a
@@ -458,19 +457,18 @@ function provenanceHtml(opt) {
 // `head`, the summary a shut card shows, and `fold`, the note (and early
 // voting's hours) that opening it reveals.
 function whenCell(kind, state, extra) {
-  var note = state.note ? '<div class="pp-note">' + esc(state.note) + '</div>' : '';
-  var shown = extra || '';
-  var phone = isPhone();
+  const note = state.note ? `<div class="pp-note">${esc(state.note)}</div>` : '';
+  let shown = extra || '';
+  const phone = isPhone();
   // Election day's "7 AM to 8 PM" is one line and belongs with the date;
   // early voting's twelve days of hours do not, and fold away with the note.
-  var fold = phone ? note + (kind === 'early' ? shown : '') : '';
+  const fold = phone ? note + (kind === 'early' ? shown : '') : '';
   if (phone && kind === 'early') shown = '';
-  var head = '<div class="vi-when vi-when-' + kind + '">' +
-    '<div class="vi-lbl' + (state.live ? ' live' : '') + '">' +
-    esc(state.label) + '</div>' +
-    '<div class="vi-val">' + esc(state.status) + '</div>' +
-    shown + (phone ? '' : note) + '</div>';
-  return { head: head, fold: fold };
+  const head = `<div class="vi-when vi-when-${kind}">` +
+    `<div class="vi-lbl${state.live ? ' live' : ''}">${esc(state.label)}</div>` +
+    `<div class="vi-val">${esc(state.status)}</div>` +
+    `${shown}${phone ? '' : note}</div>`;
+  return { head, fold };
 }
 
 // A drop box is only useful once there is a ballot to put in it, and a
@@ -481,21 +479,21 @@ function whenCell(kind, state, extra) {
 // though it were ready.
 function absenteeState() {
   if (!activeEl) return { label: 'Ballot drop box', status: 'No election scheduled' };
-  var from = Elections.absenteeFrom(activeEl);
-  var range = Elections.dayMonth(from) + ' to ' + Elections.dayMonth(activeEl.date);
-  var today = Elections.todayISO();
+  const from = Elections.absenteeFrom(activeEl);
+  const range = `${Elections.dayMonth(from)} to ${Elections.dayMonth(activeEl.date)}`;
+  const today = Elections.todayISO();
   if (today < from) {
     return { label: 'Absentee voting upcoming', status: range, live: true,
-             note: 'Absentee ballots are mailed from ' +
-                   Elections.monthDay(from) + '. They can be returned from '
-                   + 'then until the polls close on election day.' + boxAccess() };
+             note: `Absentee ballots are mailed from ${Elections.monthDay(from)}. ` +
+                   'They can be returned from then until the polls close on election day.' +
+                   boxAccess() };
   }
   if (today > activeEl.date) {
     return { label: 'Absentee voting closed', status: range };
   }
   return { label: 'Absentee voting open', status: range, live: true,
-           note: 'A returned ballot has to be in the clerk\'s hands by the '
-                 + 'time the polls close on election day.' + boxAccess() };
+           note: 'A returned ballot has to be in the clerk\'s hands by the ' +
+                 `time the polls close on election day.${boxAccess()}` };
 }
 
 // Today IS the day. The three ways to vote stop being a menu at that point:
@@ -531,7 +529,7 @@ function customClass(kind) { return chosen[kind] ? ' is-custom' : ''; }
 function locLine(text) {
   return text
     ? '<div class="pp-loc"><span class="pp-loc-l">Location:</span> ' +
-      esc(sentenceCase(text)) + '</div>'
+      `${esc(sentenceCase(text))}</div>`
     : '';
 }
 
@@ -543,8 +541,8 @@ function locLine(text) {
 // guessed. The polling card has no list to show, so its row is the button
 // alone, under the address.
 function actionRow(kind, extra) {
-  return '<div class="vi-actions">' + (extra || '') +
-    '<button type="button" class="box-open dir-btn" data-dir="' + kind + '">' +
+  return `<div class="vi-actions">${extra || ''}` +
+    `<button type="button" class="box-open dir-btn" data-dir="${kind}">` +
     'Directions</button></div>';
 }
 
@@ -557,23 +555,23 @@ function actionRow(kind, extra) {
 // tap away. Election day is never folded: it is the default destination,
 // and the map below is already pointed at it.
 function section(kind, where, when, opts) {
-  var head = (when && when.head) || '', fold = (when && when.fold) || '';
+  const head = when?.head || '', fold = when?.fold || '';
   if (!isPhone()) return where + head;
   // One control, not two. The dates ARE the button: tap the head and the
   // card opens on the place, the hours and the fine print. Shut is also the
   // statement that this way of voting is not open yet: the windows that
   // are open, and election day, come up already expanded.
-  if (!head) return '<div class="vi-card vi-card-' + kind + '">' + where + '</div>';
-  return '<div class="vi-card vi-card-' + kind + '">' +
-    '<details class="vi-fold"' + (opts && opts.collapsed ? '' : ' open') + '>' +
-    '<summary>' + head + '</summary>' +
-    '<div class="vi-fold-body">' + fold + where + '</div>' +
+  if (!head) return `<div class="vi-card vi-card-${kind}">${where}</div>`;
+  return `<div class="vi-card vi-card-${kind}">` +
+    `<details class="vi-fold"${opts?.collapsed ? '' : ' open'}>` +
+    `<summary>${head}</summary>` +
+    `<div class="vi-fold-body">${fold}${where}</div>` +
     '</details></div>';
 }
 
 function metaBlock(lines) {
-  var body = lines.filter(Boolean).join('');
-  return body ? '<div class="pp-meta">' + body + '</div>' : '';
+  const body = lines.filter(Boolean).join('');
+  return body ? `<div class="pp-meta">${body}</div>` : '';
 }
 
 // Glued to the end of the absentee note, so it returns a LEADING space with
@@ -583,17 +581,17 @@ function metaBlock(lines) {
 // box's own row and in the full list, which is where you look once you
 // have picked one; the note is a summary of WHEN a ballot can go back.
 function boxAccess() {
-  var list = boxesFor(current);
+  const list = boxesFor(current);
   if (officeOnly(list)) {
-    return ' No ballot drop box is published for ' +
-      esc((current && current.jurisdiction) || 'this jurisdiction') +
+    const where = esc(current?.jurisdiction || 'this jurisdiction');
+    return ` No ballot drop box is published for ${where}` +
       '. An absentee ballot has to be returned to your own clerk, so the ' +
       'clerk\u2019s office is where it goes, during office hours.';
   }
   return '';
 }
 
-var ALWAYS_OPEN = /^24\/7$/;
+const ALWAYS_OPEN = /^24\/7$/;
 
 function boxLabel(box) {
   // An office name is composed here, already cased, with an apostrophe
@@ -615,20 +613,20 @@ function addressForDisplay(a) {
 // caller adds. One builder for every kind of place, so they read alike.
 function placePopup(title, name, p, extra) {
   return '<div class="destpop">' +
-    '<div class="dt">' + esc(title) + '</div>' +
-    '<div class="dn">' + esc(name) + '</div>' +
-    '<div class="da">' + esc(addressForDisplay(p.address)) + '</div>' +
-    (p.entrance_note ? '<div class="de">' + esc(p.entrance_note) + '</div>' : '') +
-    (extra || '') + '</div>';
+    `<div class="dt">${esc(title)}</div>` +
+    `<div class="dn">${esc(name)}</div>` +
+    `<div class="da">${esc(addressForDisplay(p.address))}</div>` +
+    (p.entrance_note ? `<div class="de">${esc(p.entrance_note)}</div>` : '') +
+    `${extra || ''}</div>`;
 }
 
 // What an idle tap on the map shows: the precinct under it and where it
 // votes.
 function precinctInfoHtml(pr) {
-  var place = P && P.pollingPlace(P.idOf(pr));
+  const place = P?.pollingPlace(P.idOf(pr));
   return place
     ? placePopup(placeLine(pr), displayCase(place.name), place)
-    : '<div class="destpop"><div class="dt">' + esc(placeLine(pr)) + '</div>' +
+    : `<div class="destpop"><div class="dt">${esc(placeLine(pr))}</div>` +
       '<div class="da">No polling place on file.</div></div>';
 }
 
@@ -638,14 +636,14 @@ function precinctInfoHtml(pr) {
 // get a mix of the two behaviours. `html` may be a string or a function that
 // builds one when opened, as Leaflet's own bindPopup allows.
 function hoverPopups() {
-  return !!(window.matchMedia && window.matchMedia('(hover: hover)').matches);
+  return !!window.matchMedia?.('(hover: hover)').matches;
 }
 
 function bindDetail(m, html, maxWidth) {
   if (hoverPopups()) {
-    m.bindPopup(html, { maxWidth: maxWidth, className: 'cam-popup' });
+    m.bindPopup(html, { maxWidth, className: 'cam-popup' });
   } else {
-    m.on('click', function () {
+    m.on('click', () => {
       showDetail(typeof html === 'function' ? html() : html, 'marker');
     });
   }
@@ -654,30 +652,30 @@ function bindDetail(m, html, maxWidth) {
 // Desktop hover: the status bar follows the cursor instead of the view
 // centre while there is a cursor to follow; on touch devices it keeps its
 // centre-of-view meaning.
-var hoverThrottle = 0;
+let hoverThrottle = 0;
 function initMapHover() {
   if (!hoverPopups()) return;
-  map.on('mousemove', function (e) {
-    var now = Date.now();
+  map.on('mousemove', (e) => {
+    const now = Date.now();
     if (now - hoverThrottle < 40) return;
     hoverThrottle = now;
-    var el = $('mapScope');
+    const el = $('mapScope');
     if (el) el.textContent = scopeText(e.latlng.lat, e.latlng.lng);
   });
   map.on('mouseout', updateMapScope);
 }
 
 function hideMap() {
-  var b = $('mapBlock');
+  const b = $('mapBlock');
   if (b) b.hidden = true;
 }
 
 // Which section pill is lit. Set on a press, and kept honest by the scroll.
-var spyPending = false;
+let spyPending = false;
 
 function markSection(btn) {
-  Array.prototype.forEach.call(document.querySelectorAll('#sectionNav button'), function (b) {
-    var on = b === btn;
+  document.querySelectorAll('#sectionNav button').forEach((b) => {
+    const on = b === btn;
     b.classList.toggle('is-current', on);
     b.setAttribute('aria-current', on ? 'true' : 'false');
   });
@@ -687,13 +685,14 @@ function markSection(btn) {
 // pills in page order and take the last one whose block has passed the bar;
 // above the first block nothing is lit, because nothing has been reached.
 function syncSectionNav() {
-  var nav = $('sectionNav');
+  const nav = $('sectionNav');
   if (!nav || nav.hidden) return;
-  var bar = $('searchBar');
-  var line = (bar ? bar.getBoundingClientRect().bottom : 0) + 12;
-  var lit = null, live = [];
-  Array.prototype.forEach.call(nav.querySelectorAll('button'), function (b) {
-    var el = $(b.dataset.goto);
+  const bar = $('searchBar');
+  const line = (bar ? bar.getBoundingClientRect().bottom : 0) + 12;
+  let lit = null;
+  const live = [];
+  nav.querySelectorAll('button').forEach((b) => {
+    const el = $(b.dataset.goto);
     if (!el || el.hidden) return;
     live.push(b);
     if (el.getBoundingClientRect().top <= line) lit = b;
@@ -701,7 +700,7 @@ function syncSectionNav() {
   // The last section is usually shorter than a screen, so its top never
   // reaches the bar and it could never be lit by the rule above. At the
   // bottom of the page you are, by definition, in the last one.
-  var doc = document.documentElement;
+  const doc = document.documentElement;
   if (live.length && window.innerHeight + window.scrollY >= doc.scrollHeight - 4) {
     lit = live[live.length - 1];
   }
@@ -714,16 +713,16 @@ function syncSectionNav() {
 // section, and measuring it before the layout settles scrolls to where the
 // heading WAS.
 function scrollToDirections() {
-  requestAnimationFrame(function () { scrollToResult('routeBlock'); });
+  requestAnimationFrame(() => { scrollToResult('routeBlock'); });
 }
 
 // Bring a block to the top of the viewport. The address bar is sticky, so
 // scrolling the block to y=0 would tuck its heading underneath it.
 function scrollToResult(id) {
-  var el = $(id), bar = $('searchBar');
+  const el = $(id), bar = $('searchBar');
   if (!el || el.hidden) return;
-  var offset = (bar ? bar.getBoundingClientRect().height : 0) + 8;
-  var y = window.scrollY + el.getBoundingClientRect().top - offset;
+  const offset = (bar ? bar.getBoundingClientRect().height : 0) + 8;
+  const y = window.scrollY + el.getBoundingClientRect().top - offset;
   window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
 }
 
@@ -753,9 +752,9 @@ function initMap() {
     '<a href="https://leafletjs.com" title="A JavaScript library for interactive maps">Leaflet</a>');
   map.attributionControl.addAttribution(ATTR);
   if (window.matchMedia) {
-    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
     // Only matters while following the system; an explicit choice overrides.
-    var onScheme = function () {
+    const onScheme = () => {
       if (themeChoice() === 'system') onSchemeChanged();
     };
     if (mq.addEventListener) mq.addEventListener('change', onScheme);
@@ -776,7 +775,7 @@ function initMap() {
   // Pin drop is ARMED by the button beside the address field, so an idle
   // click on the map (panning slip, closing a popup) never starts a route.
   // One shot: a successful drop disarms it.
-  map.on('click', function (e) {
+  map.on('click', (e) => {
     if (pinArmed) {
       hideDetail();
       disarmPin();
@@ -789,13 +788,13 @@ function initMap() {
     // (close button, Escape, a tap outside any precinct). Marker clicks do
     // not bubble here, so their own detail is never overridden.
     if (detailKind === 'marker') { hideDetail(); return; }
-    var pr = precinctAt(e.latlng.lat, e.latlng.lng);
+    const pr = precinctAt(e.latlng.lat, e.latlng.lng);
     if (pr) showDetail(precinctInfoHtml(pr));
     else hideDetail();
   });
   $('detailX').onclick = hideDetail;
-  Array.prototype.forEach.call(document.querySelectorAll('#sectionNav button'), function (b) {
-    b.onclick = function () {
+  document.querySelectorAll('#sectionNav button').forEach((b) => {
+    b.onclick = () => {
       markSection(b);
       scrollToResult(b.dataset.goto);
     };
@@ -803,13 +802,13 @@ function initMap() {
   // The pill you are reading, not only the pill you last pressed: scrolling
   // away from a section has to give the mark up, or the nav claims you are
   // somewhere you left.
-  window.addEventListener('scroll', function () {
+  window.addEventListener('scroll', () => {
     if (spyPending) return;
     spyPending = true;
-    requestAnimationFrame(function () { spyPending = false; syncSectionNav(); });
+    requestAnimationFrame(() => { spyPending = false; syncSectionNav(); });
   }, { passive: true });
-  $('pinBtn').onclick = function () { pinArmed ? disarmPin() : armPin(); };
-  document.addEventListener('keydown', function (e) {
+  $('pinBtn').onclick = () => { pinArmed ? disarmPin() : armPin(); };
+  document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     // One surface per press: the pin is the more recent intent, so it backs
     // out first and the detail survives that press.
@@ -823,9 +822,9 @@ function initMap() {
 // SIBLING of its label, not inside it: wrapping the input in its label
 // makes a click toggle it twice and the box lands back where it started.
 function addGearControl() {
-  var gear = L.control({ position: 'topright' });
-  gear.onAdd = function () {
-    var d = L.DomUtil.create('div', 'map-gear leaflet-bar');
+  const gear = L.control({ position: 'topright' });
+  gear.onAdd = () => {
+    const d = L.DomUtil.create('div', 'map-gear leaflet-bar');
     d.innerHTML =
       '<button type="button" class="gear-btn" title="Map layers" aria-expanded="false">' +
       '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" ' +
@@ -850,19 +849,19 @@ function addGearControl() {
     // Clicks in the panel are settings work, not map gestures: they must
     // not drop a precinct card or move the map underneath.
     L.DomEvent.disableClickPropagation(d);
-    var btn = d.querySelector('.gear-btn'), panel = d.querySelector('.gear-panel');
-    btn.onclick = function () {
+    const btn = d.querySelector('.gear-btn'), panel = d.querySelector('.gear-panel');
+    btn.onclick = () => {
       panel.hidden = !panel.hidden;
       btn.setAttribute('aria-expanded', String(!panel.hidden));
     };
     // Capture phase, so a click on a row that re-renders the DOM is still
     // seen while its target is attached (the dashboard gear lesson).
-    document.addEventListener('click', function (e) {
+    document.addEventListener('click', (e) => {
       if (!panel.hidden && !d.contains(e.target)) {
         panel.hidden = true; btn.setAttribute('aria-expanded', 'false');
       }
     }, true);
-    document.addEventListener('keydown', function (e) {
+    document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !panel.hidden) {
         panel.hidden = true; btn.setAttribute('aria-expanded', 'false');
       }
@@ -875,9 +874,9 @@ function addGearControl() {
 // The ward/precinct readout lives in the map's own bottom-left corner, a
 // status bar opposite the attribution. Every writer finds it by its id.
 function addStatusControl() {
-  var status = L.control({ position: 'bottomleft' });
-  status.onAdd = function () {
-    var d = L.DomUtil.create('div', 'map-status');
+  const status = L.control({ position: 'bottomleft' });
+  status.onAdd = () => {
+    const d = L.DomUtil.create('div', 'map-status');
     d.id = 'mapScope';
     return d;
   };
@@ -891,7 +890,7 @@ function initInput() {
     input: $('addr'),
     suggest: suggestWithNeighbors,
     onChoose: choose,
-    onMiss: function (text) { showError(missExplanation(text)); }
+    onMiss(text) { showError(missExplanation(text)); }
   });
 }
 
@@ -899,8 +898,8 @@ function initInput() {
 // addresses the page cannot work without, so a failure there fails the
 // whole load; an optional file degrades to a page without that part.
 function loadJson(name, optional) {
-  var p = fetch('data/' + name + '.json').then(function (r) { return r.json(); });
-  return optional ? p.catch(function () { return null; }) : p;
+  const p = fetch(`data/${name}.json`).then((r) => r.json());
+  return optional ? p.catch(() => null) : p;
 }
 
 // The county road network, streamed.
@@ -925,28 +924,28 @@ function loadJson(name, optional) {
 // at a time. What is held early is a compressed response body, tens of
 // kilobytes; what is bounded is the parsed form, which is a hundred times
 // larger. Each document is dropped as soon as it is folded in.
-var CHUNK_LOOKAHEAD = 4;
+const CHUNK_LOOKAHEAD = 4;
 
 function loadCountyGraph(onProgress) {
-  return loadJson('graph/index').then(function (index) {
-    var g = Graph.streaming(index);
-    var chunks = index.chunks, inFlight = [];
+  return loadJson('graph/index').then((index) => {
+    const g = Graph.streaming(index);
+    const chunks = index.chunks, inFlight = [];
 
     function fetchAt(i) {
-      return i < chunks.length ? loadJson('graph/' + chunks[i].mcd) : null;
+      return i < chunks.length ? loadJson(`graph/${chunks[i].mcd}`) : null;
     }
-    for (var k = 0; k < CHUNK_LOOKAHEAD && k < chunks.length; k++) {
+    for (let k = 0; k < CHUNK_LOOKAHEAD && k < chunks.length; k++) {
       inFlight.push(fetchAt(k));
     }
 
-    var at = 0;
+    let at = 0;
     function next() {
       if (at >= chunks.length) return g.finish();
-      var pending = inFlight[at];
-      var ahead = at + CHUNK_LOOKAHEAD;
+      const pending = inFlight[at];
+      const ahead = at + CHUNK_LOOKAHEAD;
       if (ahead < chunks.length) inFlight[ahead] = fetchAt(ahead);
       at++;
-      return pending.then(function (doc) {
+      return pending.then((doc) => {
         g.addChunk(doc);
         doc = null;
         inFlight[at - 1] = null;      // release the settled promise's value
@@ -967,24 +966,22 @@ function loadCountyGraph(onProgress) {
 // city: hand-transcribed, with entrance notes and the one consolidation the
 // county's page does not carry.
 function loadCountyIndex() {
-  return loadJson('precincts').then(function (index) {
-    var mcds = (index.jurisdictions || []).map(function (j) { return j.mcd; });
+  return loadJson('precincts').then((index) => {
+    const mcds = (index.jurisdictions || []).map((j) => j.mcd);
     return Promise.all([
-      Promise.all(mcds.map(function (m) { return loadJson('addresses/' + m); })),
-      Promise.all(mcds.map(function (m) { return loadJson('polling/' + m, true); })),
+      Promise.all(mcds.map((m) => loadJson(`addresses/${m}`))),
+      Promise.all(mcds.map((m) => loadJson(`polling/${m}`, true))),
       loadJson('polling', true)
-    ]).then(function (parts) {
-      return {
-        index: index,
-        P: Precincts.county({
-          index: index,
-          addresses: parts[0],
-          polling: parts[1].filter(Boolean),
-          cityPolling: parts[2],
-          cityMcd: GR_MCD
-        })
-      };
-    });
+    ]).then(([addresses, polling, cityPolling]) => ({
+      index,
+      P: Precincts.county({
+        index,
+        addresses,
+        polling: polling.filter(Boolean),
+        cityPolling,
+        cityMcd: GR_MCD
+      })
+    }));
   });
 }
 
@@ -993,24 +990,24 @@ function loadCountyIndex() {
 // file and appear as soon as it lands -- so the loading state lives in the
 // one control that genuinely cannot work yet, the search box, and says
 // what it is waiting for and how far along it is.
-var IDLE_PLACEHOLDER = '300 Monroe Ave NW';
+const IDLE_PLACEHOLDER = '300 Monroe Ave NW';
 
 // ?debug on the URL: a panel for driving the engine with any two addresses
 // in the county -- geocode each end, route both ways, dump every number,
 // draw it. The panel is a separate file that loads only when asked for,
 // and it reaches the engine through this one object, so nothing else in
 // the page has to know it exists.
-var DEBUG = /[?&]debug\b/.test(location.search);
+const DEBUG = /[?&]debug\b/.test(location.search);
 
 function mountDebug() {
-  import('./debug.js').then(function (debug) {
+  import('./debug.js').then((debug) => {
     debug.mount({
-      graph: graph, cameras: cameras,
-      resolve: resolveEnd, computeRoutes: computeRoutes, draw: drawDebugRoutes,
+      graph, cameras,
+      resolve: resolveEnd, computeRoutes, draw: drawDebugRoutes,
       // The same suggestion source the search box uses, so the debug ends
       // are picked from the real address index rather than typed blind.
       suggest: suggestWithNeighbors,
-      attachSuggestions: attachSuggestions, metersPerMile: METERS_PER_MILE
+      attachSuggestions, metersPerMile: METERS_PER_MILE
     });
   });
 }
@@ -1019,17 +1016,17 @@ function mountDebug() {
 // say about that end: how it parsed, where it geocoded, what precinct that
 // point is in, and the road it snaps to.
 function resolveEnd(text) {
-  var out = { input: text };
-  var ll = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(text || '');
-  var t0 = performance.now();
+  const out = { input: text };
+  const ll = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(text || '');
+  const t0 = performance.now();
   if (ll) {
     out.lat = Number(ll[1]); out.lng = Number(ll[2]); out.how = 'coordinates';
   } else {
-    var parsed = P.parseTyped(text);
+    const parsed = P.parseTyped(text);
     out.parsed = parsed;
-    var hit = graph.geocode(parsed.number, parsed.rest);
+    let hit = graph.geocode(parsed.number, parsed.rest);
     if (!hit) {
-      var lk = P.lookup(text);
+      const lk = P.lookup(text);
       out.lookup = lk.error ? { error: lk.error } : { street: lk.street };
       if (!lk.error) hit = graph.geocode(lk.number, lk.street);
     }
@@ -1038,10 +1035,10 @@ function resolveEnd(text) {
     out.geocode = { street: hit.street, exact: hit.exact, edge: hit.edge };
     out.how = hit.exact ? 'centreline, exact range' : 'centreline, interpolated';
   }
-  var pr = precinctAt(out.lat, out.lng);
+  const pr = precinctAt(out.lat, out.lng);
   out.precinct = pr ? { code: pr.code, jurisdiction: pr.jurisdiction, ward: pr.ward,
                         precinct: pr.precinct } : null;
-  var snap = graph.snapToRoad(out.lat, out.lng);
+  const snap = graph.snapToRoad(out.lat, out.lng);
   out.snap = { node: snap.node, edge: snap.edge, metres: Math.round(snap.meters),
                street: snap.edge != null ? graph.edgeName(snap.edge) : null };
   out.ms = Math.round(performance.now() - t0);
@@ -1055,14 +1052,14 @@ function drawDebugRoutes(origin, place, computed) {
   document.body.classList.add('has-result');
   revealMap();
   routes = Object.assign(computed, {
-    opts: [], origin: origin, place: place, destSub: 'Debug destination'
+    opts: [], origin, place, destSub: 'Debug destination'
   });
   selected = 'avoid';
   renderAll(true);
 }
 
 function loadData() {
-  var input = $('addr');
+  const input = $('addr');
   input.disabled = true;
   input.placeholder = 'Loading Kent County\u2026';
   setHint('Loading the county\u2019s roads and addresses. This happens once.');
@@ -1071,41 +1068,40 @@ function loadData() {
   // depends on nothing else; waiting for the roads and addresses behind it
   // left the banner blank for seconds on every load, which read as the page
   // failing.
-  var calendarP = loadJson('elections', true).then(function (calendar) {
+  const calendarP = loadJson('elections', true).then((calendar) => {
     // Election day hours are statewide and statutory, so they are one
     // object beside the list rather than a field repeated on every election.
-    electionDayHours = (calendar && calendar.election_day_hours) || null;
-    electionList = (calendar && calendar.elections) || [];
+    electionDayHours = calendar?.election_day_hours || null;
+    electionList = calendar?.elections || [];
     activeEl = Elections.next(electionList);
     startCountdown();
     return calendar;
   });
 
   Promise.all([
-    loadCountyGraph(function (done, total) {
-      setHint('Loading the county\u2019s roads, ' + done + ' of ' + total +
+    loadCountyGraph((done, total) => {
+      setHint(`Loading the county\u2019s roads, ${done} of ${total}` +
               ' jurisdictions. This happens once.');
     }),
     loadJson('cameras'), loadCountyIndex(),
     calendarP, loadJson('landcover', true),
     loadJson('neighbors', true),
     loadJson('gr-clerk', true), loadJson('sources', true)
-  ]).then(function (res) {
-    var cameraData = res[1], county = res[2], landcover = res[4];
-    var neighborData = res[5], clerkData = res[6];
-    var sourceData = res[7];
+  ]).then((res) => {
+    const cameraData = res[1], county = res[2], landcover = res[4];
+    const neighborData = res[5], clerkData = res[6];
+    const sourceData = res[7];
 
     graph = res[0];
     P = county.P;
-    var precinctData = county.index;
+    const precinctData = county.index;
     drawPollingPlaces();
     // Only the streets the address list cannot answer. neighbors.json
     // names many streets the county's list also carries, often under the
     // county's spelling rather than the state's, and offering one of those
     // as out of reach is wrong.
-    neighbors = (neighborData && neighborData.streets)
-      ? P.unindexed(neighborData.streets) : null;
-    precincts = (precinctData && precinctData.precincts) || null;
+    neighbors = neighborData?.streets ? P.unindexed(neighborData.streets) : null;
+    precincts = precinctData?.precincts || null;
     if (precincts) ownBase.setPrecincts(precincts);
     // The jurisdiction outlines ride in the same file, on the index that
     // already says which jurisdictions exist.
@@ -1115,7 +1111,7 @@ function loadData() {
     // any jurisdiction, and a route drawn as clean past a plate reader we
     // know about is the one failure this whole tool exists to prevent.
     cameras = cameraData.cameras;
-    sources = (sourceData && sourceData.sources) || {};
+    sources = sourceData?.sources || {};
     clerk = placeCoords(clerkData);
     // The clock started when the calendar landed, but the load has held
     // the main thread since, and an interval cannot tick through that.
@@ -1136,7 +1132,7 @@ function loadData() {
     // Autofocus on a phone pops the keyboard over the map before the person
     // has seen anything, so it is desktop-only.
     if (!isPhone()) input.focus();
-  }).catch(function () {
+  }).catch(() => {
     // The page is a lookup over these files: with them missing there is
     // nothing to answer with, so say so where the answer would have gone.
     showError('Could not load the map data files. If you are hosting this ' +
@@ -1149,7 +1145,7 @@ function loadData() {
 // green from amber: a ring with a tick for the polling place, a box with a
 // slot for a drop box, a clock for early voting. Drawn at 22 units and
 // scaled by the icon size, so one drawing serves the map and the legend.
-var SITE_ART = {
+const SITE_ART = {
   polling:
     '<svg viewBox="0 0 22 22" aria-hidden="true">' +
     '<circle cx="11" cy="11" r="8.4" class="sm-face"/>' +
@@ -1166,9 +1162,9 @@ var SITE_ART = {
 };
 
 function siteIcon(kind, active) {
-  var S = active ? 26 : 19;
+  const S = active ? 26 : 19;
   return L.divIcon({
-    className: 'site-mark site-' + kind + (active ? ' active' : ''),
+    className: `site-mark site-${kind}${active ? ' active' : ''}`,
     html: SITE_ART[kind] || SITE_ART.polling,
     iconSize: [S, S], iconAnchor: [S / 2, S / 2]
   });
@@ -1177,9 +1173,9 @@ function siteIcon(kind, active) {
 // The legend draws the same three marks the map does, from the same
 // strings: a key that is redrawn by hand is a key that goes stale.
 function paintLegendSites() {
-  Array.prototype.forEach.call(document.querySelectorAll('.sitek'), function (el) {
-    var kind = el.dataset.kind;
-    el.className = 'sitek site-mark site-' + kind;
+  document.querySelectorAll('.sitek').forEach((el) => {
+    const kind = el.dataset.kind;
+    el.className = `sitek site-mark site-${kind}`;
     el.innerHTML = SITE_ART[kind] || '';
   });
 }
@@ -1193,22 +1189,19 @@ function paintLegendSites() {
 // said "Ward 1 \u00b7 Precincts 5, 12" for a pair split across wards would
 // be wrong rather than terse. Townships have no wards and get bare numbers.
 function precinctLines(ids) {
-  var order = [], byWard = {};
-  ids.map(function (id) { return P.describe(id); })
-    .sort(function (a, b) {
-      return (a.ward || 0) - (b.ward || 0) || (a.precinct - b.precinct);
-    })
-    .forEach(function (d) {
-      var key = d.ward == null || d.ward === '' ? '' : String(d.ward);
+  const order = [], byWard = {};
+  ids.map((id) => P.describe(id))
+    .sort((a, b) => (a.ward || 0) - (b.ward || 0) || (a.precinct - b.precinct))
+    .forEach((d) => {
+      const key = d.ward == null || d.ward === '' ? '' : String(d.ward);
       if (!byWard[key]) { byWard[key] = []; order.push(key); }
       byWard[key].push(String(d.precinct));
     });
-  return order.map(function (ward) {
-    var nums = byWard[ward];
+  return order.map((ward) => {
+    const nums = byWard[ward];
     return '<div class="dw">' +
-      (ward ? 'Ward ' + esc(ward) + ' \u00b7 ' : '') +
-      'Precinct' + (nums.length > 1 ? 's ' : ' ') + esc(nums.join(', ')) +
-      '</div>';
+      (ward ? `Ward ${esc(ward)} \u00b7 ` : '') +
+      `Precinct${nums.length > 1 ? 's ' : ' '}${esc(nums.join(', '))}</div>`;
   }).join('');
 }
 
@@ -1220,34 +1213,32 @@ function precinctLines(ids) {
 function drawPollingPlaces(activePrecinct) {
   if (!P || !pollLayer) return;
   pollLayer.clearLayers();
-  var seen = {};
+  const seen = {};
   // Which BUILDING the answer votes at, not which precinct: a consolidated
   // precinct votes at its host's, and the marker there was made under the
   // host's key, so comparing precincts left the voter's own polling place
   // drawn small like every other.
-  var activePlace = activePrecinct && P.pollingPlace(activePrecinct);
-  var activeKey = activePlace && activePlace.lat != null
-    ? activePlace.lat.toFixed(5) + ',' + activePlace.lng.toFixed(5) : null;
-  Object.keys(P.polling).forEach(function (pk) {
-    var pl = P.pollingPlace(pk);
+  const activePlace = activePrecinct && P.pollingPlace(activePrecinct);
+  const activeKey = activePlace?.lat != null
+    ? `${activePlace.lat.toFixed(5)},${activePlace.lng.toFixed(5)}` : null;
+  Object.keys(P.polling).forEach((pk) => {
+    const pl = P.pollingPlace(pk);
     if (!pl || pl.lat == null) return;
     // Consolidated precincts share a building; draw it once. The list at a
     // spot keeps growing as later precincts land on it, so the detail reads
     // it when opened rather than when the marker is made.
-    var key = pl.lat.toFixed(5) + ',' + pl.lng.toFixed(5);
+    const key = `${pl.lat.toFixed(5)},${pl.lng.toFixed(5)}`;
     if (seen[key]) { seen[key].push(pk); return; }
-    var atThisSpot = seen[key] = [pk];
-    var isActive = !!activeKey && key === activeKey;
+    const atThisSpot = seen[key] = [pk];
+    const isActive = !!activeKey && key === activeKey;
     // A hollow ring: present without competing. Filled marks buried the
     // precinct numbers and the route underneath them.
-    var m = L.marker([pl.lat, pl.lng], {
+    const m = L.marker([pl.lat, pl.lng], {
       icon: siteIcon('polling', isActive),
       zIndexOffset: isActive ? 500 : 300, keyboard: false, riseOnHover: true
     }).addTo(pollLayer);
-    bindDetail(m, function () {
-      return placePopup('Polling place', displayCase(pl.name), pl,
-                        precinctLines(atThisSpot));
-    }, 280);
+    bindDetail(m, () => placePopup('Polling place', displayCase(pl.name), pl,
+                                   precinctLines(atThisSpot)), 280);
   });
 }
 
@@ -1261,20 +1252,20 @@ function drawSites(r) {
   if (!siteLayer) return;
   siteLayer.clearLayers();
   if (!r) return;
-  destinations(r).forEach(function (opt) {
+  destinations(r).forEach((opt) => {
     if (opt.kind === 'polling') return;      // drawn with all the others
-    var list = opt.all && opt.all.length ? opt.all : [opt.place];
-    list.forEach(function (place) {
+    const list = opt.all?.length ? opt.all : [opt.place];
+    list.forEach((place) => {
       if (!place || place.lat == null) return;
-      var isPick = place === opt.place;
-      var m = L.marker([place.lat, place.lng], {
+      const isPick = place === opt.place;
+      const m = L.marker([place.lat, place.lng], {
         icon: siteIcon(opt.kind, isPick),
         zIndexOffset: isPick ? 450 : 250, keyboard: false, riseOnHover: true
       }).addTo(siteLayer);
       bindDetail(m, placePopup(
         opt.kind === 'early' ? 'Early voting site' : 'Absentee ballot drop box',
         boxLabel(place), place,
-        place.hours ? '<div class="dw">' + esc(place.hours) + '</div>' : ''), 280);
+        place.hours ? `<div class="dw">${esc(place.hours)}</div>` : ''), 280);
     });
   });
 }
@@ -1285,14 +1276,14 @@ function drawSites(r) {
 // left here is what needs the map: the wrapper that makes a Leaflet marker
 // out of the drawing, and the legend key that paints the same figure.
 function cameraIcon(c, flagged) {
-  var art = Cameras.markerSvg(c, flagged, getVar('--pin-ring'));
+  const art = Cameras.markerSvg(c, flagged, getVar('--pin-ring'));
   return L.divIcon({ className: 'cam-icon', html: art.html,
                      iconSize: [art.size, art.size],
                      iconAnchor: [art.centre, art.centre] });
 }
 
 function paintLegendCamera() {
-  var el = document.querySelector('.map-legend .dotk');
+  const el = document.querySelector('.map-legend .dotk');
   if (!el) return;
   el.innerHTML = Cameras.legendSvg(getVar('--pin-ring'));
   el.setAttribute('title', 'RoboCop');
@@ -1313,12 +1304,12 @@ function cameraDisplayPos(c) {
 // daily by scripts/refresh_cameras.py; nothing here asks a server for
 // cameras, which is what lets the page say it makes no outbound requests.
 function renderCameraCount() {
-  var fold = $('camCountFold');
+  const fold = $('camCountFold');
   if (!fold) return;
-  var n = cameras ? cameras.length : 0;
+  const n = cameras ? cameras.length : 0;
   // Names its source and its age: nothing else on the map says where these
   // came from or how old they can be.
-  fold.textContent = n + ' reported camera' + (n === 1 ? '' : 's') +
+  fold.textContent = `${n} reported camera${n === 1 ? '' : 's'}` +
     ' in Kent County, from OpenStreetMap as of the last time this page ' +
     'was published. Volunteer-mapped and certainly incomplete, so treat ' +
     'it as a floor rather than a full count.';
@@ -1336,16 +1327,16 @@ function camerasInScope() { return !!routes; }
 // cameras are not obstacles: nothing is drawn, so nothing can collide.
 // Guarded by a signature because setObstacles forces a canvas redraw, and
 // drawCameras runs on every route toggle.
-var obstacleSig = null;
+let obstacleSig = null;
 function syncLabelObstacles() {
-  var visible = layerState().cameras && camerasInScope();
-  var pts = visible && cameras
-    ? cameras.map(function (c) { return cameraDisplayPos(c); })
+  const visible = layerState().cameras && camerasInScope();
+  const pts = visible && cameras
+    ? cameras.map((c) => cameraDisplayPos(c))
     : [];
   // Count alone is not identity: a re-snap moves markers without changing
   // how many there are, and stale reservations would shield empty ground.
-  var sig = visible + ':' + pts.length +
-    (pts.length ? ':' + pts[0][0].toFixed(6) + ',' + pts[0][1].toFixed(6) : '');
+  const sig = `${visible}:${pts.length}` +
+    (pts.length ? `:${pts[0][0].toFixed(6)},${pts[0][1].toFixed(6)}` : '');
   if (sig === obstacleSig) return;
   obstacleSig = sig;
   ownBase.setObstacles(pts);
@@ -1360,14 +1351,14 @@ function drawCameras(flagged) {
     return;
   }
   if (layerState().cameras && !map.hasLayer(camLayer)) camLayer.addTo(map);
-  var flag = flagged || {};
-  cameras.forEach(function (c) {
-    var mk = L.marker(cameraDisplayPos(c), {
+  const flag = flagged || {};
+  cameras.forEach((c) => {
+    const mk = L.marker(cameraDisplayPos(c), {
       icon: cameraIcon(c, !!flag[c.id]),
       zIndexOffset: flag[c.id] ? 600 : 400,
       keyboard: false
     });
-    bindDetail(mk, function () { return Cameras.popupHtml(c); }, 300);
+    bindDetail(mk, () => Cameras.popupHtml(c), 300);
     mk.addTo(camLayer);
   });
   syncLabelObstacles();
@@ -1405,37 +1396,35 @@ function choose(item) {
   if (!item) return;
   ac.close();
   if (item.kind === 'outside') {
-    $('addr').value = (item.number != null ? item.number + ' ' : '') +
+    $('addr').value = (item.number != null ? `${item.number} ` : '') +
       displayCase(item.street);
     $('addr').blur();
     chooseOutside(item);
     return;
   }
-  var input = $('addr');
+  const input = $('addr');
   // The box shows the address the way it is written, not the way the index
   // stores it. ALL CAPS is how the parcel file happens to hold a street, not
   // how anyone writes one, and the lookup uppercases whatever it is given --
   // so nothing downstream cares and the reader gets their own address back.
-  input.value = item.number + ' ' + displayCase(item.street);
+  input.value = `${item.number} ${displayCase(item.street)}`;
   resetChoices();
   // The row's own jurisdiction, where it has one: the same number and
   // street can be a real address in two places.
-  var r = P.lookup(input.value, item.mcd);
+  const r = P.lookup(input.value, item.mcd);
   if (r.error === 'several_places') {
-    showError(esc(input.value) + ' is an address in ' +
-      r.places.map(function (p) { return esc(p.jurisdiction); }).join(' and in ') +
+    const places = r.places.map((p) => esc(p.jurisdiction)).join(' and in ');
+    showError(`${esc(input.value)} is an address in ${places}` +
       '. Pick yours from the list as you type.');
     return;
   }
   if (r.error) {
-    showError('Could not resolve ' + esc(input.value) + '.');
+    showError(`Could not resolve ${esc(input.value)}.`);
     return;
   }
   // Where the address was inferred from its neighbors, let the precinct
   // boundary overrule them. See refineWithPolygon in precinct.js.
-  P.refineWithPolygon(r, function (n, st) {
-    return graph.geocode(n, st, within(r.mcd));
-  }, precincts);
+  P.refineWithPolygon(r, (n, st) => graph.geocode(n, st, within(r.mcd)), precincts);
   setHint('');
   // Drop focus before rendering, not after. On a phone the soft keyboard is
   // most of the lower screen, and show() fits the map to the viewport it
@@ -1445,8 +1434,6 @@ function choose(item) {
   show(r);
 }
 
-var GR_MCD = '34000';      // the state's MCD code for the City of Grand Rapids
-
 // Whether a result is in the one jurisdiction whose own clerk data this
 // page carries. The city clerk's file has the early voting dates, sites
 // and drop boxes for Grand Rapids and nothing else. Every other
@@ -1454,7 +1441,7 @@ var GR_MCD = '34000';      // the state's MCD code for the City of Grand Rapids
 // release, and its early voting is not shown at all: this page has no
 // current source for another clerk's dates or sites.
 function inGrandRapids(r) {
-  return !!(r && r.mcd === GR_MCD);
+  return r?.mcd === GR_MCD;
 }
 
 // The name a suggestion row carries. The state's precinct index says
@@ -1462,7 +1449,7 @@ function inGrandRapids(r) {
 // city half is spelled out: Grand Rapids Township is a real, different
 // place next door, and "Grand Rapids" alone does not say which.
 function jurisdictionLabel(name) {
-  return /Township$/i.test(name) ? name : name + ' City';
+  return /Township$/i.test(name) ? name : `${name} City`;
 }
 
 // The address list's own suggestions, then the streets it cannot answer.
@@ -1481,30 +1468,30 @@ function suggestWithNeighbors(text, limit) {
   // is not an address, and a list of streets to finish was one more thing
   // to read before the answer; the box's placeholder shows the shape.
   if (P.parseTyped(text).number == null) return [];
-  var out = P.suggest(text, limit) || [];
+  const out = P.suggest(text, limit) || [];
   // Say which jurisdiction EVERY suggestion is in, not only the ones from
   // outside. A list where some rows are labelled and some are bare reads as
   // "these are the odd ones"; a reader still has to know that the unlabelled
   // ones are the answerable ones.
-  out.forEach(function (o) {
+  out.forEach((o) => {
     o.where = (o.where || []).map(jurisdictionLabel);
   });
   if (out.length >= limit || !neighbors) return out;
 
-  var typed = P.parseTyped(text);
+  const typed = P.parseTyped(text);
   if (!typed.rest || typed.rest.length < 2) return out;
-  var have = {};
-  out.forEach(function (o) { have[o.street] = 1; });
+  const have = {};
+  out.forEach((o) => { have[o.street] = 1; });
 
-  var names = Object.keys(neighbors).filter(function (name) {
-    return !have[name] && name.indexOf(typed.rest) === 0;
-  }).sort();
+  const names = Object.keys(neighbors)
+    .filter((name) => !have[name] && name.startsWith(typed.rest))
+    .sort();
 
-  for (var i = 0; i < names.length && out.length < limit; i++) {
-    var jurisdictions = neighbors[names[i]] || [];
+  for (let i = 0; i < names.length && out.length < limit; i++) {
+    const jurisdictions = neighbors[names[i]] || [];
     out.push({ street: names[i], number: typed.number, kind: 'outside',
                where: jurisdictions.map(jurisdictionLabel),
-               jurisdictions: jurisdictions });
+               jurisdictions });
   }
   return out;
 }
@@ -1524,18 +1511,18 @@ function chooseOutside(item) {
 // is missing, and a dropped pin answers from the precinct boundaries
 // without needing an address at all.
 function unansweredStreet(jurisdictions) {
-  var labels = jurisdictions.map(jurisdictionLabel);
-  var where = !labels.length ? 'another jurisdiction'
+  const labels = jurisdictions.map(jurisdictionLabel);
+  const where = !labels.length ? 'another jurisdiction'
     : labels.length === 1 ? esc(labels[0])
-    : esc(labels.slice(0, -1).join(', ')) + ' or ' + esc(labels[labels.length - 1]);
-  var covered = jurisdictions.some(function (j) { return P.coversJurisdiction(j); });
+    : `${esc(labels.slice(0, -1).join(', '))} or ${esc(labels[labels.length - 1])}`;
+  const covered = jurisdictions.some((j) => P.coversJurisdiction(j));
   if (covered) {
-    return 'That street is in ' + where + ', but the address list this ' +
+    return `That street is in ${where}, but the address list this ` +
       'tool uses has no address on it, so it cannot be looked up by ' +
       'address. Use the pin button beside the search box and drop the ' +
       'pin where you live, and it will find your precinct from there.';
   }
-  return 'That address is in ' + where + ', which this tool does not ' +
+  return `That address is in ${where}, which this tool does not ` +
     'cover, so it cannot say where you vote. The Michigan Voter ' +
     'Information Center at mvic.sos.state.mi.us will have your polling place.';
 }
@@ -1547,12 +1534,12 @@ function unansweredStreet(jurisdictions) {
 function missExplanation(typed) {
   // parseTyped already uppercases, collapses spaces and strips the house
   // number, which is exactly the form neighbors.json is keyed by.
-  var parsed = P.parseTyped(typed), street = parsed.rest;
+  const parsed = P.parseTyped(typed), street = parsed.rest;
   if (parsed.number == null) {
     return 'Start with the house number, like 300 Monroe Ave NW.';
   }
-  var hit = neighbors && street ? neighbors[street] : null;
-  if (hit && hit.length) return unansweredStreet(hit);
+  const hit = neighbors && street ? neighbors[street] : null;
+  if (hit?.length) return unansweredStreet(hit);
   return 'No Kent County street matches that. Check the spelling and the ' +
     'direction, like 300 Monroe Ave NW. This tool covers Kent County, ' +
     'Michigan; an address in Ottawa, Allegan, Barry, Ionia, Montcalm or ' +
@@ -1577,19 +1564,14 @@ function precinctAt(lat, lng) {
 // on Cedar Springs' N Main St NE, and routed from there. Within about 45 m
 // counts, because a section-line road is often the line itself and its
 // centreline sits on one side or the other by a hair.
-var NUDGES = [[0, 0], [4e-4, 0], [-4e-4, 0], [0, 5.5e-4], [0, -5.5e-4]];
-var withinCache = {};
+const NUDGES = [[0, 0], [4e-4, 0], [-4e-4, 0], [0, 5.5e-4], [0, -5.5e-4]];
+const withinCache = {};
 function within(mcd) {
   if (!mcd || !precincts) return null;
   if (!withinCache[mcd]) {
-    var mine = precincts.filter(function (p) { return p.mcd === mcd; });
-    withinCache[mcd] = function (lat, lng) {
-      return NUDGES.some(function (d) {
-        return mine.some(function (p) {
-          return Precincts.pointInRings(lat + d[0], lng + d[1], p.rings);
-        });
-      });
-    };
+    const mine = precincts.filter((p) => p.mcd === mcd);
+    withinCache[mcd] = (lat, lng) => NUDGES.some((d) =>
+      mine.some((p) => Precincts.pointInRings(lat + d[0], lng + d[1], p.rings)));
   }
   return withinCache[mcd];
 }
@@ -1606,7 +1588,7 @@ function armPin() {
   // There may be no map on screen yet: it only appears with an answer.
   // Arming the pin is a request for one, so bring it up over Grand Rapids
   // at a zoom where a street can be picked out.
-  var fresh = $('mapBlock').hidden;
+  const fresh = $('mapBlock').hidden;
   revealMap();
   if (fresh && map) map.setView(GR, 12);
   // A popup left open is both clutter over the spot being chosen and a
@@ -1636,7 +1618,7 @@ function disarmPin() {
 function pinLookup(lat, lng) {
   if (!graph || !P) return;
   resetChoices();
-  var pr = precinctAt(lat, lng);
+  const pr = precinctAt(lat, lng);
   if (!pr) {
     $('addr').value = ''; ac.close();
     showError('That spot is outside Kent County, or not in any precinct ' +
@@ -1644,8 +1626,8 @@ function pinLookup(lat, lng) {
       'pin on a street, or type the address instead.');
     return;
   }
-  var who = P.describe(P.idOf(pr));
-  var place = P.pollingPlace(who.code);
+  const who = P.describe(P.idOf(pr));
+  const place = P.pollingPlace(who.code);
   $('addr').value = ''; ac.close();
   setHint('Routing from your dropped pin. Type an address to switch back.');
   // Land on the map, not on the voting info. A typed lookup is a request
@@ -1653,9 +1635,9 @@ function pinLookup(lat, lng) {
   // the map, and answering it by scrolling the map off the screen moves
   // the thing under the finger that just used it. The voting info is
   // filled in above either way, and the section pills still jump to it.
-  show({ pin: true, lat: lat, lng: lng, code: who.code,
+  show({ pin: true, lat, lng, code: who.code,
          precinct: who.precinct, ward: who.ward,
-         jurisdiction: who.jurisdiction, mcd: who.mcd, place: place },
+         jurisdiction: who.jurisdiction, mcd: who.mcd, place },
        null, 'mapBlock');
 }
 
@@ -1663,7 +1645,7 @@ function pinLookup(lat, lng) {
 
 function showError(msg) {
   $('resultBlock').hidden = false; $('routeBlock').hidden = true;
-  $('precinctInfo').innerHTML = '<div class="err">' + msg + '</div>';
+  $('precinctInfo').innerHTML = `<div class="err">${msg}</div>`;
   $('advisory').innerHTML = '';
   routeLayer.clearLayers(); pinLayer.clearLayers();
   routes = null;   // or a theme change redraws the last answer's route
@@ -1677,18 +1659,17 @@ function showError(msg) {
 // journey is least excusable. It gets the same camera-aware routing as a
 // trip to the polls.
 function dropBoxCard(r) {
-  var box = destinations(r).filter(function (o) { return o.kind === 'dropbox'; })[0];
+  const box = destinations(r).find((o) => o.kind === 'dropbox');
   if (!box) return '';
-  var where = '<div class="vi-where vi-dropbox' + customClass('dropbox') +
-    '" data-kind="dropbox">' +
-    '<div class="vi-lbl">' +
-    esc(placeLabel('dropbox', box.place.office
-                                ? 'Where to return an absentee ballot'
-                                : 'Ballot drop box nearest to you')) + '</div>' +
-    '<div class="pp-name">' + esc(boxLabel(box.place)) + '</div>' +
-    '<div class="pp-addr">' +
-    (box.place.address ? esc(addressForDisplay(box.place.address)) : '') +
-    '</div>' +
+  const label = placeLabel('dropbox', box.place.office
+    ? 'Where to return an absentee ballot'
+    : 'Ballot drop box nearest to you');
+  const addr = box.place.address ? esc(addressForDisplay(box.place.address)) : '';
+  const where =
+    `<div class="vi-where vi-dropbox${customClass('dropbox')}" data-kind="dropbox">` +
+    `<div class="vi-lbl">${esc(label)}</div>` +
+    `<div class="pp-name">${esc(boxLabel(box.place))}</div>` +
+    `<div class="pp-addr">${addr}</div>` +
     metaBlock([locLine(box.place.note), boxHoursHtml(box.place, 'div', {})]) +
     // One office is not a list to show all of.
     actionRow('dropbox', box.place.office ? '' :
@@ -1696,38 +1677,38 @@ function dropBoxCard(r) {
       'Show all drop box locations</button>') +
     '</div>';
 
-  var st = absenteeState();
+  const st = absenteeState();
   return section('dropbox', where, whenCell('dropbox', st, ''),
                  { collapsed: !/open/i.test(st.label) });
 }
 
 // The early voting row. Empty when the calendar has no window to speak of.
 function earlyVotingCard(r) {
-  var evState = earlyVotingForBlock(r);
+  const evState = earlyVotingForBlock(r);
   if (!evState) return '';
   // ev can come back empty with a window published, because destinations()
   // also wants sites with coordinates and an origin to measure from: the
   // honest thing then is to give the dates and name nothing, rather than
   // blame the calendar for a gap of our own. destinations() already ranks
   // by distance from this origin, so the nearest is read back from it.
-  var ev = evState.site
-    ? destinations(r).filter(function (o) { return o.kind === 'early'; })[0]
+  const ev = evState.site
+    ? destinations(r).find((o) => o.kind === 'early')
     : null;
   // Always a two-column row, whether or not a site is named: a row that
   // says "No site published yet" beside its dates is the same row with one
   // fact missing, and should look like it rather than like a new shape.
-  var where = '<div class="vi-where vi-ev-site' + (ev ? customClass('early') : '') + '"' +
-    (ev ? ' data-kind="early"' : '') + '>' +
-    '<div class="vi-lbl">' +
-    esc(placeLabel('early', 'Early voting site nearest to you')) + '</div>' +
+  const label = placeLabel('early', 'Early voting site nearest to you');
+  const where = `<div class="vi-where vi-ev-site${ev ? customClass('early') : ''}"` +
+    `${ev ? ' data-kind="early"' : ''}>` +
+    `<div class="vi-lbl">${esc(label)}</div>` +
     (ev
-      ? '<div class="pp-name">' + esc(displayCase(ev.place.name)) + '</div>' +
-        '<div class="pp-addr">' + esc(addressForDisplay(ev.place.address)) + '</div>' +
+      ? `<div class="pp-name">${esc(displayCase(ev.place.name))}</div>` +
+        `<div class="pp-addr">${esc(addressForDisplay(ev.place.address))}</div>` +
         metaBlock([locLine(ev.place.entrance_note)]) +
         (ev.all.length > 1
           ? '<div class="pp-note">Early voting is not tied to your ' +
             'precinct. Any Grand Rapids voter may use any of these ' +
-            ev.all.length + ' sites.</div>'
+            `${ev.all.length} sites.</div>`
           : '')
       : '<div class="pp-addr">No site published yet.</div>') +
     (ev ? actionRow('early', ev.all.length > 1
@@ -1744,43 +1725,43 @@ function earlyVotingCard(r) {
 // The election day row: the polling place, then the day and its hours.
 // `multi` says whether there are other destinations to choose between.
 function pollingCard(r, multi) {
-  var html = '<div class="vi-where' + (activeEl ? '' : ' vi-full') +
-    '" data-kind="polling"><div class="vi-lbl">Election day polling place</div>';
-  var place = r.place;
+  let html = `<div class="vi-where${activeEl ? '' : ' vi-full'}" data-kind="polling">` +
+    '<div class="vi-lbl">Election day polling place</div>';
+  const place = r.place;
   if (place) {
     // The name and address ARE the show-on-map control when the polling
     // place is the only destination: clicking the place takes you to the
     // place. A separate link said in four words what the affordance can say
     // in zero. With other destinations the whole cell is the control, and
     // it routes, so the name must not claim a different job of its own.
-    var clickable = !!(place.lat && place.lng);
-    html += '<div' + (clickable ? ' class="pp-place"' : '') +
-      (clickable && !multi
-        ? ' id="showPlaceBtn" role="button" tabindex="0" title="Show it on the map"'
-        : '') + '>' +
-      '<div class="pp-name">' + esc(displayCase(place.name)) + '</div>' +
-      '<div class="pp-addr">' + esc(addressForDisplay(place.address)) + '</div>' +
+    const clickable = !!(place.lat && place.lng);
+    const showAttrs = clickable && !multi
+      ? ' id="showPlaceBtn" role="button" tabindex="0" title="Show it on the map"'
+      : '';
+    html += `<div${clickable ? ' class="pp-place"' : ''}${showAttrs}>` +
+      `<div class="pp-name">${esc(displayCase(place.name))}</div>` +
+      `<div class="pp-addr">${esc(addressForDisplay(place.address))}</div>` +
       metaBlock([locLine(place.entrance_note)]) +
       '</div>' +
       (clickable ? actionRow('polling') : '');
     if (place.consolidated_with) {
-      html += '<div class="pp-note">Precinct ' + esc(r.precinct) + ' votes with precinct ' +
-        esc(precinctNumber(place.consolidated_with, r.ward)) + ' this election' +
-        (place.note ? ', because ' + esc(place.note).toLowerCase() : '') + '.</div>';
+      html += `<div class="pp-note">Precinct ${esc(r.precinct)} votes with precinct ` +
+        `${esc(precinctNumber(place.consolidated_with, r.ward))} this election` +
+        (place.note ? `, because ${esc(place.note).toLowerCase()}` : '') + '.</div>';
     }
   } else {
-    html += '<div class="err">No polling place on file for precinct ' + esc(r.precinct) + '.</div>';
+    html += `<div class="err">No polling place on file for precinct ${esc(r.precinct)}.</div>`;
   }
   html += '</div>';
 
-  var when = null;
+  let when = null;
   if (activeEl) {
     when = whenCell('polling',
       { label: 'Election day', status: Elections.withWeekday(activeEl.date) },
-      electionDayHours && electionDayHours.open && electionDayHours.close
+      electionDayHours?.open && electionDayHours.close
         ? '<div class="vi-hours"><span class="vi-hours-lbl">Hours:</span> ' +
-          esc(Elections.shortTime(electionDayHours.open)) + ' to ' +
-          esc(Elections.shortTime(electionDayHours.close)) + '</div>'
+          `${esc(Elections.shortTime(electionDayHours.open))} to ` +
+          `${esc(Elections.shortTime(electionDayHours.close))}</div>`
         : '');
   }
   return section('polling', html, when, { collapsed: false });
@@ -1793,10 +1774,10 @@ function show(r, focusKind, landOn) {
   current = r;
   $('col').classList.add('has-result');
   document.body.classList.add('has-result');
-  var nav = $('sectionNav');
+  const nav = $('sectionNav');
   if (nav) { nav.hidden = false; requestAnimationFrame(syncSectionNav); }
   revealMap();
-  var place = r.place;
+  const place = r.place;
   $('resultBlock').hidden = false;
 
   // The answer as labelled facts in a grid: one row for each way to vote,
@@ -1806,18 +1787,18 @@ function show(r, focusKind, landOn) {
   // rail down the left of the whole table, spanning every row, rather than
   // a row of their own: that is what keeps the place names starting at the
   // same x. The identity names the whole answer, not its first row.
-  var html = '<div class="vi-rows"><div class="vi-grid"><div class="vi-rail">' +
+  let html = '<div class="vi-rows"><div class="vi-grid"><div class="vi-rail">' +
     // The jurisdiction first: it is what a precinct number means anything
     // relative to, since every one of the thirty jurisdictions has a Precinct 1.
     (r.jurisdiction ? '<div><div class="vi-lbl">Where you vote</div>' +
-                      '<div class="vi-name">' + esc(r.jurisdiction) + '</div></div>' : '') +
+                      `<div class="vi-name">${esc(r.jurisdiction)}</div></div>` : '') +
     // .vi-idn marks the two number rows, Ward and Precinct; the tests find
     // them by it.
     (r.ward != null && r.ward !== ''
       ? '<div class="vi-idn"><div class="vi-lbl">Ward</div>' +
-        '<div class="vi-num">' + esc(r.ward) + '</div></div>' : '') +
+        `<div class="vi-num">${esc(r.ward)}</div></div>` : '') +
     '<div class="vi-idn"><div class="vi-lbl">Precinct</div>' +
-    '<div class="vi-num">' + esc(r.precinct) + '</div></div></div>';
+    `<div class="vi-num">${esc(r.precinct)}</div></div></div>`;
 
   // Three ways to cast a ballot. Every row reads the same way, the place
   // and its hours on the left and when it applies on the right, so the
@@ -1825,8 +1806,8 @@ function show(r, focusKind, landOn) {
   // A row whose window has not opened, or has closed, says so where the
   // dates are. Each is built into its own string rather than appended
   // straight to the page, because on election day the order changes.
-  var multi = destinations(r).length > 1;
-  var boxHtml = dropBoxCard(r), evHtml = earlyVotingCard(r),
+  const multi = destinations(r).length > 1;
+  const boxHtml = dropBoxCard(r), evHtml = earlyVotingCard(r),
       pollHtml = pollingCard(r, multi);
 
   // Normally the order is the order a voter can act: the box is open first
@@ -1845,23 +1826,22 @@ function show(r, focusKind, landOn) {
   // width. It sits inside a cell that is itself a tap target on a phone,
   // so the press is stopped here rather than allowed to arrive twice and
   // route the same trip two times over.
-  Array.prototype.forEach.call($('precinctInfo').querySelectorAll('.dir-btn'),
-    function (b) {
-      b.onclick = function (e) {
-        e.stopPropagation();
-        if (!current) return;
-        routeTo(current, b.dataset.dir);
-        scrollToDirections();
-      };
-    });
+  $('precinctInfo').querySelectorAll('.dir-btn').forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      if (!current) return;
+      routeTo(current, b.dataset.dir);
+      scrollToDirections();
+    };
+  });
 
   // The place cells ARE the destination toggle, so the block itself says
   // which address the directions are for, rather than leaving that to the
   // segmented control below the map.
-  var destCells = $('precinctInfo').querySelectorAll('[data-kind]');
-  var phone = isPhone();
-  Array.prototype.forEach.call(destCells, function (cell) {
-    var kind = cell.dataset.kind;
+  const destCells = $('precinctInfo').querySelectorAll('[data-kind]');
+  const phone = isPhone();
+  destCells.forEach((cell) => {
+    const kind = cell.dataset.kind;
     // On a phone every place card is a tap target even when it is the only
     // destination, because the tap is also how you get down to the
     // directions. On a wider screen a lone destination has nothing to
@@ -1872,7 +1852,7 @@ function show(r, focusKind, landOn) {
     cell.setAttribute('tabindex', '0');
     cell.setAttribute('aria-pressed', 'false');
     cell.title = phone ? 'Directions here' : 'Get directions here instead';
-    cell.onclick = function () {
+    cell.onclick = () => {
       if (!current) return;
       routeTo(current, kind);
       // On a phone, tapping a place takes you to the directions for it:
@@ -1880,32 +1860,32 @@ function show(r, focusKind, landOn) {
       // under the sticky bar rather than beneath it.
       if (phone) scrollToDirections();
     };
-    cell.onkeydown = function (e) {
+    cell.onkeydown = (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cell.click(); }
     };
   });
 
   // Present only when the polling place is the one destination.
-  var spb = $('showPlaceBtn');
+  const spb = $('showPlaceBtn');
   if (spb) {
-    spb.onkeydown = function (e) {
+    spb.onkeydown = (e) => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
       e.preventDefault(); e.stopPropagation(); spb.click();
     };
-    spb.onclick = function (e) {
+    spb.onclick = (e) => {
       // Its own job, not the cell's: on a phone the cell around it routes
       // and scrolls to the directions, which would undo this framing.
       e.stopPropagation();
-      if (!place || !place.lat) return;
+      if (!place?.lat) return;
       revealMap();
       map.setView([place.lat, place.lng], 16);
       $('mapBlock').scrollIntoView({ block: 'center', behavior: 'smooth' });
       // Pulse the polling marker so the eye lands on the right dot rather
       // than just the right neighborhood.
-      pollLayer.eachLayer(function (m) {
-        var ll = m.getLatLng();
+      pollLayer.eachLayer((m) => {
+        const ll = m.getLatLng();
         if (Math.abs(ll.lat - place.lat) < 1e-6 && Math.abs(ll.lng - place.lng) < 1e-6) {
-          var el = m.getElement();
+          const el = m.getElement();
           if (el) {
             el.classList.remove('pulse');
             void el.offsetWidth;   // restart the animation on repeat clicks
@@ -1931,33 +1911,33 @@ function show(r, focusKind, landOn) {
   // has a page to link; a township has the phone number the county
   // publishes for its clerk, which is the same thing said the way a
   // township says it.
-  var office = !inGrandRapids(r) && P && r.mcd ? P.clerkOf(r.mcd) : null;
-  var whom = inGrandRapids(r)
+  const office = !inGrandRapids(r) && P && r.mcd ? P.clerkOf(r.mcd) : null;
+  const whom = inGrandRapids(r)
     ? 'the <a href="https://www.grandrapidsmi.gov/departments/clerks-office/" ' +
       'target="_blank" rel="noopener">Grand Rapids City Clerk</a>'
     : r.jurisdiction
-    ? 'the ' + esc(r.jurisdiction) + ' clerk' +
-      (office && office.phone ? ' (' + esc(office.phone) + ')' : '')
+    ? `the ${esc(r.jurisdiction)} clerk` +
+      (office?.phone ? ` (${esc(office.phone)})` : '')
     : 'your clerk';
-  var adv = ['<strong>Not an official government tool.</strong> Your voting ' +
+  const adv = ['<strong>Not an official government tool.</strong> Your voting ' +
     'location is based on the address where you registered to vote, not ' +
     'what you enter here. If you are not sure the entered address is the ' +
-    'same, double-check with ' + whom + ' or the ' +
+    `same, double-check with ${whom} or the ` +
     '<a href="https://mvic.sos.state.mi.us/" target="_blank" ' +
     'rel="noopener">Michigan Voter Information Center</a>.'];
   if (r.rivals) adv.push('This address sits on a precinct line and could be in ' +
-    esc(r.rivals.join(' or ')) + '.');
+    `${esc(r.rivals.join(' or '))}.`);
   else if (r.inferred) adv.push('This exact number is not in ' +
     'the address list, so the precinct was taken from its neighbors and ' +
     'checked against the precinct boundary.');
   if (r.edgeMetres < 30) adv.push('This address is close ' +
     'to a precinct boundary, so the answer is less certain.');
-  if (r.ambiguousStreet) adv.push('Read as ' + esc(displayCase(r.street)) +
+  if (r.ambiguousStreet) adv.push(`Read as ${esc(displayCase(r.street))}` +
     '. Other streets also match what you typed.');
   // Last, because it is about the drive rather than the answer, and the
   // drive is what the reader goes to next.
   adv.push('Obey all traffic signs and laws.');
-  $('advisory').innerHTML = '<div class="advisory">' + adv.join(' ') + '</div>';
+  $('advisory').innerHTML = `<div class="advisory">${adv.join(' ')}</div>`;
 
   routeTo(r, focusKind);
   // After routeTo, because the blocks it fills are hidden until then and a
@@ -1970,7 +1950,7 @@ function show(r, focusKind, landOn) {
   // address is typed from wherever the reader had got to, which may be the
   // directions, with the map filling the screen. A lookup is a request for
   // the voting info, so it ends on the voting info.
-  requestAnimationFrame(function () { scrollToResult(landOn || 'resultBlock'); });
+  requestAnimationFrame(() => { scrollToResult(landOn || 'resultBlock'); });
 }
 
 // ---- election + destination -----------------------------------------
@@ -1991,20 +1971,19 @@ function show(r, focusKind, landOn) {
 // answer, when it is open is the detail that follows it. Same shape the
 // /simple page renders, so hours read alike on both surfaces.
 function evHoursHtml(e) {
-  var rules = (e && e.early_voting_hours) || [];
+  const rules = e?.early_voting_hours || [];
   if (!rules.length) return '';
-  var today = Elections.todayAbbr();
-  var out = '<div class="vi-hours-lbl ev-hours-lbl">Hours:</div>' +
+  const today = Elections.todayAbbr();
+  let out = '<div class="vi-hours-lbl ev-hours-lbl">Hours:</div>' +
             '<div class="ev-hours">';
-  for (var i = 0; i < rules.length; i++) {
-    var days = rules[i].days || [];
-    var mark = days.indexOf(today) !== -1 ? ' class="is-today"' : '';
-    out += '<span' + mark + '>' + esc(days.join(', ')) +
-           (mark ? ' (today)' : '') + '</span>' +
-           '<span' + mark + '>' + esc(Elections.shortTime(rules[i].open)) + ' to ' +
-           esc(Elections.shortTime(rules[i].close)) + '</span>';
+  for (const rule of rules) {
+    const days = rule.days || [];
+    const mark = days.includes(today) ? ' class="is-today"' : '';
+    out += `<span${mark}>${esc(days.join(', '))}${mark ? ' (today)' : ''}</span>` +
+           `<span${mark}>${esc(Elections.shortTime(rule.open))} to ` +
+           `${esc(Elections.shortTime(rule.close))}</span>`;
   }
-  return out + '</div>';
+  return `${out}</div>`;
 }
 
 // The early voting window for this result: the clerk's published dates
@@ -2036,7 +2015,7 @@ function evWindow(r) {
 // election it was never about: the failure the county's early voting page
 // has between elections, in reverse.
 function clerkForThisElection(r) {
-  return !!(inGrandRapids(r) && clerk && clerk.early_voting && activeEl &&
+  return !!(inGrandRapids(r) && clerk?.early_voting && activeEl &&
             clerk.election === activeEl.date);
 }
 
@@ -2052,15 +2031,15 @@ function clerkForThisElection(r) {
 // window a voter can act on, so the block says nothing rather than describe
 // a date range that does not exist yet.
 function earlyVotingForBlock(r) {
-  var w = activeEl && evWindow(r);
+  const w = activeEl && evWindow(r);
   if (!w) return null;
-  var to = w.early_voting_to;
+  const to = w.early_voting_to;
   switch (Elections.windowState(w)) {
     case 'none':
       return null;
     case 'closed':
       return { label: 'Early voting closed',
-               status: 'Ended ' + Elections.dayMonth(to), site: false };
+               status: `Ended ${Elections.dayMonth(to)}`, site: false };
     case 'before':
       // Name the site before the window opens, but only when the CLERK has
       // published it for this election: checked against the election it
@@ -2068,12 +2047,11 @@ function earlyVotingForBlock(r) {
       // planning around it is better served knowing where than being told
       // to come back later.
       return { label: 'Early voting dates',
-               status: Elections.dayMonth(w.early_voting_from) +
-                       ' to ' + Elections.dayMonth(to),
+               status: `${Elections.dayMonth(w.early_voting_from)} to ${Elections.dayMonth(to)}`,
                site: clerkForThisElection(r) };
     default:
       return { label: 'Early voting open',
-               status: 'Through ' + Elections.dayMonth(to),
+               status: `Through ${Elections.dayMonth(to)}`,
                site: inGrandRapids(r) };
   }
 }
@@ -2094,7 +2072,7 @@ function earlyVotingForBlock(r) {
 // reads "58 days, 1 hour" where a calendar count would say 58 days flat. That
 // is the true remaining time, and the seconds field has to be real time to
 // tick at all, so the hour is kept rather than rounded away.
-var cdTimer = null;
+let cdTimer = null;
 
 function startCountdown() {
   if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
@@ -2109,12 +2087,12 @@ function startCountdown() {
 // Tuesday, November 3" reads as three items of equal rank, which buries the
 // one figure a reader came for.
 function noteLine() {
-  return '<span class="cd-for">' + esc(activeEl.name) + ':</span> ' +
-    '<span class="cd-when">' + esc(Elections.withWeekday(activeEl.date)) + '</span>';
+  return `<span class="cd-for">${esc(activeEl.name)}:</span> ` +
+    `<span class="cd-when">${esc(Elections.withWeekday(activeEl.date))}</span>`;
 }
 
 function renderCountdown() {
-  var box = $('countdown'), clock = $('cdClock'), note = $('cdNote'),
+  const box = $('countdown'), clock = $('cdClock'), note = $('cdNote'),
       said = $('cdSaid'), label = $('cdLabel');
   if (!box || !clock) return;
 
@@ -2131,21 +2109,21 @@ function renderCountdown() {
     return;
   }
 
-  var target = Elections.dayStart(activeEl.date);
+  const target = Elections.dayStart(activeEl.date);
   if (!target) { box.hidden = true; return; }
-  var left = target.getTime() - Date.now();
+  const left = target.getTime() - Date.now();
 
   // Days unpadded because it is the figure being read; the rest padded so the
   // row keeps its width and nothing shifts as the seconds run.
-  var unit = function (n, name, pad) {
-    return '<span class="cd-unit"><b class="cd-num">' +
-      (pad ? String(n).padStart(2, '0') : String(n)) +
-      '</b><span class="cd-lab">' + name + '</span></span>';
+  const unit = (n, name, pad) => {
+    const num = pad ? String(n).padStart(2, '0') : String(n);
+    return `<span class="cd-unit"><b class="cd-num">${num}</b>` +
+      `<span class="cd-lab">${name}</span></span>`;
   };
-  var hms = function (ms) {
-    var s = Math.max(0, Math.floor(ms / 1000));
-    var hrs = Math.floor(s / 3600); s -= hrs * 3600;
-    var mins = Math.floor(s / 60); s -= mins * 60;
+  const hms = (ms) => {
+    let s = Math.max(0, Math.floor(ms / 1000));
+    const hrs = Math.floor(s / 3600); s -= hrs * 3600;
+    const mins = Math.floor(s / 60); s -= mins * 60;
     return unit(hrs, 'Hours', true) + unit(mins, 'Minutes', true) +
            unit(s, 'Seconds', true);
   };
@@ -2158,24 +2136,22 @@ function renderCountdown() {
     // becomes a countdown again. The statutory hours come from the same
     // field the answer's Election day row shows, so the two cannot
     // disagree; without them the banner can only say it is today.
-    var now = new Date();
-    var phase = Elections.pollsPhase(activeEl, electionDayHours, now);
+    const now = new Date();
+    const phase = Elections.pollsPhase(activeEl, electionDayHours, now);
     if (phase === 'before') {
       if (label) label.textContent = 'Polls Open In:';
       clock.innerHTML = hms(Elections.atTime(activeEl.date, electionDayHours.open) - now);
       if (said) said.textContent = 'Polls open at ' +
-        Elections.shortTime(electionDayHours.open) + ' today for the ' +
-        activeEl.name + '.';
+        `${Elections.shortTime(electionDayHours.open)} today for the ${activeEl.name}.`;
     } else if (phase === 'open') {
       if (label) label.textContent = 'Polls Close In:';
       clock.innerHTML = hms(Elections.atTime(activeEl.date, electionDayHours.close) - now);
       if (said) said.textContent = 'Polls are open until ' +
-        Elections.shortTime(electionDayHours.close) + ' today for the ' +
-        activeEl.name + '.';
+        `${Elections.shortTime(electionDayHours.close)} today for the ${activeEl.name}.`;
     } else if (phase === 'closed') {
       if (label) label.textContent = 'Polls Have Closed:';
-      clock.innerHTML = '<span class="cd-today">' +
-        esc(Elections.shortTime(electionDayHours.close)) + '</span>';
+      clock.innerHTML =
+        `<span class="cd-today">${esc(Elections.shortTime(electionDayHours.close))}</span>`;
       // The one thing a voter reading this after 8 PM needs to know.
       if (said) said.textContent = (electionDayHours.in_line_note ||
         'Everyone in line when the polls closed must be allowed to vote.');
@@ -2184,8 +2160,8 @@ function renderCountdown() {
       // label gives up its preposition for the one day it does not need it.
       if (label) label.textContent = 'Election Day:';
       clock.innerHTML = '<span class="cd-today">Today</span>';
-      if (said) said.textContent = 'The ' + activeEl.name + ' is today, ' +
-        Elections.withWeekday(activeEl.date) + '.';
+      if (said) said.textContent = `The ${activeEl.name} is today, ` +
+        `${Elections.withWeekday(activeEl.date)}.`;
     }
     if (note) note.innerHTML = noteLine();
     box.hidden = false;
@@ -2193,12 +2169,12 @@ function renderCountdown() {
   }
 
   if (label) label.textContent = 'Election Day is In:';
-  var days = Math.floor(left / 86400000);
+  const days = Math.floor(left / 86400000);
   clock.innerHTML = unit(days, 'Days', false) + hms(left - days * 86400000);
 
   if (note) note.innerHTML = noteLine();
-  if (said) said.textContent = days + (days === 1 ? ' day' : ' days') +
-    ' until the ' + activeEl.name + ' on ' + Elections.withWeekday(activeEl.date) + '.';
+  if (said) said.textContent = `${days}${days === 1 ? ' day' : ' days'} until the ` +
+    `${activeEl.name} on ${Elections.withWeekday(activeEl.date)}.`;
   box.hidden = false;
 }
 
@@ -2217,8 +2193,8 @@ function renderCountdown() {
 function placeCoords(data) {
   if (!data || !graph) return null;
   function fix(place) {
-    var m = /^(\d+)\s+(.+)$/.exec(place.address || '');
-    var hit = m && graph.geocode(Number(m[1]), m[2], within(GR_MCD));
+    const m = /^(\d+)\s+(.+)$/.exec(place.address || '');
+    const hit = m && graph.geocode(Number(m[1]), m[2], within(GR_MCD));
     return hit ? Object.assign({}, place, { lat: hit.lat, lng: hit.lng }) : null;
   }
   return {
@@ -2228,7 +2204,7 @@ function placeCoords(data) {
     // A box with no street address cannot be routed to, so it is not
     // offered as a destination. It is still real: the full list names it.
     boxes: (data.drop_boxes || []).map(fix).filter(Boolean),
-    unrouted: (data.drop_boxes || []).filter(function (b) { return !b.address; })
+    unrouted: (data.drop_boxes || []).filter((b) => !b.address)
   };
 }
 
@@ -2239,11 +2215,9 @@ function placeCoords(data) {
 // differ. The actual drive appears the moment one is chosen.
 function nearest(origin, places) {
   if (!origin || !places || !places.length) return null;
-  return places.map(function (p) {
-    return Object.assign({}, p, {
-      metres: haversine(origin.lat, origin.lng, p.lat, p.lng)
-    });
-  }).sort(function (a, b) { return a.metres - b.metres; });
+  return places.map((p) => Object.assign({}, p, {
+    metres: haversine(origin.lat, origin.lng, p.lat, p.lng)
+  })).sort((a, b) => a.metres - b.metres);
 }
 
 function resetChoices() { chosen = { dropbox: 0, early: 0 }; }
@@ -2254,10 +2228,10 @@ function resetChoices() { chosen = { dropbox: 0, early: 0 }; }
 // ones that were placed can be offered as somewhere to drive.
 function boxesFor(r) {
   if (!r) return [];
-  if (inGrandRapids(r)) return (clerk && clerk.boxes) || [];
-  var boxes = (P ? P.dropBoxes(r.mcd) : []).filter(function (b) {
-    return b.lat && b.lng;
-  }).map(normaliseHours);
+  if (inGrandRapids(r)) return clerk?.boxes || [];
+  const boxes = (P ? P.dropBoxes(r.mcd) : [])
+    .filter((b) => b.lat && b.lng)
+    .map(normaliseHours);
   if (boxes.length) return boxes;
   // No box published. The state's report currently fills every
   // jurisdiction the county's page leaves empty, so this is the fallback
@@ -2266,15 +2240,15 @@ function boxesFor(r) {
   // offered as the place to return it, marked as an office so nothing
   // downstream calls it a box, gives it hours it does not keep, or says it
   // is watched.
-  var office = P ? P.clerkOf(r.mcd) : null;
+  const office = P ? P.clerkOf(r.mcd) : null;
   if (!office || !office.lat || !office.lng) return [];
   // The street address is the part before the first comma; the county
   // often trails a P.O. Box and a second mailing line. A record with no
   // usable street line falls back to whatever it has rather than showing
   // an empty one, and a missing phone is simply not mentioned.
-  var street = String(office.address || '').split(',')[0].trim();
+  const street = String(office.address || '').split(',')[0].trim();
   return [{
-    name: (r.jurisdiction || 'Your') + ' Clerk\u2019s Office',
+    name: `${r.jurisdiction || 'Your'} Clerk\u2019s Office`,
     address: street || String(office.address || '').trim() || null,
     phone: (office.phone && String(office.phone).trim()) || null,
     lat: office.lat, lng: office.lng,
@@ -2294,7 +2268,8 @@ function boxesFor(r) {
 // "call to check" was telling the reader what to do with it.
 function boxHoursHtml(b, tag, cls) {
   function line(c, text) {
-    return '<' + tag + (c ? ' class="' + c + '"' : '') + '>' + text + '</' + tag + '>';
+    const attr = c ? ` class="${c}"` : '';
+    return `<${tag}${attr}>${text}</${tag}>`;
   }
   if (b.office) {
     return line('bx-hours-odd', 'Open during office hours') +
@@ -2302,12 +2277,12 @@ function boxHoursHtml(b, tag, cls) {
   }
   if (!b.hours) return '';
   return ALWAYS_OPEN.test(b.hours) ? line(cls.open, 'Open 24/7')
-                                   : line('bx-hours-odd', 'Open hours: ' + esc(b.hours));
+                                   : line('bx-hours-odd', `Open hours: ${esc(b.hours)}`);
 }
 
 // The drop-off list is the clerk's office rather than any box.
 function officeOnly(list) {
-  return !!(list && list.length && list[0].office);
+  return !!(list?.length && list[0].office);
 }
 
 // The county writes "24 hours a day, 7 days a week" where the city clerk
@@ -2315,7 +2290,7 @@ function officeOnly(list) {
 // that is not "24/7" is shown in amber as an exception. Left as written,
 // every county box would be one. The scrape stays the record of what the
 // page said; this is the reading of it.
-var ROUND_THE_CLOCK = /24\s*hours?\s*(a|per)\s*day.*7\s*days/i;
+const ROUND_THE_CLOCK = /24\s*hours?\s*(a|per)\s*day.*7\s*days/i;
 function normaliseHours(b) {
   if (b.hours && ROUND_THE_CLOCK.test(b.hours)) {
     return Object.assign({}, b, { hours: '24/7' });
@@ -2327,7 +2302,7 @@ function normaliseHours(b) {
 function destSub(pick, r) {
   return pick.kind === 'early' ? 'Early voting site'
        : pick.kind === 'dropbox' ? 'Absentee ballot drop box'
-       : 'Precinct ' + r.precinct;
+       : `Precinct ${r.precinct}`;
 }
 
 // Which destinations are available for this voter right now. Three places
@@ -2337,29 +2312,29 @@ function destSub(pick, r) {
 // a discretionary errand, at a time of your choosing, and there is no
 // reason a record of it should exist.
 function destinations(r) {
-  var out = [];
-  var origin = addressPoint(r);
+  const out = [];
+  const origin = addressPoint(r);
 
   // The clerk's own sites when we have them, the calendar's otherwise, and
   // only for Grand Rapids. Both lists are the city's; offering them to a
   // Kentwood voter would send them to the wrong clerk's early voting site,
   // and this page reads no other jurisdiction's sites.
-  var sites = !inGrandRapids(r) ? []
+  const sites = !inGrandRapids(r) ? []
             : (clerkForThisElection(r) && clerk.sites.length) ? clerk.sites
-            : Elections.sites(activeEl).filter(function (s) { return s.lat && s.lng; });
-  var evState = Elections.windowState(evWindow(r));
-  var ranked = nearest(origin, sites);
+            : Elections.sites(activeEl).filter((s) => s.lat && s.lng);
+  const evState = Elections.windowState(evWindow(r));
+  const ranked = nearest(origin, sites);
   if (ranked && evState !== 'closed') {
     out.push({ kind: 'early', label: 'Early voting',
                place: ranked[chosen.early] || ranked[0],
                all: ranked, state: evState });
   }
 
-  if (r.place && r.place.lat) {
+  if (r.place?.lat) {
     out.push({ kind: 'polling', label: 'Election day', place: r.place });
   }
 
-  var boxes = nearest(origin, boxesFor(r));
+  const boxes = nearest(origin, boxesFor(r));
   if (boxes) {
     out.push({ kind: 'dropbox', label: 'Drop box',
                place: boxes[chosen.dropbox] || boxes[0],
@@ -2372,8 +2347,8 @@ function destinations(r) {
   // still says -- that is where a voter has to be by 8pm, and it is what the
   // directions should already be pointed at when the answer appears.
   if (out.length > 1 && (evState !== 'open' || isElectionDay())) {
-    out.sort(function (a, b) {
-      var rank = { polling: 0, early: 1, dropbox: 2 };
+    out.sort((a, b) => {
+      const rank = { polling: 0, early: 1, dropbox: 2 };
       return rank[a.kind] - rank[b.kind];
     });
   }
@@ -2385,10 +2360,10 @@ function destinations(r) {
 // An origin this close to its destination is already there. 150 m is the
 // block: far enough to cover an address geocoded to the middle of a long
 // parcel, close enough that "already here" is not a lie.
-var ARRIVED_M = 150;
+const ARRIVED_M = 150;
 
 function routeTo(r, forcedKind) {
-  var opts = destinations(r);
+  const opts = destinations(r);
   routeLayer.clearLayers(); pinLayer.clearLayers();
 
   if (!opts.length) {
@@ -2396,20 +2371,20 @@ function routeTo(r, forcedKind) {
     $('routeBlock').hidden = true;
     return;
   }
-  var pick = null;
-  if (forcedKind) pick = opts.filter(function (o) { return o.kind === forcedKind; })[0];
+  let pick = null;
+  if (forcedKind) pick = opts.find((o) => o.kind === forcedKind);
   if (!pick) pick = opts[0];
   destChoice = pick;
   markDestination();
 
-  var origin = addressPoint(r);
+  const origin = addressPoint(r);
   if (!origin) {
     routeError();
     $('routes').innerHTML = '<div class="err">Found where you vote, but could not ' +
       'place your address on the street map, so no route is drawn.</div>';
     return;
   }
-  var place = pick.place;
+  const place = pick.place;
 
   // Nobody needs directions to the building they are standing in: both
   // ends would snap to road nodes, and the router would dutifully draw a
@@ -2418,23 +2393,23 @@ function routeTo(r, forcedKind) {
   if (haversine(origin.lat, origin.lng, place.lat, place.lng) <= ARRIVED_M) {
     // Still a `routes` object, so the destination picker stays live: being
     // at the drop box is a good moment to ask for the polling place.
-    routes = { here: true, opts: opts, origin: origin, place: place,
+    routes = { here: true, opts, origin, place,
                destSub: destSub(pick, r) };
     renderAll(true);
     return;
   }
 
-  var computed = computeRoutes(origin, place);
+  const computed = computeRoutes(origin, place);
   if (!computed) {
     routeError();
     $('routes').innerHTML = '<div class="err">No drivable route between your address ' +
-      'and ' + esc(place.name) + ' on this road network.</div>';
+      `and ${esc(place.name)} on this road network.</div>`;
     map.fitBounds(L.latLngBounds([[origin.lat, origin.lng], [place.lat, place.lng]]).pad(.35), fitOpts());
     return;
   }
 
   routes = Object.assign(computed, {
-    opts: opts, origin: origin, place: place,
+    opts, origin, place,
     destSub: destSub(pick, r)
   });
   // Keep whichever route the reader chose, unless there is no longer a
@@ -2466,17 +2441,18 @@ function computeRoutes(origin, place) {
   // graph exactly as it was found, so the drawable geometry and the step
   // list have to be materialized BEFORE that happens: afterwards the
   // temporary edges they refer to no longer exist.
-  var oSplit = graph.splitAt(origin.lat, origin.lng);
-  var dSplit = graph.splitAt(place.lat, place.lng);
-  var originNode = oSplit ? oSplit.node : graph.snapToRoad(origin.lat, origin.lng).node;
-  var destNode = dSplit ? dSplit.node : graph.snapToRoad(place.lat, place.lng).node;
+  const oSplit = graph.splitAt(origin.lat, origin.lng);
+  const dSplit = graph.splitAt(place.lat, place.lng);
+  const originNode = oSplit ? oSplit.node : graph.snapToRoad(origin.lat, origin.lng).node;
+  const destNode = dSplit ? dSplit.node : graph.snapToRoad(place.lat, place.lng).node;
 
-  var fast, avoid, t0 = performance.now();
+  let fast, avoid;
+  const t0 = performance.now();
   try {
     // The fastest route ignores cameras: hide the table for one search,
     // and put it back even if that search throws, or every later route
     // would be planned blind to them.
-    var saved = graph._edgeCams;
+    const saved = graph._edgeCams;
     graph._edgeCams = null;
     try { fast = graph.route(originNode, destNode); }
     finally { graph._edgeCams = saved; }
@@ -2497,22 +2473,22 @@ function computeRoutes(origin, place) {
   // When the quickest way already passes nothing, the avoiding route is the
   // same road. Showing it twice implies a choice that does not exist, so the
   // two collapse into one.
-  var fastExp = Object.keys(fast.camsOnRoute).length;
-  var identical = sameRoute(fast, avoid, fastExp, avoid.cameraCount);
+  const fastExp = Object.keys(fast.camsOnRoute).length;
+  let identical = sameRoute(fast, avoid, fastExp, avoid.cameraCount);
 
   // A route through cameras earns its place on the page by being faster.
   // When it is not (by the same threshold the cost line uses), offering it
   // would present surveillance exposure as one half of a trade that has no
   // other half, so it collapses into the single-route display.
-  var fastDropped = false;
+  let fastDropped = false;
   if (!identical && fastExp > avoid.cameraCount && noRealSaving(fast, avoid)) {
     identical = true;
     fastDropped = true;
   }
   return {
-    fast: fast, avoid: avoid, identical: identical, fastDropped: fastDropped,
-    fastExp: fastExp, avoidExp: avoid.cameraCount, flagged: fast.camsOnRoute,
-    originNode: originNode, destNode: destNode,
+    fast, avoid, identical, fastDropped,
+    fastExp, avoidExp: avoid.cameraCount, flagged: fast.camsOnRoute,
+    originNode, destNode,
     originSplit: !!oSplit, destSplit: !!dSplit,
     ms: Math.round(performance.now() - t0)
   };
@@ -2540,14 +2516,14 @@ function renderAll(fit) {
     renderDestPicker();
     $('routes').innerHTML =
       '<div class="here"><div class="here-h">You\u2019re already here</div>' +
-      '<div class="here-b">' + esc(displayCase(routes.place.name || '')) +
+      `<div class="here-b">${esc(displayCase(routes.place.name || ''))}` +
       ' is at the address you searched, so there is nothing here to navigate. ' +
       'Pick another destination above for directions.</div></div>';
     $('steps').innerHTML = ''; $('unavoid').innerHTML = '';
     renderRouteKey();
     bindDetail(marker([routes.place.lat, routes.place.lng], 'dest'),
       placePopup('You are here', displayCase(routes.place.name), routes.place,
-                 '<div class="dw">' + esc(routes.destSub) + '</div>'), 280);
+                 `<div class="dw">${esc(routes.destSub)}</div>`), 280);
     if (fit) map.setView([routes.place.lat, routes.place.lng], 17, { animate: false });
     return;
   }
@@ -2555,7 +2531,7 @@ function renderAll(fit) {
   drawCameras(routes.flagged);
 
   if (!routes.identical) {
-    var other = selected === 'avoid' ? 'fast' : 'avoid';
+    const other = selected === 'avoid' ? 'fast' : 'avoid';
     drawRoute(routes[other], 'muted', other);
   }
   drawRoute(routes[selected], selected === 'avoid' ? 'avoid' : 'fastmain', selected);
@@ -2565,15 +2541,15 @@ function renderAll(fit) {
   // arrow points the way the SELECTED route leaves, and that changes when
   // the reader flips between fastest and avoiding. (The layer was cleared
   // at the top, alongside the route layer.)
-  var rp = routes[selected].pts;
-  var brg = (rp && rp.length > 1) ? bearing(rp[0], rp[1]) : 0;
+  const rp = routes[selected].pts;
+  const brg = (rp && rp.length > 1) ? bearing(rp[0], rp[1]) : 0;
   originArrow = marker([routes.origin.lat, routes.origin.lng], 'origin', brg);
   // The flag stands alone on the map; the detail is a click away. A
   // permanent card beside it covered the streets around the destination,
   // which is exactly where a reader is trying to look.
   bindDetail(marker([routes.place.lat, routes.place.lng], 'dest'),
     placePopup('Finish', displayCase(routes.place.name), routes.place,
-               '<div class="dw">' + esc(routes.destSub) + '</div>'), 280);
+               `<div class="dw">${esc(routes.destSub)}</div>`), 280);
 
   // With mid-block splitting the route normally begins at the address
   // itself, so these draw nothing. They stay for the fallback case where a
@@ -2581,8 +2557,8 @@ function renderAll(fit) {
   // junction: better to show that gap than to leave a line stopping short.
   // Read the ends off the route geometry, never off node ids -- the split
   // nodes are gone by now.
-  var pts = routes[selected].pts;
-  if (pts && pts.length) {
+  const pts = routes[selected].pts;
+  if (pts?.length) {
     connector([routes.origin.lat, routes.origin.lng], pts[0]);
     connector([routes.place.lat, routes.place.lng], pts[pts.length - 1]);
   }
@@ -2594,9 +2570,9 @@ function renderAll(fit) {
     // union of both routes and both endpoints makes the scene's own
     // centroid the view centre, and the frame no longer changes meaning
     // when the toggle flips.
-    var fitB = L.latLngBounds(routes[selected].pts);
+    const fitB = L.latLngBounds(routes[selected].pts);
     if (!routes.identical) {
-      var otherKey = selected === 'avoid' ? 'fast' : 'avoid';
+      const otherKey = selected === 'avoid' ? 'fast' : 'avoid';
       fitB.extend(L.latLngBounds(routes[otherKey].pts));
     }
     fitB.extend([routes.origin.lat, routes.origin.lng]);
@@ -2607,9 +2583,9 @@ function renderAll(fit) {
     // Reflecting the scene bounds through the midpoint makes bounds that
     // are symmetric about it, so fitBounds lands the midpoint dead centre
     // while still guaranteeing the whole scene fits.
-    var midLat = (routes.origin.lat + routes.place.lat) / 2;
-    var midLng = (routes.origin.lng + routes.place.lng) / 2;
-    var sw = fitB.getSouthWest(), ne = fitB.getNorthEast();
+    const midLat = (routes.origin.lat + routes.place.lat) / 2;
+    const midLng = (routes.origin.lng + routes.place.lng) / 2;
+    const sw = fitB.getSouthWest(), ne = fitB.getNorthEast();
     fitB.extend([2 * midLat - sw.lat, 2 * midLng - sw.lng]);
     fitB.extend([2 * midLat - ne.lat, 2 * midLng - ne.lng]);
     map.fitBounds(fitB, fitOpts());
@@ -2623,8 +2599,7 @@ function renderAll(fit) {
   drawSites(current);
   // Tell the basemap which streets this route uses so it names them first.
   ownBase.setRouteStreets(
-    (routes[selected].steps || []).map(function (st) { return st.street; })
-      .filter(Boolean),
+    (routes[selected].steps || []).map((st) => st.street).filter(Boolean),
     routes[selected].pts);
 
   renderDestPicker();
@@ -2638,11 +2613,11 @@ function renderAll(fit) {
 // the router picked even when the choice came from the segmented control,
 // from a re-route, or from the fallback to opts[0].
 function markDestination() {
-  var box = $('precinctInfo');
+  const box = $('precinctInfo');
   if (!box) return;
-  var cells = box.querySelectorAll('[data-kind]');
-  Array.prototype.forEach.call(cells, function (cell) {
-    var on = !!(destChoice && cell.dataset.kind === destChoice.kind);
+  const cells = box.querySelectorAll('[data-kind]');
+  cells.forEach((cell) => {
+    const on = !!(destChoice && cell.dataset.kind === destChoice.kind);
     cell.classList.toggle('is-dest', on && cell.classList.contains('vi-dest'));
     if (cell.hasAttribute('aria-pressed')) {
       cell.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2651,12 +2626,12 @@ function markDestination() {
 }
 
 function renderDestPicker() {
-  var el = $('destPick');
+  const el = $('destPick');
   if (!el) return;
   el.innerHTML = routes
-    ? destPickerHtml(routes.opts, destChoice && destChoice.kind) : '';
-  Array.prototype.forEach.call(el.querySelectorAll('button'), function (b) {
-    b.onclick = function () { if (current) routeTo(current, b.dataset.kind); };
+    ? destPickerHtml(routes.opts, destChoice?.kind) : '';
+  el.querySelectorAll('button').forEach((b) => {
+    b.onclick = () => { if (current) routeTo(current, b.dataset.kind); };
   });
 }
 
@@ -2665,7 +2640,7 @@ function renderDestPicker() {
 // phone, where the card is shorter and generous padding would zoom the
 // route out until the streets stopped being readable.
 function fitOpts() {
-  var pad = isPhone() ? 24 : 38;
+  const pad = isPhone() ? 24 : 38;
   // Top headroom covers the finish flag, which stands 32px above its
   // anchor; the bottom clears Leaflet's attribution strip.
   return { paddingTopLeft: [pad, Math.max(pad, 36)],
@@ -2673,20 +2648,20 @@ function fitOpts() {
 }
 
 function camsOn(edges) {
-  var s = {};
-  edges.forEach(function (id) {
-    var cc = graph._edgeCams && graph._edgeCams[id];
-    if (cc) cc.forEach(function (x) { s[x] = 1; });
+  const s = {};
+  edges.forEach((id) => {
+    const cc = graph._edgeCams?.[id];
+    if (cc) cc.forEach((x) => { s[x] = 1; });
   });
   return s;
 }
 
 function routePoints(r) {
-  var pts = [];
-  r.edges.forEach(function (id, i) {
-    var poly = graph.edgePoly(id);
+  const pts = [];
+  r.edges.forEach((id, i) => {
+    const poly = graph.edgePoly(id);
     if (r.nodes[i] !== graph.edgeA(id)) poly.reverse();
-    poly.forEach(function (p) { pts.push(p); });
+    poly.forEach((p) => { pts.push(p); });
   });
   return pts;
 }
@@ -2697,8 +2672,8 @@ function routePoints(r) {
 // prominently to draw it. They are separate because the unselected route
 // still has an identity worth keeping.
 function drawRoute(r, kind, which) {
-  var pts = r.pts;
-  var casing = getVar('--case');
+  const pts = r.pts;
+  const casing = getVar('--case');
   if (kind === 'muted') {
     // Solid, not dashed. Dashes are how this map draws precinct and
     // jurisdiction boundaries, so a dashed route read as another border
@@ -2711,7 +2686,7 @@ function drawRoute(r, kind, which) {
     // this page exists to let you make was the hardest thing on the map to
     // see. Selection is carried by weight and by the moving highlight
     // instead, which is a difference in emphasis rather than in meaning.
-    var tone = which === 'avoid' ? getVar('--route-avoid') : getVar('--route-fastsel');
+    const tone = which === 'avoid' ? getVar('--route-avoid') : getVar('--route-fastsel');
     L.polyline(pts, { color: casing, weight: 9.5, opacity: .55,
       lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
     L.polyline(pts, { color: tone, weight: 5.5, opacity: .95,
@@ -2724,10 +2699,10 @@ function drawRoute(r, kind, which) {
     }
     return;
   }
-  var color = kind === 'avoid' ? getVar('--route-avoid') : getVar('--route-fastsel');
+  const color = kind === 'avoid' ? getVar('--route-avoid') : getVar('--route-fastsel');
   L.polyline(pts, { color: casing, weight: 13, opacity: .75,
     lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
-  L.polyline(pts, { color: color, weight: 7.5, opacity: 1,
+  L.polyline(pts, { color, weight: 7.5, opacity: 1,
     lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer);
   if (kind === 'avoid') {
     // The clean route keeps the subtle animated flow.
@@ -2751,13 +2726,11 @@ function drawRoute(r, kind, which) {
 // under the corner box. Any control inside the map will eventually cover
 // something. Outside it, the overlap is not reduced, it is impossible.
 function renderRouteKey() {
-  var k = $('routeKey');
+  const k = $('routeKey');
   if (!k) return;
   if (!routes || routes.here || routes.identical) { k.hidden = true; k.innerHTML = ''; return; }
-  var row = function (kind, label) {
-    return '<span class="rk-row' + (selected === kind ? ' on' : '') + '">' +
-      '<i class="rk-sw ' + kind + '"></i>' + label + '</span>';
-  };
+  const row = (kind, label) => `<span class="rk-row${selected === kind ? ' on' : ''}">` +
+    `<i class="rk-sw ${kind}"></i>${label}</span>`;
   k.innerHTML = row('avoid', 'Avoiding') + row('fast', 'Fastest');
   k.hidden = false;
 }
@@ -2774,16 +2747,16 @@ function connector(from, to) {
 // The start arrow or the finish flag. Both are 34px; only the anchor
 // differs, since the flag stands on its pole rather than being centred.
 function marker(latlng, kind, bearingDeg) {
-  var ring = getVar('--pin-ring');
-  var html, anchor;
+  const ring = getVar('--pin-ring');
+  let html, anchor;
   if (kind === 'origin') {
     // A compass arrow rotated to the first leg's bearing: the start of the
     // route says which way you set off, not just where you stand.
     anchor = [17, 17];
-    html = '<div style="width:34px;height:34px;border-radius:50%;background:' +
-      getVar('--accent') + ';border:3px solid ' + ring +
-      ';box-shadow:0 1px 8px rgba(0,0,0,.5);display:flex;align-items:center;' +
-      'justify-content:center;transform:rotate(' + (bearingDeg || 0) + 'deg)">' +
+    html = '<div style="width:34px;height:34px;border-radius:50%;' +
+      `background:${getVar('--accent')};border:3px solid ${ring};` +
+      'box-shadow:0 1px 8px rgba(0,0,0,.5);display:flex;align-items:center;' +
+      `justify-content:center;transform:rotate(${bearingDeg || 0}deg)">` +
       '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff">' +
       '<path d="M12 3l6 15-6-4-6 4z"/></svg></div>';
   } else {
@@ -2791,16 +2764,16 @@ function marker(latlng, kind, bearingDeg) {
     anchor = [6, 32];
     html = '<div style="width:34px;height:34px;position:relative">' +
       '<div style="position:absolute;left:4px;top:0;width:3px;height:32px;' +
-      'border-radius:2px;background:' + ring + ';box-shadow:0 1px 5px rgba(0,0,0,.45)"></div>' +
+      `border-radius:2px;background:${ring};box-shadow:0 1px 5px rgba(0,0,0,.45)"></div>` +
       '<svg style="position:absolute;left:7px;top:1px" width="22" height="15" viewBox="0 0 22 15">' +
-      '<rect width="22" height="15" rx="2" fill="' + getVar('--warn') + '"/>' +
+      `<rect width="22" height="15" rx="2" fill="${getVar('--warn')}"/>` +
       '<g fill="rgba(20,16,6,.82)"><rect x="0" y="0" width="5.5" height="5"/>' +
       '<rect x="11" y="0" width="5.5" height="5"/><rect x="5.5" y="5" width="5.5" height="5"/>' +
       '<rect x="16.5" y="5" width="5.5" height="5"/><rect x="0" y="10" width="5.5" height="5"/>' +
       '<rect x="11" y="10" width="5.5" height="5"/></g></svg></div>';
   }
-  var m = L.marker(latlng, {
-    icon: L.divIcon({ className: '', html: html, iconSize: [34, 34],
+  const m = L.marker(latlng, {
+    icon: L.divIcon({ className: '', html, iconSize: [34, 34],
       iconAnchor: anchor }),
     zIndexOffset: 1000
   }).addTo(pinLayer);
@@ -2814,39 +2787,39 @@ function marker(latlng, kind, bearingDeg) {
 
 function renderRouteCards() {
   $('routes').innerHTML = cardsHtml(routes, selected);
-  Array.prototype.forEach.call($('routes').querySelectorAll('button[data-key]'), function (b) {
-    b.onclick = function () { selected = b.dataset.key; renderAll(false); };
+  $('routes').querySelectorAll('button[data-key]').forEach((b) => {
+    b.onclick = () => { selected = b.dataset.key; renderAll(false); };
   });
 }
 
 function renderSteps() {
   // Read, never recomputed: the steps were taken while the split edges
   // they refer to still existed (see computeRoutes).
-  var steps = routes[selected].steps;
+  const steps = routes[selected].steps;
   $('steps').innerHTML = stepsHtml(steps);
 
   // A step is also a viewport: clicking it frames that stretch of the
   // route. maxZoom keeps a 40-foot leg from being blown up to rooftop
   // level, and on a phone, where the map sits above the list, the map is
   // scrolled back into view so the zoom is not happening off screen.
-  Array.prototype.forEach.call($('steps').querySelectorAll('li'), function (li) {
-    li.addEventListener('click', function () {
-      var st = steps[Number(li.dataset.i)];
-      if (!st || !st.points || !st.points.length) return;
-      var cur = $('steps').querySelector('li.cur');
+  $('steps').querySelectorAll('li').forEach((li) => {
+    li.addEventListener('click', () => {
+      const st = steps[Number(li.dataset.i)];
+      if (!st?.points?.length) return;
+      const cur = $('steps').querySelector('li.cur');
       if (cur) cur.classList.remove('cur');
       li.classList.add('cur');
-      var o = fitOpts(); o.maxZoom = 17;
+      const o = fitOpts(); o.maxZoom = 17;
       map.fitBounds(L.latLngBounds(st.points).pad(.25), o);
       // Walk the blue arrow to this manoeuvre, pointed the way the leg
       // leaves, so the list and the map agree about where "you" are.
       // Clicking the first step returns it to the true start.
       if (originArrow) {
         pinLayer.removeLayer(originArrow);
-        var hb = st.points.length > 1
+        const hb = st.points.length > 1
           ? bearing(st.points[0], st.points[1])
-          : (function () {
-              var rp2 = routes[selected].pts;
+          : (() => {
+              const rp2 = routes[selected].pts;
               return rp2 && rp2.length > 1
                 ? bearing(rp2[rp2.length - 2], rp2[rp2.length - 1]) : 0;
             })();
@@ -2862,13 +2835,13 @@ function renderSteps() {
 }
 
 function renderUnavoidable() {
-  var exp = selected === 'avoid' ? routes.avoidExp : routes.fastExp;
+  const exp = selected === 'avoid' ? routes.avoidExp : routes.fastExp;
   if (selected !== 'avoid' || exp === 0) { $('unavoid').innerHTML = ''; return; }
   // Read street names off the step list, which was captured while the
   // temporary split edges still existed.
-  var names = {};
-  (routes.avoid.steps || []).forEach(function (st) {
-    if (st.cameras && st.cameras.length) names[st.street || 'an unnamed road'] = 1;
+  const names = {};
+  (routes.avoid.steps || []).forEach((st) => {
+    if (st.cameras?.length) names[st.street || 'an unnamed road'] = 1;
   });
   $('unavoid').innerHTML = unavoidableHtml(exp, Object.keys(names));
 }
@@ -2888,10 +2861,8 @@ function renderUnavoidable() {
 // The distance and time formats live here too; app.js borrows fmtMi for the
 // drop box list, and debug.js the mile.
 
-var METERS_PER_MILE = 1609.344;       // the international mile, exactly
-
-function fmtMi(m) { return (m / METERS_PER_MILE).toFixed(1) + ' mi'; }
-function fmtMin(s) { return Math.max(1, Math.round(s / 60)) + ' min'; }
+function fmtMi(m) { return `${(m / METERS_PER_MILE).toFixed(1)} mi`; }
+function fmtMin(s) { return `${Math.max(1, Math.round(s / 60))} min`; }
 function plural(n) { return n > 1 ? 's' : ''; }
 
 // "Would taking the cameras actually get you there faster?" Both routes come
@@ -2903,8 +2874,8 @@ function plural(n) { return n > 1 ? 's' : ''; }
 // ONE predicate for both decisions that depend on it: whether the fastest
 // route is offered at all, and how its cost is described when it is.
 function noRealSaving(fast, avoid) {
-  var dMi = (avoid.meters - fast.meters) / METERS_PER_MILE;
-  var dMin = (avoid.seconds - fast.seconds) / 60;
+  const dMi = (avoid.meters - fast.meters) / METERS_PER_MILE;
+  const dMin = (avoid.seconds - fast.seconds) / 60;
   return dMi <= .05 && dMin <= .5;
 }
 
@@ -2919,7 +2890,7 @@ function noRealSaving(fast, avoid) {
 function sameRoute(a, b, aExp, bExp) {
   if (!a || !b) return false;
   if (a.edges.length === b.edges.length &&
-      a.edges.every(function (e, i) { return e === b.edges[i]; })) return true;
+      a.edges.every((e, i) => e === b.edges[i])) return true;
   return aExp === bExp &&
          Math.round(a.seconds) === Math.round(b.seconds) &&
          Math.round(a.meters) === Math.round(b.meters);
@@ -2927,7 +2898,7 @@ function sameRoute(a, b, aExp, bExp) {
 
 function camWord(n) {
   return n === 0 ? '<span class="cam-zero">no cameras</span>'
-    : '<span class="cam-big">' + n + ' camera' + plural(n) + '</span>';
+    : `<span class="cam-big">${n} camera${plural(n)}</span>`;
 }
 
 // A glyph per manoeuvre, read off the instruction text. Faster to scan
@@ -2950,7 +2921,7 @@ function turnGlyph(text) {
 // replace is exact rather than a guess at where it starts.
 function stepText(st) {
   if (!st.street) return st.text;
-  var c = displayCase(st.street);
+  const c = displayCase(st.street);
   return c === st.street ? st.text : st.text.replace(st.street, c);
 }
 
@@ -2966,43 +2937,43 @@ function option(key, r, exp, saved, selected) {
   // camera-free route exists the search falls back to fewest exposures, so
   // that route can still pass some: it says "passing" plainly rather than
   // claiming an avoidance it did not achieve.
-  var label;
+  let label;
   if (key === 'avoid') {
-    label = exp > 0 ? 'Passing ' + exp + ' camera' + plural(exp)
-      : saved > 0 ? 'Avoiding ' + saved + ' camera' + plural(saved)
+    label = exp > 0 ? `Passing ${exp} camera${plural(exp)}`
+      : saved > 0 ? `Avoiding ${saved} camera${plural(saved)}`
       : 'No cameras';
   } else {
     label = exp === 0 ? 'No cameras'
-      : 'Traversing ' + exp + ' camera' + plural(exp);
+      : `Traversing ${exp} camera${plural(exp)}`;
   }
 
-  return '<button type="button" class="' + key +
-    (selected === key ? ' on' : '') + '" data-key="' + key + '">' +
-    '<span class="rt-top"><span class="sw ' + key + '"></span>' + label + '</span>' +
-    '<span class="rt-sub">' + fmtMi(r.meters) + ' · ' + fmtMin(r.seconds) + '</span>' +
+  return `<button type="button" class="${key}${selected === key ? ' on' : ''}"` +
+    ` data-key="${key}">` +
+    `<span class="rt-top"><span class="sw ${key}"></span>${label}</span>` +
+    `<span class="rt-sub">${fmtMi(r.meters)} · ${fmtMin(r.seconds)}</span>` +
     '</button>';
 }
 
 function cardsHtml(routes, selected) {
-  var fast = routes.fast, avoid = routes.avoid;
-  var dMi = (avoid.meters - fast.meters) / METERS_PER_MILE;
-  var dMin = (avoid.seconds - fast.seconds) / 60;
-  var saved = routes.avoidExp < routes.fastExp ? routes.fastExp - routes.avoidExp : 0;
+  const { fast, avoid } = routes;
+  const dMi = (avoid.meters - fast.meters) / METERS_PER_MILE;
+  const dMin = (avoid.seconds - fast.seconds) / 60;
+  const saved = routes.avoidExp < routes.fastExp ? routes.fastExp - routes.avoidExp : 0;
 
   if (routes.identical) {
-    var clean = routes.avoidExp === 0;
-    var note = routes.fastDropped
+    const clean = routes.avoidExp === 0;
+    const note = routes.fastDropped
       ? '<div class="verdict">Going through the cameras would not get you ' +
         'there any faster, so only this route is offered.</div>'
       : clean ? ''
       : '<div class="verdict">This is also the way that passes ' +
         'the fewest cameras.</div>';
-    return '<div class="one-route"><b>' + fmtMi(avoid.meters) + '</b> · <b>' +
-      fmtMin(avoid.seconds) + '</b>' +
-      (clean ? '' : ' · ' + camWord(routes.avoidExp)) + '</div>' + note;
+    return `<div class="one-route"><b>${fmtMi(avoid.meters)}</b> · ` +
+      `<b>${fmtMin(avoid.seconds)}</b>` +
+      (clean ? '' : ` · ${camWord(routes.avoidExp)}`) + `</div>${note}`;
   }
 
-  var html = '<div class="route-toggle">' +
+  let html = '<div class="route-toggle">' +
     option('avoid', avoid, routes.avoidExp, saved, selected) +
     option('fast', fast, routes.fastExp, saved, selected) + '</div>';
 
@@ -3010,50 +2981,50 @@ function cardsHtml(routes, selected) {
   // under the two buttons and only while that route is the selection.
   // With Fastest selected it would be arguing with the reader's choice.
   if (saved > 0 && selected === 'avoid') {
-    var cost;
+    let cost;
     if (noRealSaving(fast, avoid)) cost = 'costs you nothing';
     else {
-      var parts = [];
-      if (dMi > .05) parts.push(dMi.toFixed(1) + ' mi');
-      if (dMin > .5) parts.push(Math.round(dMin) + ' min');
-      cost = 'costs an extra ' + parts.join(' and ');
+      const parts = [];
+      if (dMi > .05) parts.push(`${dMi.toFixed(1)} mi`);
+      if (dMin > .5) parts.push(`${Math.round(dMin)} min`);
+      cost = `costs an extra ${parts.join(' and ')}`;
     }
-    html += '<div class="verdict">Going around them ' + cost + '.</div>';
+    html += `<div class="verdict">Going around them ${cost}.</div>`;
   }
   return html;
 }
 
 function stepsHtml(steps) {
-  return '<ol class="steps">' + steps.map(function (st, i) {
-    var dist = st.meters ? '<span class="sd">' +
-      (st.meters < 160 ? Math.round(st.meters * 3.28084) + ' ft' : fmtMi(st.meters)) +
+  const items = steps.map((st, i) => {
+    const dist = st.meters ? '<span class="sd">' +
+      (st.meters < 160 ? `${Math.round(st.meters * 3.28084)} ft` : fmtMi(st.meters)) +
       '</span>' : '';
-    var cam = st.cameras.length
-      ? '<span class="scam">' + st.cameras.length + ' camera' +
-        plural(st.cameras.length) + '</span>' : '';
-    return '<li data-i="' + i + '"' + (st.arrive ? ' class="arrive"' : '') +
+    const cam = st.cameras.length
+      ? `<span class="scam">${st.cameras.length} camera${plural(st.cameras.length)}</span>`
+      : '';
+    return `<li data-i="${i}"${st.arrive ? ' class="arrive"' : ''}` +
       ' title="Show this part of the route on the map">' +
-      (st.arrive ? '' : '<span class="glyph">' + turnGlyph(st.text) + '</span>') +
-      '<span class="stext">' + esc(stepText(st)) + '</span>' + dist + cam + '</li>';
-  }).join('') + '</ol>';
+      (st.arrive ? '' : `<span class="glyph">${turnGlyph(st.text)}</span>`) +
+      `<span class="stext">${esc(stepText(st))}</span>${dist}${cam}</li>`;
+  });
+  return `<ol class="steps">${items.join('')}</ol>`;
 }
 
 // Named streets, so "unavoidable" is a fact the reader can check rather
 // than a claim they have to take on trust.
 function unavoidableHtml(count, streets) {
   return '<div class="unavoid">There is no way to reach this destination ' +
-    'without passing ' + count + ' known camera' + plural(count) +
-    ', on ' + esc(streets.join(', ')) + '. This route passes the fewest it can.</div>';
+    `without passing ${count} known camera${plural(count)}` +
+    `, on ${esc(streets.join(', '))}. This route passes the fewest it can.</div>`;
 }
 
 // One destination needs no announcement: the answer block above has already
 // named it, so this returns nothing rather than a control with one button.
 function destPickerHtml(opts, chosenKind) {
   if (!opts || opts.length < 2) return '';
-  return '<div class="seg">' + opts.map(function (o) {
-    return '<button type="button" data-kind="' + o.kind + '"' +
-      (o.kind === chosenKind ? ' class="on"' : '') + '>' + esc(o.label) + '</button>';
-  }).join('') + '</div>';
+  const buttons = opts.map((o) => `<button type="button" data-kind="${o.kind}"` +
+    `${o.kind === chosenKind ? ' class="on"' : ''}>${esc(o.label)}</button>`);
+  return `<div class="seg">${buttons.join('')}</div>`;
 }
 
 // Released into the public domain under the Unlicense, see UNLICENSE.
@@ -3072,20 +3043,20 @@ function destPickerHtml(opts, chosenKind) {
 
 // The small grey word beside a suggestion that is not an exact hit, saying
 // why it is being offered. Keyed by the `kind` precinct.js assigns.
-var SUGGESTION_WHY = {
+const SUGGESTION_WHY = {
   inferred: 'estimated', quadrant: 'did you mean',
   near: 'nearest on this street'
 };
 
-var LIMIT = 8;
-var DEBOUNCE_MS = 120;
+const LIMIT = 8;
+const DEBOUNCE_MS = 120;
 // Long enough for a click on an item to land before the blur closes the
 // list under the pointer.
-var BLUR_MS = 150;
+const BLUR_MS = 150;
 
 function attachSuggestions(opts) {
-  var input = opts.input;
-  var items = [], index = -1, timer = null, box = null;
+  const input = opts.input;
+  let items = [], index = -1, timer = null, box = null;
 
   // Built on first use rather than required in the HTML, so the markup
   // carries the input and this file carries everything the input grew.
@@ -3096,7 +3067,7 @@ function attachSuggestions(opts) {
       // attaches this to its own two fields, and three elements sharing
       // id="ac" is invalid markup and an ambiguous selector for anything
       // reaching for one of them.
-      box.id = 'ac-' + (input.id || 'x');
+      box.id = `ac-${input.id || 'x'}`;
       box.className = 'ac';
       box.hidden = true;
       box.setAttribute('role', 'listbox');
@@ -3112,7 +3083,7 @@ function attachSuggestions(opts) {
   // the two read as the same idea rather than two unrelated controls.
   // Filled rather than stroked: at 15px a 2px outline collapses into a blob,
   // and evenodd keeps the hole a hole whichever way the arc is wound.
-  var PIN_SVG =
+  const PIN_SVG =
     '<svg class="pin-glyph" viewBox="0 0 24 24" width="15" height="15" ' +
     'aria-hidden="true" fill="currentColor" fill-rule="evenodd">' +
     '<path d="M12 2c-3.87 0-7 3.13-7 7 0 5.25 6.3 12.3 6.57 12.6a.58.58 0 0 0 .86 0' +
@@ -3120,32 +3091,32 @@ function attachSuggestions(opts) {
     'M12 6.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>';
 
   function itemHtml(it, i) {
-    var why = SUGGESTION_WHY[it.kind] || '';
-    return '<button type="button" class="ac-item" role="option" data-i="' + i + '">' +
-      '<span class="ac-pin">' + PIN_SVG + '</span>' +
-      (it.number != null ? '<span class="num">' + it.number + '</span>' : '') +
-      '<span class="st">' + esc(displayCase(it.street)) + '</span>' +
-      (why ? '<span class="why">' + why + '</span>' : '') +
+    const why = SUGGESTION_WHY[it.kind] || '';
+    return `<button type="button" class="ac-item" role="option" data-i="${i}">` +
+      `<span class="ac-pin">${PIN_SVG}</span>` +
+      (it.number != null ? `<span class="num">${it.number}</span>` : '') +
+      `<span class="st">${esc(displayCase(it.street))}</span>` +
+      (why ? `<span class="why">${why}</span>` : '') +
       // Which place the street is in, per row: one street name can be in
       // several jurisdictions, and a street outside the index has to name
       // WHICH place it is in.
-      (it.where && it.where.length
-        ? '<span class="ac-where">' + esc(it.where.join(' or ')) + '</span>'
+      (it.where?.length
+        ? `<span class="ac-where">${esc(it.where.join(' or '))}</span>`
         : '') + '</button>';
   }
 
   function refresh() {
-    var text = input.value.trim();
+    const text = input.value.trim();
     if (text.length < 2) { close(); return; }
     items = opts.suggest(text, LIMIT) || [];
     if (!items.length) { close(); return; }
 
-    var el = element();
+    const el = element();
     el.innerHTML = items.map(itemHtml).join('');
-    Array.prototype.forEach.call(el.querySelectorAll('.ac-item'), function (button) {
+    el.querySelectorAll('.ac-item').forEach((button) => {
       // mousedown, not click: the input's blur would otherwise close the
       // list before the click could land on it.
-      button.addEventListener('mousedown', function (e) {
+      button.addEventListener('mousedown', (e) => {
         e.preventDefault();
         swallowNextClick();
         opts.onChoose(items[Number(button.dataset.i)]);
@@ -3162,15 +3133,14 @@ function attachSuggestions(opts) {
   // there and scrolled the reader down to its directions. Eat the one
   // click that belongs to the choosing tap; anything later is a real tap.
   function swallowNextClick() {
-    var t;
+    const t = setTimeout(off, 700);
     function eat(e) { e.stopPropagation(); e.preventDefault(); off(); }
     function off() { document.removeEventListener('click', eat, true); clearTimeout(t); }
     document.addEventListener('click', eat, true);
-    t = setTimeout(off, 700);
   }
 
   function highlight(n) {
-    var els = element().querySelectorAll('.ac-item');
+    const els = element().querySelectorAll('.ac-item');
     if (!els.length) return;
     if (index >= 0 && els[index]) els[index].classList.remove('active');
     index = (n + els.length) % els.length;
@@ -3185,15 +3155,15 @@ function attachSuggestions(opts) {
   // instead of guessing which.
   function enter() {
     if (!element().hidden && index >= 0) { opts.onChoose(items[index]); return; }
-    var text = input.value.trim();
-    var best = opts.suggest(text, 1) || [];
+    const text = input.value.trim();
+    const best = opts.suggest(text, 1) || [];
     if (best.length && best[0].choice) { refresh(); return; }
     if (best.length) { opts.onChoose(best[0]); return; }
     opts.onMiss(text);
   }
 
   function onKey(e) {
-    var open = !element().hidden;
+    const open = !element().hidden;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (!open) refresh();
@@ -3209,17 +3179,17 @@ function attachSuggestions(opts) {
     }
   }
 
-  input.addEventListener('input', function () {
+  input.addEventListener('input', () => {
     clearTimeout(timer);
     timer = setTimeout(refresh, DEBOUNCE_MS);
   });
   input.addEventListener('keydown', onKey);
-  input.addEventListener('blur', function () { setTimeout(close, BLUR_MS); });
-  document.addEventListener('click', function (e) {
+  input.addEventListener('blur', () => { setTimeout(close, BLUR_MS); });
+  document.addEventListener('click', (e) => {
     if (!input.parentNode.contains(e.target)) close();
   });
 
-  return { refresh: refresh, close: close };
+  return { refresh, close };
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

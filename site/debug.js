@@ -34,9 +34,8 @@ function summarise(r, mile) {
     edges: r.edges.length, nodes: r.nodes.length,
     cameraCount: r.cameraCount, cameras: r.cameras,
     camerasOnRoute: Object.keys(r.camsOnRoute || {}).length,
-    steps: (r.steps || []).map(function (s) {
-      return s.text + (s.meters ? ' (' + Math.round(s.meters) + ' m)' : '');
-    })
+    steps: (r.steps || []).map((s) =>
+      s.text + (s.meters ? ` (${Math.round(s.meters)} m)` : ''))
   };
 }
 
@@ -45,21 +44,20 @@ function summarise(r, mile) {
 // what choose() does on the main search box.
 function label(item) {
   if (!item) return '';
-  var street = displayCase(item.street);
-  return (item.number != null ? item.number + ' ' : '') + street;
+  const street = displayCase(item.street);
+  return (item.number != null ? `${item.number} ` : '') + street;
 }
 
 function mount(api) {
-  var bar = $('searchBar');
+  const bar = $('searchBar');
   if (!bar || $('debugPanel')) return;
-  var panel = document.createElement('section');
+  const panel = document.createElement('section');
   panel.id = 'debugPanel';
   panel.className = 'debug-panel';
   panel.innerHTML =
     '<div class="dbg-head">Routing engine debug ' +
-    '<span class="dbg-sub">' + api.graph.nodeCount() + ' nodes · ' +
-    api.graph.edgeCount() + ' edges · ' + (api.cameras || []).length +
-    ' cameras</span></div>' +
+    `<span class="dbg-sub">${api.graph.nodeCount()} nodes · ` +
+    `${api.graph.edgeCount()} edges · ${(api.cameras || []).length} cameras</span></div>` +
     '<div class="dbg-row">' +
     '<label>From<input id="dbgFrom" placeholder="address, or lat,lng" spellcheck="false"></label>' +
     '<label>To<input id="dbgTo" placeholder="address, or lat,lng" spellcheck="false"></label>' +
@@ -73,7 +71,7 @@ function mount(api) {
     '<pre id="dbgOut" class="dbg-out" hidden></pre>';
   bar.insertAdjacentElement('afterend', panel);
 
-  var from = $('dbgFrom'), to = $('dbgTo'), out = $('dbgOut'), status = $('dbgStatus');
+  const from = $('dbgFrom'), to = $('dbgTo'), out = $('dbgOut'), status = $('dbgStatus');
   from.value = param('from');
   to.value = param('to');
 
@@ -82,26 +80,26 @@ function mount(api) {
   // which is the same widget and the same suggestions a visitor gets. A
   // lat,lng pair still works: the picker offers nothing for text with no
   // house number in it, so coordinates fall straight through to run().
-  var pickers = [];
+  const pickers = [];
   if (typeof api.suggest === 'function') {
-    [from, to].forEach(function (el) {
-      var ac = api.attachSuggestions({
+    [from, to].forEach((el) => {
+      const ac = api.attachSuggestions({
         input: el,
         suggest: api.suggest,
-        onChoose: function (item) {
+        onChoose(item) {
           el.value = label(item);
           ac.close();
         },
         // Nothing to say here. The panel dumps whatever resolve() makes of
         // the text, which is more use to somebody debugging than a message.
-        onMiss: function () {}
+        onMiss() {}
       });
       pickers.push(ac);
     });
   }
 
   function shareUrl() {
-    var u = new URL(location.href);
+    const u = new URL(location.href);
     u.search = '';
     u.searchParams.set('debug', '');
     if (from.value.trim()) u.searchParams.set('from', from.value.trim());
@@ -110,7 +108,7 @@ function mount(api) {
   }
 
   function run() {
-    var report = { from: null, to: null, route: null };
+    const report = { from: null, to: null, route: null };
     out.hidden = false;
     status.textContent = 'working…';
     try {
@@ -119,10 +117,10 @@ function mount(api) {
       if (report.from.error || report.to.error) {
         status.textContent = 'could not place one end';
       } else {
-        var origin = { lat: report.from.lat, lng: report.from.lng };
-        var place = { lat: report.to.lat, lng: report.to.lng,
-                      name: 'Debug destination', address: to.value };
-        var computed = api.computeRoutes(origin, place);
+        const origin = { lat: report.from.lat, lng: report.from.lng };
+        const place = { lat: report.to.lat, lng: report.to.lng,
+                        name: 'Debug destination', address: to.value };
+        const computed = api.computeRoutes(origin, place);
         if (!computed) {
           report.route = { error: 'no drivable route on this road network' };
           status.textContent = 'no route';
@@ -135,12 +133,12 @@ function mount(api) {
             fastest: summarise(computed.fast, api.metersPerMile),
             avoiding: summarise(computed.avoid, api.metersPerMile)
           };
-          status.textContent = computed.ms + ' ms';
+          status.textContent = `${computed.ms} ms`;
           api.draw(origin, place, computed);
         }
       }
     } catch (e) {
-      report.error = String(e && e.stack || e);
+      report.error = String(e?.stack || e);
       status.textContent = 'threw';
     }
     out.textContent = JSON.stringify(report, null, 2);
@@ -148,16 +146,16 @@ function mount(api) {
   }
 
   $('dbgRun').onclick = run;
-  $('dbgSwap').onclick = function () {
-    var a = from.value; from.value = to.value; to.value = a;
-    pickers.forEach(function (p) { p.close(); });
+  $('dbgSwap').onclick = () => {
+    [from.value, to.value] = [to.value, from.value];
+    pickers.forEach((p) => p.close());
   };
-  $('dbgLink').onclick = function () {
-    var url = shareUrl();
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(function () {
+  $('dbgLink').onclick = () => {
+    const url = shareUrl();
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(() => {
         status.textContent = 'link copied';
-      }, function () { status.textContent = url; });
+      }, () => { status.textContent = url; });
     } else {
       status.textContent = url;
     }
@@ -165,8 +163,8 @@ function mount(api) {
   // Deferred by a tick on purpose: Enter with a suggestion highlighted is
   // the picker's key first, and running before its onChoose lands would
   // route the half-typed text the reader was replacing.
-  [from, to].forEach(function (el) {
-    el.addEventListener('keydown', function (e) {
+  [from, to].forEach((el) => {
+    el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') setTimeout(run, 0);
     });
   });
