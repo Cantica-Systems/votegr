@@ -9,7 +9,7 @@
      explicitly chosen theme does not flash the other one on load. -->
 <script>try{var t=localStorage.getItem('theme');if(t!=='system')document.documentElement.setAttribute('data-theme',(t==='light'||t==='dark')?t:'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}</script>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="router.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header id="siteHeader">
@@ -304,14 +304,6 @@
   </div>
 </div>
 <script src="vendor/leaflet/leaflet.js"></script>
-<script src="display-case.js"></script>
-<script src="elections.js"></script>
-<script src="cameras.js"></script>
-<script src="routepanel.js"></script>
-<script src="autocomplete.js"></script>
-<script src="basemap.js"></script>
-<script src="router.js"></script>
-<script src="precinct.js"></script>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

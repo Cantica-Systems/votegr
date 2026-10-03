@@ -1,6 +1,7 @@
 {
   "name": "votegr",
   "private": true,
+  "type": "module",
   "description": "Tooling manifest. The site itself has no build step and no dependencies; this file exists so the browser suites have a browser to drive.",
   "license": "Unlicense",
   "devDependencies": {

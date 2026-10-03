@@ -59,17 +59,15 @@ Copy the `site` folder to any web host and it works.
 
 ```
 site/index.html              the page
-site/router.css              its styles
-site/app.js                  the interface: loading, the answer, the map, the route
+site/style.css               its styles
+site/app.js                  the interface: loading, the answer, the suggestion list,
+                             the route panel, the map
+site/voting.js               shared with /simple: address -> jurisdiction, ward,
+                             precinct, polling place, drop boxes and clerk; the
+                             election calendar; title-casing the ALL CAPS names
+site/map.js                  draws the map on a canvas, no tiles, and the plate
+                             readers' markers and popups
 site/router.js               routing, geocoding, turn restrictions
-site/basemap.js              draws the map on a canvas, no tiles
-site/precinct.js             address -> jurisdiction, ward, precinct, polling place,
-                             drop boxes and clerk; /simple uses it too
-site/autocomplete.js         the suggestion list under the address box
-site/routepanel.js           what the route panel says: the route cards, the turn list
-site/cameras.js              a plate reader's marker and popup
-site/elections.js            the election calendar and early voting window, for both pages
-site/display-case.js         title-cases the ALL CAPS street and place names for display
 site/debug.js                the ?debug panel (below), loaded only when asked for
 site/vendor/leaflet/         Leaflet 1.9.4, with its LICENSE
 site/fonts/                  the Hanken Grotesk typeface, with its OFL.txt
@@ -277,7 +275,7 @@ limits plus about 2 km. Everywhere else it draws roads alone.
 
 [votegr.org/simple/](https://votegr.org/simple/) is the same county-wide
 lookup with no map and no directions, built on the map page's own
-`precinct.js`, so the two cannot give one address two answers. It downloads
+`voting.js`, so the two cannot give one address two answers. It downloads
 a fraction of what the map page does, so it stays the better choice on an old
 phone, a slow connection, or a screen reader. Early voting there is also shown for
 Grand Rapids only. It is deliberately unlisted, carrying a noindex and linked
@@ -307,7 +305,7 @@ Two third-party pieces ship with the site and keep their own licences:
 [Leaflet](https://leafletjs.com) 1.9.4, BSD 2-Clause, in `site/vendor/leaflet/`
 with its `LICENSE`; and the Hanken Grotesk typeface, SIL Open Font License 1.1,
 in `site/fonts/` with its `OFL.txt`. The address-matching logic in
-`site/precinct.js` is carried over from the earlier vote-gr project and says so
+`site/voting.js` is carried over from the earlier vote-gr project and says so
 at the top of the file.
 
 The data is not ours to license. Streets and address ranges are public

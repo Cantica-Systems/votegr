@@ -21,12 +21,11 @@ import { createServer } from 'http';
 import { readFile } from 'fs/promises';
 import { join, extname, normalize } from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
 import { chromium } from 'playwright';
 import { pinnedCalendar } from './pinned_calendar.mjs';
 
 const ROOT = join(fileURLToPath(new URL('..', import.meta.url)), 'site');
-const { Precincts } = createRequire(import.meta.url)('../site/precinct.js');
+import { Precincts } from '../site/voting.js';
 
 let pass = 0, fail = 0;
 // The detail, when a check passes one, is printed only on failure: it is what
