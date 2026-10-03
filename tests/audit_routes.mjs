@@ -17,11 +17,9 @@
 //   5. U-TURNS      only where they buy something a legal turn could not
 //   6. DISTANCE     step distances sum to the route distance (within 2%)
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
+import fs from 'fs';
+import * as R from '../site/router.js';
 process.chdir(fileURLToPath(new URL('..', import.meta.url)));   // paths below are from the repo root
-const R = require('../site/router.js');
-const fs = require('fs');
 
 // The county network the page actually loads, built the way the page builds
 // it: the index, then every chunk, then finish. Not site/data/graph.json,

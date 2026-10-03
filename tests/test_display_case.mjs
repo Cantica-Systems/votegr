@@ -14,10 +14,8 @@
 // polling place and drop box in all thirty jurisdictions, and the city
 // clerk's early voting sites: over ten thousand real strings, rather than a
 // handful.
-import { createRequire } from 'module';
 import { readFile, readdir } from 'fs/promises';
-const require = createRequire(import.meta.url);
-const D = require('../site/display-case.js');
+import { displayCase as D } from '../site/voting.js';
 
 let fails = 0;
 const ok = (n, c, d = '') => { console.log((c ? '  ok   ' : '  FAIL ') + n + (c ? '' : '  ' + d)); if (!c) fails++; };

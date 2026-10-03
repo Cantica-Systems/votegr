@@ -14,12 +14,11 @@ import { createServer } from 'http';
 import { readFile } from 'fs/promises';
 import { join, extname, normalize } from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
 import { chromium, devices } from 'playwright';
 import { pinnedCalendar } from './pinned_calendar.mjs';
 
 const ROOT = join(fileURLToPath(new URL('..', import.meta.url)), 'site');
-const Elections = createRequire(import.meta.url)('../site/elections.js');
+import { Elections } from '../site/voting.js';
 
 let pass = 0, fail = 0;
 // The detail, when a check passes one, is printed only on failure: it is what
@@ -548,6 +547,8 @@ for (const w of WIDTHS) {
     report = JSON.parse(await page.evaluate(() => document.getElementById('dbgOut').textContent));
   } catch (e) { errors.push('debug panel never produced a report: ' + e.message); }
   ok('?debug mounts the panel', await page.$('#debugPanel') !== null);
+  ok('?debug fetches debug.js', await page.evaluate(() =>
+     performance.getEntriesByType('resource').some(e => /\/debug\.js$/.test(e.name))));
   ok('both ends resolve to a precinct', !!(report && report.from.precinct && report.to.precinct
      && report.from.precinct.jurisdiction === 'Grand Rapids' && report.to.precinct.jurisdiction === 'Kentwood'));
   ok('the report carries routed metres for both routes', !!(report && report.route
@@ -568,7 +569,8 @@ for (const w of WIDTHS) {
   await page.goto(URL_, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
   ok('without ?debug no panel and no debug.js', await page.evaluate(() =>
-     !document.getElementById('debugPanel') && ![...document.scripts].some(s => /debug\.js/.test(s.src))));
+     !document.getElementById('debugPanel') &&
+     !performance.getEntriesByType('resource').some(e => /\/debug\.js$/.test(e.name))));
   await ctx.close();
 }
 
@@ -582,7 +584,7 @@ for (const w of WIDTHS) {
 // pinned calendar (pinned_calendar.mjs).
 //
 // 60 days out is the number that matters. ABSENTEE_LEAD_DAYS is 40 in
-// elections.js, so an election further out than that has not reached its absentee
+// voting.js, so an election further out than that has not reached its absentee
 // window and the drop box card is reliably shut. Read from the live
 // calendar, this block fails as soon as the next election is within 40
 // days: the drop box card renders expanded, and the tap below closes it
@@ -1502,7 +1504,7 @@ for (const w of [390, 1280]) {
 }
 
 // --- the ward tint means WARD ---------------------------------------
-// The legend calls this layer "Wards, or your township" and basemap.js says a
+// The legend calls this layer "Wards, or your township" and map.js says a
 // precinct "steps in lightness by number within it so neighbours differ while
 // the area still reads as one". Both halves are checkable, and the first one
 // silently stopped being true: a lightness step of 10-11 points over a modulus
@@ -1524,9 +1526,10 @@ for (const theme of ['dark', 'light']) {
   await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 60000 });
 
   // Record every tint fill with the precinct it was painted for.
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     window.__tints = [];
-    const proto = Object.getPrototypeOf(window.BasemapLayer({}));
+    const { basemapLayer } = await import('./map.js');
+    const proto = Object.getPrototypeOf(basemapLayer({}));
     const orig = proto._fillRings;
     proto._fillRings = function (c, rings, color, pt) {
       if (this._precincts) {
@@ -1560,7 +1563,7 @@ for (const theme of ['dark', 'light']) {
   ok(`${theme}: the ward tint is painted for a warded city`, tints.tints.length > 10);
   const wards = new Set(tints.tints.map(t => t.ward));
   ok(`${theme}: and Grand Rapids paints all three of its wards`, wards.size === 3);
-  // basemap.js publishes the land tone so this can compose against the real
+  // map.js publishes the land tone so this can compose against the real
   // one. Required rather than defaulted: a fallback here would be the second
   // copy of the backdrop that publishing it exists to avoid, and would be
   // the wrong colour for one of the two themes.

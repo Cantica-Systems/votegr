@@ -1,37 +1,11 @@
 <!doctype html>
-<!--
-  Kent County Precinct Lookup, the light version of votegr.org
-  Type an address, get the ward, the precinct, and where that precinct votes.
-
-  Live:   https://votegr.org/simple/
-  Source: https://github.com/Cantica-Systems/votegr
-
-  Released into the public domain under the Unlicense, see UNLICENSE in the
-  repository: free to copy, host, and change, including by a city or clerk's
-  office, with or without credit. The data in data/ is not ours to
-  license: it is public record from the State of Michigan, Kent County and the
-  city and township clerks, passed along as published.
-
-  The address you type never leaves the browser. There is no geocoder: data/
-  lists every parcel address in Kent County with the precinct it votes in, and
-  the search runs against that locally, with the same lookup as the map page
-  (../precinct.js). Clicking a Directions link is the one act that shares the
-  typed address: it becomes the route's starting point.
-
-  Unofficial and offered with no guarantee of accuracy. Why this exists, where
-  the data comes from, how it is hosted, and how to keep it current are in the
-  README: https://github.com/Cantica-Systems/votegr
--->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Kent County Precinct Lookup</title>
-<script src="../display-case.js" defer></script>
-<script src="../elections.js" defer></script>
-<script src="../precinct.js" defer></script>
-<script src="lookup.js" defer></script>
+<script type="module" src="lookup.js"></script>
 <link rel="stylesheet" href="lookup.css">
 </head>
 <body>

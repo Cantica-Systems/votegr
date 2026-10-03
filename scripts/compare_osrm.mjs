@@ -16,13 +16,11 @@
 // Etiquette: this queries the public OSRM demo server. Small samples, one
 // request at a time, 2.5s apart, identified user agent. Keep N modest.
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
+import fs from 'fs';
 import { execFileSync } from 'child_process';
-const require = createRequire(import.meta.url);
 process.chdir(fileURLToPath(new URL('..', import.meta.url)));   // paths below are from the repo root
-const R = require('../site/router.js');
-const { pointInRings } = require('../site/precinct.js');
-const fs = require('fs');
+import * as R from '../site/router.js';
+import { pointInRings } from '../site/voting.js';
 
 // The county network the page actually loads, built the way the page and
 // tests/audit_routes.mjs build it: the index, then every chunk, then finish.

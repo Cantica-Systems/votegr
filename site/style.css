@@ -1,13 +1,5 @@
-/* VoteGR.org, the map page: find your polling place anywhere in Kent County
- * and get there around the known plate cameras.
- * Released into the public domain under the Unlicense, see UNLICENSE.
- *
- * Visual language: civic wayfinding. The map is deliberately quiet so the
- * route reads like a transit line -- heavy, cased, unmistakable -- and the
- * cameras read as bright warning nodes on top of it. The light palette is
- * the one /simple uses (simple/lookup.css); the dark one is lifted off it,
- * see :root.
- */
+/* VoteGR.org map page: find your polling place anywhere in Kent County and
+   a route there around the known plate cameras. */
 
 @font-face {
   font-family: "Hanken Grotesk";
@@ -20,8 +12,7 @@
 }
 
 :root {
-  /* Lifted off /simple's near-black: a map fills far more of the screen than
-     a text page, so the same values read much heavier here. Slate, not black. */
+  /* Slate, not /simple's near-black: a full-screen map reads heavier. */
   --bg: #191d25;
   --panel: #212630;
   --raise: #2a303b;
@@ -39,33 +30,19 @@
   --pin-ring: #12151b;
   --shadow: 0 2px 8px rgba(0,0,0,.45);
   --header-h: 72px;
-  /* Column tint. NOT --raise: that is the .pp-place hover colour and it sits
-     1.05:1 from the page in light theme, which is invisible. Chosen by
-     measurement: 1.44:1 against the page here and 1.28:1 in light, still
-     1.13:1 clear of the hover colour so clicking the polling place reads,
-     and every text colour stays above AA on it (--dim at 5.54:1). */
+  /* Column tint. Not --raise, which sits 1.05:1 from the light page; every
+     text colour stays above AA on this. */
   --tint: #35383f;
-  /* Bevel edges, and the hover the tint forced. --raise was the polling
-     place's hover colour, but on a tinted panel it is DARKER than the panel
-     (1.13:1 the wrong way), so hovering read as the card dimming. --tint-hover
-     lifts instead, 1.24:1 above the tint. Light theme darkens on hover, which
-     is the convention there. */
+  /* Bevel edges, and the hover on --tint (--raise would be darker than it). */
   --bevel-hi: rgba(255,255,255,.08);
   --bevel-lo: rgba(0,0,0,.22);
   --tint-hover: #43464c;
-  /* One micro-label role. Seven sizes (.68 to .85rem) and five trackings
-     (.04 to .12em) had accumulated across this file for what is a single
-     job: the small uppercase label above or beside a value. Size and
-     tracking are fixed here; colour still varies by role, which is the part
-     that carries meaning. A few rules step off the size on purpose (.cd-label,
-     .cd-lab, .vi-grid .vi-lbl, the type-ahead's notes, .gear-sec), and each
-     says why where it does. */
+  /* The one small uppercase label style; rules that step off it say why. */
   --label-size: .74rem;
   --label-track: .1em;
 }
-/* Light applies when the system asks for it AND the reader has not explicitly
-   chosen dark, or when they have explicitly chosen light. Both rules carry the
-   same palette so the two paths cannot drift apart. */
+/* Light: system preference unless dark was chosen, or an explicit choice.
+   Keep both blocks identical; the palette matches simple/lookup.css. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     --bg: #fbfbfd;
@@ -115,9 +92,7 @@
 
 * { box-sizing: border-box; }
 html { height: 100%; }
-/* The body is a flex column at least a viewport tall, so the footer can be
-   pushed to the bottom of the SCREEN on a short page and to the bottom of
-   the CONTENT on a long one. */
+/* A viewport-tall flex column keeps the footer at the bottom of short pages. */
 body {
   margin: 0; min-height: 100dvh;
   display: flex; flex-direction: column;
@@ -128,12 +103,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Links read as body text with a quiet underline, and read the SAME whether
-   or not they have been followed. Left to the browser they came out default
-   blue and then default purple: two colours neither of which is legible on a
-   dark panel, and a change of colour that says "you clicked this", which is
-   not a thing any link on this page means. The accent is kept for the
-   pointer, where it is a state and not a permanent stain. */
+/* Visited links look unvisited: no link here means "you clicked this". */
 a, a:visited {
   color: var(--fg); text-decoration: underline;
   text-decoration-color: color-mix(in srgb, var(--dim) 80%, transparent);
@@ -141,24 +111,13 @@ a, a:visited {
 }
 a:hover, a:focus-visible { color: var(--accent); text-decoration-color: var(--accent); }
 
-/* No browser tap flash on anything we style ourselves. Chrome and Safari
-   paint a translucent box over the whole element on touch, which on a card
-   the size of these lands as a full-width wash a moment before our own
-   :active does something quieter. Every one of these has a press or open
-   state of its own, so nothing is being taken away. */
+/* No tap flash: each of these has a press or open state of its own. */
 summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .section-nav button, .ac-item, ol.steps li {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ---------------------------------------------------------------------
-   One centred column, the width of a paragraph, until there is an answer;
-   from 640px up the answer becomes the two-pane workspace further down.
-   The map is part of the answer rather than a standing half of the screen,
-   because there is no reason to consult it until you have asked a
-   question, and it is sized to be read, not explored. Nothing here needs a
-   viewport height, so there is no bottom sheet and no fixed positioning.
-   --------------------------------------------------------------------- */
+/* ---- Column and map ---- */
 #col {
   max-width: 34rem;
   width: 100%;
@@ -168,34 +127,23 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   display: flex; flex-direction: column;
 }
 
-/* The asking state is a composed landing: little on screen, and pushed down
-   so the headline and the field sit in the optical centre of the viewport.
-   Scaled padding rather than flex centring on purpose. True vertical centring
-   reads well on a desktop and badly on a phone, where it shoves the one thing
-   you came to use below the fold. */
+/* Asking state (no .has-result). Scaled padding, not flex centring:
+   centring pushes the field below the fold on a phone. */
 #col:not(.has-result) { padding-top: clamp(1.25rem, 8vh, 4.5rem); }
 #col.has-result { padding-top: 1rem; }
-/* 8vh of headroom is a nice breath on a laptop and 67px of nothing on a
-   phone, where the header, the countdown and the search box should share
-   the first screen. */
+/* On a phone the header, countdown and search box share the first screen. */
 @media (max-width: 700px) {
   #col:not(.has-result) { padding-top: .9rem; }
 }
 
-/* The map sits inside the route section, directly under the choice it
-   illustrates, so it takes no divider of its own. */
 .map-section { padding: 16px 0 4px; }
-/* Section opened only to show the map (pin picking): its route chrome has
-   nothing to say yet. */
+/* .map-only: the section is open just to show the map, for pin picking. */
 #routeBlock.map-only > h2,
 #routeBlock.map-only > #destPick,
 #routeBlock.map-only > .routes,
 #routeBlock.map-only > #unavoid,
 #routeBlock.map-only > #steps { display: none; }
 
-/* The status bar in the map's bottom-left corner. Styled like the
-   attribution strip opposite it, and gone entirely while it has nothing
-   to say. */
 .map-status {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -208,21 +156,9 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   box-shadow: 0 1px 5px rgba(0,0,0,.22);
 }
 .map-status:empty { display: none; }
-/* Leaflet numbers its own furniture in the hundreds -- panes 200 to 700, and
-   controls at 1000 -- and those numbers are written against the map, not
-   against the page. They only stay inside it if the container is a stacking
-   context, and position: relative with z-index auto is not one: Leaflet sets
-   that position itself and stops there. So on a phone, where the map is in
-   the normal flow, every one of those numbers escaped and beat the sticky
-   search bar's z-index 5. Scrolling the map up under the bar painted canvas
-   over the address field and the pills AND took their taps, because the hit
-   test follows the same order. Pinning the map at z-index 0 keeps Leaflet's
-   scale to itself; the bar, the masthead and the modals keep theirs.
-   Desktop never showed this: .map-section is sticky there, and a sticky box
-   is a stacking context whether or not it is given a z-index, so it was
-   already doing this job by accident.
-   Not fixed by raising the bar instead: 1000 is Leaflet's ceiling AND the
-   modals', so that trade is one overlap for another. */
+/* z-index 0 makes #map a stacking context, so on a phone Leaflet's panes and
+   controls (200 to 1000) cannot paint over the sticky search bar (z-index 5)
+   and take its taps. Raising the bar instead would collide with the modals. */
 #map {
   height: 320px;
   background: var(--raise);
@@ -234,8 +170,6 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .map-note {
   font-size: .82rem; color: var(--dim); line-height: 1.45;
 }
-/* The pin is armed and the map is waiting for a tap. Both halves of that are
-   visual: the instruction above the map, and the map's own edge. */
 .pin-cue {
   margin: 0 0 10px; padding: 9px 12px; border-radius: 8px;
   font-size: .92rem; line-height: 1.45; color: var(--fg);
@@ -248,19 +182,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   #col { padding-left: 1rem; padding-right: 1rem; }
 }
 
-/* ---------------------------------------------------------------------
-   The answer as a workspace on desktop: the ward/precinct header runs full
-   width, the directions take a reading-width side column, and the map fills
-   the rest, sticky so it stays in view while the steps scroll. The map is
-   placed in the grid rather than popped out to a wider box of its own, which
-   would line up with nothing on either side.
-   On a phone none of this applies and the flow stays linear:
-   answer, route choice, map, steps.
-   --------------------------------------------------------------------- */
-/* The two-pane answer needs only enough width for a readable step list
-   beside a useful map, which a landscape phone already has. The directions
-   column is fluid: never below a readable floor, never wider than a
-   comfortable measure, and the map takes the rest. */
+/* ---- Two-pane answer, 640px and up ---- */
 @media (min-width: 640px) {
   #col.has-result { max-width: 74rem; }
 
@@ -278,29 +200,17 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   #routeBlock:not(.map-only) > .map-section {
     grid-column: 2;
     grid-row: 1 / span 9;   /* overshoot; empty implicit rows cost nothing */
-    /* 72px is the sticky search bar's measured height in THIS layout, which
-       is one number rather than two because the section pills stop at the
-       same 640px the grid starts at.
-       Worth knowing before trusting this line: the rule is inert as things
-       stand. A sticky box can only travel inside its containing block, and
-       here that is the grid area, whose height the map itself sets because
-       the map section is taller than the directions column beside it (737px
-       against 534px on a nine-step route at 660px wide). So the map scrolls
-       away with the page instead of holding. Making it hold means making the
-       map section shorter than the column, which is a design decision about
-       how tall the map should be, not a number to nudge here. */
+    /* 72px: the sticky search bar's height here. Inert today: the map section
+       is taller than the directions column, so it has no room to stick. */
     position: sticky; top: 72px;
     padding-top: 0;
   }
-  /* On a landscape phone 64vh is under 300px, so the clamp floor carries
-     the map there; the ceiling still applies on tall desktops. */
   #map { height: clamp(300px, 64vh, 620px); }
 }
 
-/* The key, under the map. Nothing of ours is drawn inside the map box, so
-   nothing of ours can cover a camera. The caption slot on its left (#mapNote)
-   is no longer written to; app.js keeps the empty element for now because
-   the key's position depends on it. */
+/* ---- Map key ---- */
+/* Under the map, so nothing of ours covers a camera. The empty #mapNote still
+   sets the key's position, so it stays in index.html. */
 .map-foot {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 14px; flex-wrap: wrap; margin-top: 8px;
@@ -324,19 +234,9 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
     var(--route-fastsel) 0 5px, #fff 5px 8px);
 }
 
-/* ---- election day countdown ---- */
-/* A ticker, but a civic one: an instrument panel rather than a sale ending
-   soon. Sits above the lede because it is the standing fact the page is
-   about. Its contents are centred: it is the one thing on the start page that
-   is not read left to right like prose, so the clock sits on the column's
-   axis. The CARD is not centred and must not be. #col is a flex column, so
-   `margin: 0 auto` on a child overrides the default stretch and shrink-wraps
-   it to its digits -- a 373px badge that lines up with nothing and changes
-   width with the election name. Left on the same 31rem measure as the lede,
-   it keeps the column's rhythm and the clock still lands on the axis,
-   because the measure is what the axis is drawn through. (The search box
-   below is not on this measure: from 601px it is capped at 30rem and
-   centred, so it sits 12px in from the lede's left edge on a desktop.) */
+/* ---- Election day countdown ---- */
+/* Left on the lede's 31rem measure, not centred: in the #col flex column,
+   margin: 0 auto would shrink-wrap the card to its digits. */
 .countdown {
   margin: 0 0 20px;
   padding: 13px 15px 14px;
@@ -348,32 +248,12 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   text-align: center;
 }
 
-/* The hidden attribute has to WIN. It is only display:none in the browser's
-   own stylesheet, so any rule of ours that sets display beats it, and the
-   element stays on screen with its attribute saying otherwise. That is not
-   hypothetical: #routeBlock:not(.map-only) takes display:grid above 640px,
-   which left "Directions" floating under the search box on the start page,
-   heading a section that had nothing in it yet. Every phone width hid it
-   correctly, so it read as a desktop-only mystery rather than a CSS
-   precedence bug. One rule, once, rather than a display:none per section. */
+/* hidden must beat our display rules; one left an empty "Directions" heading on the desktop start page. */
 [hidden] { display: none !important; }
 
-/* Off --label-size on the same grounds .vi-grid .vi-lbl is: this titles a
-   whole card, not a word above a single value, and it has to stay the
-   largest label inside it. At .74rem it sat under the election name two
-   lines below and read as that line's caption. Tracking eases with the size,
-   as it does there.
-
-   1.25rem rather than 1rem: this is the line that says what the four numbers
-   under it are counting, and at 1rem it read as a caption on a card whose
-   digits are 2.1rem. It has a ceiling as well as a floor -- .cd-num has to
-   stay the largest thing in the card, since the figure is what a reader came
-   for -- so it cannot simply track the digits. The floor and the ceiling are
-   both asserted in tests/test_page.mjs rather than left to a later eye.
-
-   The label is also the longest string in the card on election day itself,
-   when it becomes "Polls Have Closed:", so the step-down below is sized off
-   that phrase at 320px and not off this one. */
+/* Off --label-size: it titles the card. Stays below .cd-num and at or above
+   .cd-for and .cd-when (tests/test_page.mjs). Its longest text, "Polls Have
+   Closed:", sizes the 400px step-down. */
 .cd-label {
   margin: 0 0 10px;
   font-weight: 700; font-size: 1.25rem; letter-spacing: .05em;
@@ -383,32 +263,23 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .cd-clock { display: flex; align-items: flex-start; justify-content: center; }
 .cd-unit {
   display: flex; flex-direction: column; gap: 3px;
-  /* The first unit too: on a centred row, pulling it flush would push the
-     four half a gutter off the axis they sit on. */
+  /* The first unit too, or the centred row sits half a gutter off axis. */
   padding: 0 clamp(11px, 4vw, 20px);
 }
-/* Hairlines rather than gaps alone: four numbers in a row need to read as one
-   clock, and the rules do that without adding weight. */
 .cd-unit + .cd-unit { border-left: 1px solid var(--line); }
 .cd-num {
   font-size: clamp(1.5rem, 7vw, 2.1rem);
   font-weight: 700; line-height: 1; letter-spacing: -.02em;
   color: var(--fg);
-  /* Fixed-width figures, so a running seconds field does not shove the row
-     sideways twice a second. */
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
 }
-/* The unit names under the digits. Off --label-size, which is for a word
-   above a value: these caption the figure over them, so they sit smaller.
-   The tracking is the shared one. */
+/* Off --label-size: a caption under its figure, so smaller. */
 .cd-lab {
   font-size: .62rem; font-weight: 700; letter-spacing: var(--label-track);
   text-transform: uppercase; color: var(--dim);
 }
 
-/* Election day itself: the clock has nothing to count, so the slot carries
-   the word instead of four zeroes. */
 .cd-today {
   font-size: clamp(1.5rem, 7vw, 2.1rem);
   font-weight: 700; line-height: 1; letter-spacing: -.02em;
@@ -416,30 +287,21 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 
 .cd-note { margin: 12px 0 0; line-height: 1.5; }
-/* Which election, then the day it falls on: a label and its value on one
-   line, told apart by colour rather than by size. Just under .vi-val, which
-   is the same fact stated in the answer, and under .cd-label above them. */
 .cd-for, .cd-when {
   font-size: .95rem; font-weight: 700; letter-spacing: -.01em;
 }
 .cd-for { color: var(--accent); }
 .cd-when { color: var(--fg); }
 
-/* The sentence a screen reader gets in place of the ticking digits. Clipped
-   rather than hidden: display:none would take it out of the reading order
-   along with everything else. */
+/* Visually hidden, not display:none, so screen readers still get it. */
 .cd-said {
   position: absolute; width: 1px; height: 1px;
   margin: -1px; padding: 0; border: 0;
   clip-path: inset(50%); overflow: hidden; white-space: nowrap;
 }
 
-/* Once there is an answer the countdown goes the way the lede does: the
-   answer carries its own Election day row, and the screen belongs to it. */
 #col.has-result .countdown { display: none; }
 
-/* Narrow phones: the four units stop fitting on one line at full size, so
-   everything steps down before the row wraps. */
 @media (max-width: 400px) {
   .countdown { padding: 11px 12px 12px; }
   .cd-unit { padding: 0 clamp(8px, 3.5vw, 14px); }
@@ -449,8 +311,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   .cd-for, .cd-when { font-size: .87rem; }
 }
 
-/* ---- intro ---- */
-/* One sentence and a How? link; the About sheet carries the rest. */
+/* ---- Intro ---- */
 .ask { padding: 0 0 26px; }
 .ask .lede {
   margin: 0;
@@ -460,14 +321,9 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   max-width: 31rem;
 }
 
-/* No padding here: both blocks take theirs from the #resultBlock and
-   #routeBlock rule further down, which an id selector lets win anyway. */
+/* Padding comes from the #resultBlock, #routeBlock rule further down. */
 .block { border-top: 1px solid var(--line); }
-/* The block heading is a different role from the labels inside it, so it
-   sits off the label scale on purpose. It titles a whole section of the
-   answer, so it carries more weight than the labels beneath it and takes the
-   page's foreground colour rather than their accent; at label size it would
-   read as one more label in a column of them. */
+/* Off the label scale, in --fg: a section title, not one more label. */
 .block h2 {
   margin: 0 0 16px; font-size: 1.28rem; font-weight: 800;
   letter-spacing: .06em; text-transform: uppercase; color: var(--fg);
@@ -475,13 +331,9 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 @media (max-width: 640px) {
   .block h2 { font-size: 1.12rem; letter-spacing: .05em; }
 }
-/* The one block heading that is centred and takes the accent. It heads a row
-   of three buttons rather than a column of text, so centring it over them
-   reads as labelling the set; and it is the landing point a tap on a place
-   scrolls to, which is a job the page's other headings do not have. */
 .block h2.dir-head { text-align: center; color: var(--accent); }
 
-/* ---- address input ---- */
+/* ---- Address input ---- */
 .field { position: relative; }
 .field input {
   width: 100%; background: var(--raise); color: var(--fg);
@@ -489,9 +341,6 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   /* Room on the left for the pin inside the box. */
   padding: 12px 13px 12px 38px; font: inherit; font-size: 1rem;
 }
-/* The map pin inside the search box. Grey at rest, accent while the box
-   has focus, so it behaves like part of the field rather than a sticker on
-   it. Centred on the input's own height, and never in the way of a click. */
 .field-pin {
   position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
   width: 16px; height: 16px; color: var(--dim); pointer-events: none;
@@ -503,31 +352,16 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 .field input::placeholder { color: var(--dim); opacity: .8; }
 .hint { font-size: .85rem; color: var(--dim); margin-top: 8px; line-height: 1.45; }
-/* Rests empty; no reserved height while it has nothing to say. */
 .hint:empty { display: none; }
 
-/* The phone's section bar. Two pills under the search box, in the sticky
-   bar, so "there are directions further down" is always on screen. */
 .section-nav { display: none; }
-/* 640, not 700, because these pills belong to the SINGLE-COLUMN answer and
-   that is exactly where it ends. Their reason for existing is that the answer
-   is one long column with the directions at the bottom of it, and at 640px it
-   stops being one: the grid above puts the directions beside the map, at the
-   top. Were both to apply, a landscape phone would get the two-pane layout
-   AND a 126px phone bar instead of a 72px one, on a viewport that may only be
-   400px tall. Keeping the two bounds equal is what stops that band existing,
-   and it is also what lets the sticky map's top up in the grid rule be a
-   single stable number rather than one value per breakpoint. */
+/* 640, not 700: the pills serve the one-column answer, which ends where the
+   two-pane grid begins, and one bound keeps the map's sticky top at 72px. */
 @media (max-width: 639.98px) {
   #col.has-result .section-nav:not([hidden]) {
     display: flex; gap: 8px; margin-top: 10px;
   }
-  /* 44px because these are the page's navigation on the device with the
-     worst pointer. At 7px of padding they came out 33px tall, under both
-     platform floors, and they are the two controls a reader uses most on a
-     phone. The bar is sticky, so the height is paid for on every screen: it
-     buys back its cost by being the thing that is hit on the first try.
-     One pill fewer is what makes the room for it. */
+  /* 44px, the touch-target floor on both platforms. */
   .section-nav button {
     flex: 1; font: inherit; font-size: .84rem; font-weight: 600;
     color: var(--fg); background: var(--raise); border: 1px solid var(--line);
@@ -535,32 +369,21 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
     min-height: 44px;
   }
   .section-nav button:active { border-color: var(--accent); color: var(--accent); }
-  /* The section you are in, lit: pressing a pill lights it, and scrolling
-     hands the light to whichever section has passed under the bar. */
   .section-nav button.is-current {
     color: var(--accent); border-color: var(--accent);
     background: color-mix(in srgb, var(--accent) 15%, var(--raise));
   }
 }
 
-/* ---- the voting info block ----
-   Labels above values throughout, so each fact is a pair the eye can take in
-   one line rather than a run-on sentence. */
+/* ---- Voting info ---- */
 .vi-rows { display: flex; flex-direction: column; gap: 16px; }
-/* Labels in the answer take the accent ("Election day polling place",
-   "Ballot drop box nearest to you", the rail's Ward and Precinct), so the
-   headings stand off the body text at a glance. Two exceptions come later:
-   a custom pick turns its label amber, and a phone's card dims the place
-   label under its dates. The `live` class app.js writes on some labels has
-   no style of its own; it is a hook. */
+/* app.js adds a "live" class to some labels; it is a hook with no style. */
 .vi-lbl {
   font-size: var(--label-size); font-weight: 700;
   letter-spacing: var(--label-track); text-transform: uppercase;
   color: var(--accent); line-height: 1.5; margin-bottom: 2px;
 }
-/* The jurisdiction, above the ward and precinct numbers. A name, not a
-   number, so it takes a text size rather than the numeral size: "Plainfield
-   Township" at 1.42rem would be the widest thing in the rail. */
+/* Text size, not numeral size: "Plainfield Township" would outgrow the rail. */
 .vi-name {
   font-size: 1.05rem; font-weight: 700; letter-spacing: -.012em; line-height: 1.25;
 }
@@ -570,88 +393,40 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 .vi-val { font-size: 1.05rem; font-weight: 600; line-height: 1.35; }
 
-/* WHERE on the left, WHEN on the right: the place leads and the timing
-   follows it. The DOM emits them in that order too, so the collapsed single
-   column stacks in the same reading order rather than inverting on a phone.
-   The columns are placed EXPLICITLY rather than left to flow, because a row
-   can be missing its where-cell (the window is closed, so there is no site
-   to name) and auto-flow would pull the next row's cell into the gap.
-   stretch, not start, so a tinted cell fills its row instead of stopping at
-   its own last line while the other column runs on. */
+/* Columns are placed explicitly: a row can lack its where-cell, and auto-flow
+   would pull the next row's cell into the gap. */
 .vi-grid {
   display: grid; grid-template-columns: auto 1fr 1fr;
   gap: 18px 24px; align-items: stretch;
 }
-/* The identity rail spans every row, so it reads as naming the whole answer
-   rather than the first line of it, and both place names start at the same
-   x. auto, so it takes exactly the width of the longer label.
-
-   Every row in it is a word with a value under it, and a value reads as
-   belonging to its word when it is centred on it: ranged left, a "3" sat
-   under the W of WARD with the rest of the label hanging off to its right.
-   Two rules do that, and both are needed. align-items shrinks each row to
-   its own content and puts them on one axis, so the rail reads as a
-   centred column rather than three blocks of different widths flush to a
-   left edge -- which is what a vertical stack wants. text-align then
-   centres the value against its own label rather than against the rail,
-   which is as wide as the longest of the three. Centring alone would have
-   put "3" under the middle of "Grand Rapids". */
+/* The rail spans every row. align-items and text-align are both needed: the
+   first centres the rows, the second each value under its own label. */
 .vi-rail { grid-column: 1; grid-row: 1 / -1; display: flex;
            flex-direction: column; gap: 18px; align-items: center; }
 .vi-rail > div { text-align: center; }
 .vi-where { grid-column: 2; }
 .vi-when { grid-column: 3; }
-/* A row with no place spans the two content columns, never the rail: the
-   identity belongs to every row and must not be written over. */
 .vi-grid .vi-full { grid-column: 2 / -1; }
-/* No negative margins: a pull-out overflowed the column and closed the row
-   gap until two panels read as one slab. The where-cell takes matching top
-   padding instead, so both columns' first labels sit on the same line. */
-/* Both content columns are beveled panels: a light inset edge along the top
-   and a dark one along the bottom, so each cell reads as a raised card
-   rather than a flat colour block. The identity row stays plain, since a
-   panel around a single number is a lot of chrome for one digit. */
+/* No negative margins on these cells: a pull-out overflowed the column and
+   closed the row gap. */
 .vi-grid .vi-where,
 .vi-grid .vi-when {
   background: var(--tint); border-radius: 8px; padding: 12px 14px;
   box-shadow: inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
 }
-/* The polling place is the show-on-map control and sits ON the tint, so its
-   hover lifts to --tint-hover rather than to --raise, which on the tint
-   would read as the card dimming (see :root). The phone card rules below
-   700px still set --raise here, for a narrow window with a mouse.
-
-   The hovers on the place cards are gated on a real pointer. A phone has
-   none, so a tap SETS :hover and leaves it set: the tapped card kept the
-   lift and its name kept the accent long after the finger was gone, which
-   reads as a selection the page never made. The states that mean something
-   (.is-dest, .is-custom, :focus-visible) are not gated and still show on a
-   phone. Two hovers elsewhere in the answer are not gated: the turn list's
-   rows and the map detail card's close button. */
+/* Gated on a real pointer: a phone tap sets :hover and leaves it set. */
 @media (hover: hover) {
   .vi-grid .pp-place:hover { background: var(--tint-hover); }
 }
 
-/* While early voting is open there are two addresses on screen and only one
-   of them is the one being routed to. The cells are the toggle: hover lifts
-   either, and the one the directions are actually for carries an accent ring
-   so the answer to "which address is this route for" is on the address
-   itself rather than only in the control below the map. */
+/* .vi-dest cells pick which address the route goes to; .is-dest marks it. */
 .vi-dest { cursor: pointer; }
-/* The fade belongs to a pointer crossing a card, which is a continuous
-   gesture worth easing. A tap is not: it is a state change, and animating it
-   made a selection look like the page was still deciding. So the transition
-   lives with the hover rules that need it. */
+/* Transitions only under a pointer: an animated tap looked undecided. */
 @media (hover: hover) {
   .vi-dest { transition: background .12s, box-shadow .12s; }
   .vi-card, .vi-fold { transition: background-color .16s ease, box-shadow .16s ease; }
 }
-/* A background a shade lighter is not enough of a signal on its own: on a
-   card that is already tinted, most people never noticed the cards were
-   clickable at all. Hover draws a thin accent ring and lights the place name,
-   so "this is a control" is unmistakable -- and it is thinner than the 2px
-   ring on .is-dest, so hovering one card while another is selected still
-   reads as two different states rather than two selections. */
+/* A 1.5px hover ring, thinner than .is-dest's 2px, so the two states differ. */
 @media (hover: hover) {
   .vi-dest:hover {
     background: var(--tint-hover);
@@ -666,72 +441,40 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   box-shadow: inset 0 0 0 2px var(--accent),
               inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
 }
-/* A place the reader chose rather than the nearest one. Dashed, and outside
-   the cell, so it reads differently from the solid inset ring that marks
-   where the directions currently go -- a cell is often both at once. Picking
-   the nearest again clears it, which is how you get back. */
+/* The reader's own pick: dashed and outside, as a cell can also be .is-dest. */
 .vi-where.is-custom { outline: 2px dashed var(--warn); outline-offset: 3px; }
-/* And the label says so in the same colour as the ring, because "Custom
-   location selected" is the one label on the card that reports a choice the
-   reader made rather than a fact about the election. Dim grey said it as
-   quietly as the labels it is replacing. */
 .vi-where.is-custom .vi-lbl { color: var(--warn); }
 
-/* Inside a selected cell the place block must not paint over the ring's
-   inner edge on hover. */
+/* Hover inside a selected cell must not paint over the ring's inner edge. */
 @media (hover: hover) {
   .vi-dest.is-dest .pp-place:hover { background: var(--tint-hover); }
 }
 
-/* Hours are a labelled sub-field, not another column header, so they sit
-   below the header scale rather than on it. */
 .vi-hours-lbl { color: var(--dim); font-weight: 600; }
 .ev-hours-lbl { font-size: .88rem; margin-top: 12px; }
 .ev-hours-lbl + .ev-hours { margin-top: 2px; }
-/* These name a whole column of the table, a bigger job than a word above a
-   single value, so they step off --label-size. Tracking eases with the size:
-   what reads as deliberate at 11.8px reads as gappy at 14px. Ward and
-   Precinct come too, since they head a 1.42rem value exactly as these do. */
+/* Off --label-size: these head whole columns, Ward and Precinct included. */
 .vi-grid .vi-lbl {
   font-size: .88rem; letter-spacing: .07em; margin-bottom: 4px;
 }
-/* In a ~230px column the days and times cannot sit side by side without
-   clipping, so the pairs stack. Same content, one per line. */
+/* Too narrow for days beside times, so they stack. */
 .vi-grid .ev-hours { grid-template-columns: 1fr; gap: .1rem 0; }
 .vi-grid .ev-hours span:nth-child(even) { margin-bottom: .3rem; }
-/* Two columns of this need about 240px each. Below that the polling place
-   name wraps to three lines and the pair stops reading as a pair, so the
-   grid becomes one column and the rows simply stack.
-   700px, the same line as isPhone() in app.js, which is what decides to
-   write each row as a folding card. The two have to agree: wherever they
-   do not, card markup lands on the desktop grid as three cramped columns
-   with the browser's own disclosure triangles, and a phone held sideways
-   is exactly that width. */
+/* 700px, matches isPhone() in app.js, which writes rows as folding cards.
+   Where the two disagree, card markup lands on the desktop grid. */
 @media (max-width: 700px) {
   .vi-grid { grid-template-columns: 1fr; gap: 16px; }
-  /* .vi-grid-prefixed to match the specificity of the two-column rules
-     above. Written bare, .vi-full lost to .vi-grid .vi-full and kept its
-     "2 / -1", which on a one-column grid invents an implicit second column
-     and pushed the closed-state row half off the left edge. */
+  /* .vi-grid-prefixed to match the rules above; bare, .vi-full kept 2 / -1
+     and pushed the closed-state row off the left edge. */
   .vi-grid .vi-when, .vi-grid .vi-where,
   .vi-grid .vi-full, .vi-grid .vi-rail { grid-column: auto; grid-row: auto; }
-  /* Stacked there is no rail to run down, and a vertical pair would burn
-     height a phone does not have, so Ward and Precinct sit side by side.
-     Each value stays centred under its own label, which is the same rule the
-     column uses. align-items goes BACK to stretch: in a row it means
-     vertical, and centring three blocks of unequal height there would take
-     the three labels off the line they share. */
+  /* Ward and Precinct side by side. stretch, not center: in a row, centring
+     takes the three labels off their shared line. */
   .vi-rail { flex-direction: row; gap: 32px; align-items: stretch; }
-  /* Stacked, the panels STAY. Each place is a tappable card on a phone, and
-     a raised, beveled slab is what says so; flattened to bare text it read
-     as a list of facts. One card per place, dates included, instead of a
-     card and a separate block of dates. */
   .vi-card {
     background: var(--tint); border-radius: 8px;
     box-shadow: inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
   }
-  /* Inside the card the two cells are plain: the card is the panel. The
-     dates come first and read large; the place follows under a rule. */
   .vi-card .vi-when, .vi-card .vi-where {
     background: none; box-shadow: none; border-radius: 0;
   }
@@ -739,27 +482,16 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   .vi-card .vi-when .vi-lbl { margin-bottom: 3px; }
   .vi-card .vi-when .vi-val { font-size: 1.12rem; font-weight: 700; }
   .vi-card .vi-when .pp-note { margin-top: 8px; padding-top: 8px; }
-  /* The 2.4rem on the right was room for the chevron a place card carried
-     before the Directions button replaced it; nothing sits there now.
-     Taking it back widens the text, so it is left for a separate change. */
+  /* The 2.4rem right padding is spare: the chevron it made room for is gone. */
   .vi-card .vi-where {
     padding: 10px 2.4rem 12px 14px; border-top: 1px solid var(--line);
   }
   .vi-card .vi-where .vi-lbl { color: var(--dim); }
-  /* The card IS the expander: its head is the summary, and one chevron on
-     the right says which way it will go. Two links under the dates -- "More"
-     and "Show the nearest drop box" -- asked the same question twice and
-     neither said that the section itself was shut. */
   .vi-fold > summary {
     cursor: pointer; list-style: none; display: flex; align-items: center;
   }
   .vi-fold > summary::-webkit-details-marker { display: none; }
   .vi-fold > summary > .vi-when { flex: 1; min-width: 0; }
-  /* The whole head is the tap target; this is the MARK that says so. A 44px
-     box with a 2.1rem glyph in it, sized to the target rather than to
-     itself, because anything smaller is a hairline at arm's length. Grey at
-     rest, not accent: a bigger blue arrow is more blue on a card that
-     already carries accent labels and the accent ring on the chosen place. */
   .vi-fold > summary::after {
     content: '\203a'; flex: 0 0 auto; margin-left: 6px;
     width: 44px; height: 44px;
@@ -768,12 +500,6 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
     transform: rotate(90deg); transition: transform .15s ease, color .15s ease;
   }
   .vi-fold[open] > summary::after { transform: rotate(-90deg); color: var(--fg); }
-  /* Open is a lift, in the same panel language the wide layout uses: the
-     card goes to --tint-hover, which is the colour a card takes under a
-     pointer there, and keeps the bevel. Not a blue wash: with the accent
-     labels and the accent ring on the chosen place, one more blue would have
-     the phone reading as several at once. The head takes a press highlight,
-     so a tap is answered before the card has finished opening. */
   .vi-fold[open] {
     display: block; border-radius: 8px;
     background: var(--tint-hover);
@@ -781,33 +507,25 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   }
   .vi-fold > summary:active { background: color-mix(in srgb, var(--fg) 9%, transparent); }
   .vi-fold[open] > summary { border-bottom: 1px solid var(--line); }
-  /* Shut, the card is one flat block of dates; open, the head is separated
-     from what it revealed. The rule belongs to the opening, not the head. */
   .vi-fold-body > .pp-note, .vi-fold-body > .ev-hours { margin: 0 14px 12px; }
   .vi-fold-body > .pp-note { padding-top: 10px; border-top: 1px solid var(--line); }
   @media (hover: hover) {
     .vi-grid .pp-place:hover { background: var(--raise); }
   }
 }
-/* One line, not the days-and-times grid early voting needs: the 7 AM to 8 PM
-   window is set by state law and is the same every day and every election, so
-   there is no weekday pattern to lay out. */
+/* One line: the 7 AM to 8 PM window is set by state law, the same every day. */
 .vi-hours { font-size: .88rem; color: var(--dim); margin-top: 4px; }
 
-/* Days left, times right, so the columns line up and the row that applies
-   today can be picked out. Matches .ev-hours on the /simple page, which
-   already renders these, rather than inventing a second treatment. */
+/* Matches .ev-hours in simple/lookup.css. */
 .ev-hours {
   display: grid; grid-template-columns: auto 1fr;
   gap: .25rem 1.1rem; margin-top: 12px;
   font-size: .88rem; color: var(--dim);
 }
 .ev-hours .is-today { color: var(--fg); font-weight: 600; }
-/* The polling place block doubles as the show-on-map control. It should
-   read as clickable without dressing up as a hyperlink. */
+/* The polling place block is also the show-on-map control. */
 .pp-place { cursor: pointer; border-radius: 8px; margin: 0 -8px; padding: 2px 8px; }
-/* Its hover background is set where it sits, by the .vi-grid rules above:
-   the block only ever appears inside the answer grid. */
+/* Its hover background is set by the .vi-grid rules above. */
 @media (hover: hover) {
   .pp-place:hover .pp-name { color: var(--accent); }
 }
@@ -818,10 +536,6 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   letter-spacing: -.022em; margin-top: 2px;
 }
 .pp-addr { font-size: .93rem; color: var(--dim); line-height: 1.55; margin-top: 4px; }
-/* Under the address, set apart from it: where to go once you are there, and
-   when. The address is grey because it is the part you already know; these
-   are the parts you read on arrival, so they are body-white, and the label
-   is weighted so "Location:" is found before the eye reads the rest. */
 .pp-meta { margin-top: 8px; font-size: .93rem; line-height: 1.55; color: var(--fg); }
 .pp-meta > div + div { margin-top: 2px; }
 .pp-loc { color: var(--fg); }
@@ -831,42 +545,26 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   border-top: 1px solid var(--line); color: var(--dim); line-height: 1.5;
 }
 
-/* The button that opens the full list. Quiet: the row already answers the
-   question, and this is for the reader who wants the other ten. */
 .box-open {
   margin-top: 12px; font: inherit; font-size: .87rem; color: var(--fg);
   background: none; border: 1px solid var(--dim); border-radius: 999px;
   padding: 5px 12px; cursor: pointer;
 }
-/* Legible at rest and coloured under the pointer, rather than fading up out
-   of the background when the mouse happens to pass over it. A control that
-   only looks like one on hover is invisible to anyone not already hunting
-   for it -- and to everyone on a touchscreen, where there is no hover at all. */
 @media (hover: hover) {
   .box-open:hover { color: var(--accent); border-color: var(--accent); }
 }
 .box-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* The controls a place card offers, on one line. The list button and the
-   Directions button are the same kind of thing (one opens the other
-   options, the other drives to the one already named), so they share a
-   shape and sit together, and wrap together where there is no room. A
-   labelled button says out loud what a corner chevron only hinted at: that
-   the card is a way to get there. */
 .vi-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .vi-actions .box-open { margin-top: 0; }
 
-/* The list inside the panel. Each row routes to that box: the nearest one
-   answers the common case, and only the reader knows whether they will pass a
-   different one anyway. */
+/* ---- Place lists ---- */
 .box-list { list-style: none; margin: 0; padding: 0; }
 .box-list li {
   display: grid; gap: 1px; padding: 10px 12px; border-radius: 8px;
   font-size: .92rem; line-height: 1.45;
 }
 .box-list li + li { margin-top: 2px; }
-/* Keyed on [data-pick], which placeListHtml writes on every routable row.
-   Both lists use this: drop boxes and early voting sites are the same widget
-   with different contents. */
+/* data-pick is written by placeListHtml in app.js on every routable row. */
 .box-list li[data-pick] { cursor: pointer; transition: background .12s; }
 @media (hover: hover) {
   .box-list li[data-pick]:hover { background: var(--raise); }
@@ -877,39 +575,27 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 .bx-name { font-weight: 650; display: flex; justify-content: space-between;
             align-items: baseline; gap: 12px; }
-/* The order of the list is by distance; this is what makes that legible.
-   The figure is straight-line and printed bare, as in app.js; the drive
-   itself appears once a place is chosen. */
+/* Straight-line distance; the drive appears once a place is chosen. */
 .bx-dist { font-weight: 400; font-size: .82rem; color: var(--dim);
            white-space: nowrap; }
 .bx-addr { color: var(--dim); font-size: .87rem; }
 .bx-where { color: var(--fg); font-size: .87rem; margin-top: 3px; }
-/* Every box says when it can be used. The ordinary case is plain; the one
-   that is not 24/7 is amber, so the exception reads as one against a column
-   of white. */
+/* .bx-hours-odd: a box that is not open 24/7. */
 .bx-hours { color: var(--fg); font-size: .87rem; }
 .bx-hours-odd { color: var(--warn); font-size: .87rem; font-weight: 600; }
-/* The one currently being routed to, so the list says where you are as well
-   as where you could go. */
 .box-list li.is-chosen { background: var(--tint); }
 .box-list li.is-chosen .bx-name { color: var(--accent); }
 
-/* Not a destination, and it should not look like one. */
 .box-list li.bx-noroute { opacity: .72; cursor: default; }
 
-/* The page's one disclaimer, shown with the answer it hedges rather than
-   standing under the tool as a second copy of itself. */
 .advisory {
   font-size: .87rem; color: var(--warn); line-height: 1.5; margin-top: 12px;
   padding-left: 12px; border-left: 2px solid var(--warn);
 }
-/* The block is warn-coloured, so a default blue anchor inside it would read
-   as a different voice: take the surrounding colour, keep the underline that
-   says it is a link. */
 .advisory a { color: inherit; }
 .err { font-size: .93rem; color: var(--warn); line-height: 1.55; }
 
-/* ---- route cards ---- */
+/* ---- Route cards ---- */
 .routes { display: flex; flex-direction: column; gap: 10px; }
 .cam-big { color: var(--danger); font-weight: 700; }
 .cam-zero { color: var(--good); font-weight: 700; }
@@ -922,16 +608,11 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   padding-left: 12px; border-left: 2px solid var(--warn);
 }
 
-/* ---- legend + footer ---- */
-/* One ink for the whole key: label and items are one level of importance,
-   not two. var(--fg), not literal white, which would vanish on the light
-   theme's background. */
+/* ---- Map legend ---- */
 .map-legend {
   display: flex; align-items: center; flex-wrap: wrap;
   gap: 7px 16px; font-size: .78rem; color: var(--fg);
 }
-/* The intro's How? opener. Underlined rather than button-shaped: it sits in a
-   sentence, and a button there would compete with the search box for the eye. */
 .how-link {
   color: var(--accent); font-weight: 700; text-decoration: underline;
   text-underline-offset: 3px; text-decoration-thickness: 1.5px;
@@ -945,21 +626,14 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .map-legend .k {
   display: inline-block; width: 26px; height: 5px; border-radius: 2.5px;
 }
-/* Holds the real marker SVG, injected by paintLegendCamera(), so the key and
-   the marker are one drawing and cannot drift apart. */
+/* Filled by paintLegendCamera() in app.js with the real marker SVG. */
 .map-legend .dotk {
   display: inline-flex; width: 18px; height: 18px;
   align-items: center; justify-content: center;
 }
 
-/* The dark theme lifts the ground so it reads as slate under the route.
-   The basemap is our own canvas (basemap.js), drawn into Leaflet's tile
-   pane, so everything on it passes through this filter: the land, the ward
-   tints, the precinct lines and the jurisdiction border. The legend swatches
-   read the same colours from --lg-* but are not filtered, so in dark they
-   do not match the map (a precinct line drawn #b5a6f0, which the key shows,
-   paints as #e8e8e8). Whether to drop the filter and retune the palette, or
-   to filter the key as well, is a design decision still open. */
+/* Dark theme: brighten the basemap, our own canvas (map.js) in the tile pane.
+   The --lg-* legend swatches are not filtered, so in dark they do not match. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .leaflet-tile-pane {
     filter: brightness(1.72) contrast(.82) saturate(1.15);
@@ -969,7 +643,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   filter: brightness(1.72) contrast(.82) saturate(1.15);
 }
 
-/* ---- map furniture ---- */
+/* ---- Map furniture ---- */
 .leaflet-container { font-family: inherit; background: var(--raise); }
 .leaflet-control-attribution {
   background: color-mix(in srgb, var(--panel) 86%, transparent) !important;
@@ -982,28 +656,22 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 .leaflet-bar a:hover { background: var(--raise) !important; }
 
-/* The chosen route flows, so the eye follows it without reading the legend. */
 .route-flow { animation: flow 2.4s linear infinite; }
 @keyframes flow { to { stroke-dashoffset: -28; } }
 @media (prefers-reduced-motion: reduce) {
   .route-flow { animation: none; }
 }
 
-/* Very small phones: tighten the gutter. (The masthead's own steps down are
-   with the header rules below, which come later in the file and would win
-   over anything set for it here.) */
 @media (max-width: 380px) {
   #col { padding: 0 .75rem 2.5rem; }
 }
 
-/* Origin and destination are the same place. Sized like a route summary so
-   the panel does not visibly collapse when this case fires. */
+/* Origin and destination are the same place; sized like a route summary. */
 .here { padding: 16px 0 4px; }
 .here-h { font-size: 1.18rem; font-weight: 700; letter-spacing: -.015em; }
 .here-b { margin-top: 6px; color: var(--dim); line-height: 1.55; }
 
-/* ---- the ?debug panel ----
-   Dashed and amber so it can never be mistaken for part of the page. */
+/* ---- ?debug panel ---- */
 .debug-panel {
   margin: 14px 0 6px; padding: 12px 14px 14px;
   border: 1px dashed var(--warn); border-radius: 10px; background: var(--raise);
@@ -1013,13 +681,9 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .dbg-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .dbg-row label { flex: 1 1 220px; font-size: .78rem; color: var(--dim);
                  text-transform: uppercase; letter-spacing: .05em;
-                 /* The suggestion list hangs off this, so it has to be the
-                    positioned ancestor. Without it the list anchors to the
-                    panel and sits under the wrong field. */
+                 /* The suggestion list's positioned ancestor. */
                  position: relative; }
-/* The label is a small uppercase caption and the list inherits from it, so
-   the addresses would come out shouting and letter-spaced. .ac-item takes
-   font: inherit, which is what makes this necessary here and nowhere else. */
+/* The list would inherit the label's uppercase tracking. */
 .debug-panel .ac { text-transform: none; letter-spacing: normal; }
 .debug-panel .ac-item { font-size: .92rem; color: var(--fg); }
 .dbg-row input {
@@ -1043,9 +707,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   white-space: pre-wrap; word-break: break-word; color: var(--fg);
 }
 
-/* ---- address type-ahead ---- */
-/* Hangs off its positioned parent: .field on the page (see the address
-   input), the field's label in the ?debug panel. */
+/* ---- Address type-ahead ---- */
+/* Positioned against .field, or the field's label in the ?debug panel. */
 .ac {
   position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 900;
   background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px;
@@ -1059,37 +722,24 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 .ac-item:last-child { border-bottom: 0; }
 .ac-item:hover, .ac-item.active { background: var(--raise); }
-/* Centred against the row rather than sitting on the text baseline the rest
-   of the row shares: a glyph has no baseline worth aligning to. It takes the
-   accent under the cursor so the row lights up as one object. */
 .ac-item .ac-pin {
   flex: 0 0 auto; align-self: center; display: flex; color: var(--dim);
   margin-right: 9px;
 }
 .ac-item:hover .ac-pin, .ac-item.active .ac-pin { color: var(--accent); }
-/* Spacing per pair rather than one flex gap: "602 Alexander St SE" is a
-   single address and wants a word space between its halves, while the pin
-   and the trailing note are separate things and want room. */
+/* Margins, not a flex gap: number and street want just a word space. */
 .ac-item .num {
   font-weight: 700; font-variant-numeric: tabular-nums; margin-right: .3em;
 }
 .ac-item .st { flex: 1; }
 .ac-item .why { margin-left: 9px; }
-/* Off the shared label role on purpose: this is a hint inside a suggestion
-   list, not a heading over a value, and the looser .04em keeps it quiet
-   under the address it annotates. */
+/* Off the label role: a quiet hint inside a suggestion list. */
 .ac-item .why, .ac-item .ac-where {
   font-size: .76rem; color: var(--dim); letter-spacing: .04em;
   text-transform: uppercase; white-space: nowrap;
 }
-/* The jurisdiction sits furthest right, after any "did you mean", because it
-   is the one note every row carries and a column reads faster than a note
-   that moves. */
 .ac-item .ac-where { margin-left: 9px; }
-/* On a phone a street in four jurisdictions does not fit beside its name:
-   the row wraps and the jurisdictions take a line of their own under the
-   street, indented past the pin so they read as part of the same row. 24px
-   is the pin (15px, drawn in autocomplete.js) plus its 9px margin above. */
+/* 24px clears the pin: 15px (PIN_SVG in app.js) plus its 9px margin. */
 @media (max-width: 700px) {
   .ac-item { flex-wrap: wrap; }
   .ac-item .ac-where {
@@ -1097,11 +747,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   }
 }
 
-/* ---- marker detail ---- */
-/* Marker detail on a touch screen, shown under the map rather than in a
-   popup over it. See bindDetail and showDetail in app.js for why. Full column
-   width, so nothing is clipped and nothing covers the streets the reader is
-   looking at. */
+/* ---- Marker detail ---- */
+/* Touch screens show detail here, under the map, rather than in a popup. */
 .map-detail {
   position: relative;
   margin-top: 10px;
@@ -1121,8 +768,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 .detail-x:hover { background: var(--raise); color: var(--fg); }
 
-/* Leaflet popup chrome for marker detail where there is a hover pointer
-   (bindDetail, all three marker kinds). */
+/* A hover pointer gets a popup instead (bindDetail in app.js). */
 .cam-popup .leaflet-popup-content-wrapper {
   background: var(--panel); color: var(--fg);
   border: 1.5px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
@@ -1146,9 +792,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   font-size: .78rem; color: var(--dim);
 }
 
-/* Full-width footer band on the header's surface, in two tracks: the
-   colour-scheme switch left, the links right. The body flex chain keeps it
-   at the viewport bottom when the page is short. */
+/* ---- Footer ---- */
 #siteFooter {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1161,13 +805,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 #siteFooter .sf-links { grid-column: 2; justify-self: end; }
 .sf-links { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sf-links .about-btn { text-decoration: none; }
-/* The switch and the links share one row on a phone and push apart, so the
-   switch still lands in the bottom-left corner of the screen. */
 @media (max-width: 640px) {
   #siteFooter { padding: 12px 18px 14px; }
-  /* With an answer up, a phone's column ends at the directions. The footer
-     is for the page before a search, and under the step list it was one more
-     screen to scroll past. It returns with the reset button. */
   body.has-result #siteFooter { display: none; }
 }
 
@@ -1176,7 +815,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   margin-bottom: 10px;
 }
 
-/* ---- destination segmented control ---- */
+/* ---- Destination segmented control ---- */
 .seg { display: flex; gap: 0; margin-bottom: 12px; border: 1.5px solid var(--line);
        border-radius: 8px; overflow: hidden; }
 .seg button {
@@ -1187,10 +826,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .seg button:last-child { border-right: 0; }
 .seg button.on { background: var(--panel); color: var(--accent); }
 
-/* ---- turn-by-turn ---- */
-/* An arrow per turn reads faster than a counter: each step carries a .glyph
-   in the 30px gutter on its left, and the arrive step, which has none, takes
-   a flag there instead. */
+/* ---- Turn-by-turn ---- */
 ol.steps { list-style: none; margin: 12px 0 0; padding: 0; }
 ol.steps li {
   position: relative; display: flex; align-items: baseline; gap: 10px;
@@ -1211,10 +847,6 @@ ol.steps li.arrive::before {
 }
 ol.steps .stext { flex: 1; }
 ol.steps li:hover { background: var(--raise); }
-/* The step being looked at, and the last one. A highlighted turn is the
-   instruction in play, and "Arrive at your destination" is the one every
-   trip ends on; both are read at a glance from the corner of an eye on the
-   road, so they carry the weight. */
 ol.steps li.cur, ol.steps li:hover, ol.steps li.arrive { font-weight: 700; }
 ol.steps li.cur {
   background: var(--raise);
@@ -1225,21 +857,15 @@ ol.steps .scam {
   color: var(--danger); font-size: .78rem; font-weight: 700; white-space: nowrap;
 }
 
-/* camera markers */
+/* ---- Camera markers ---- */
 .cam-icon { background: none; border: 0; }
 .cam-pulse { animation: campulse 1.9s ease-in-out infinite; transform-origin: center; }
 @keyframes campulse { 0%,100% { opacity: .95; } 50% { opacity: .28; } }
 @media (prefers-reduced-motion: reduce) { .cam-pulse { animation: none; opacity: .7; } }
 .campop .cago { color: var(--dim); font-weight: 400; }
 
-/* ---- site header ---- */
-/* Three tracks with equal flexible sides, so the middle is optically centred
-   in the bar. The bar carries the wordmark and nothing else (the
-   colour-scheme switch is in the footer's left track); the empty side tracks
-   are what centre it. min-height rather than height: --header-h is the
-   bar's floor, and tests/test_page.mjs checks the bar comes out at exactly
-   that. Below 640px it is one column holding one item, where a gap has
-   nothing to separate. */
+/* ---- Site header ---- */
+/* tests/test_page.mjs checks the bar comes out exactly --header-h tall. */
 #siteHeader {
   min-height: var(--header-h);
   display: grid;
@@ -1270,11 +896,8 @@ ol.steps .scam {
   font-size: 1.8rem; letter-spacing: -.018em; font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* The wordmark steps down on smaller screens, but only as far as the width
-   genuinely demands: nothing else shares the bar, so there is nothing to
-   make room for. Kept together and ordered widest to narrowest on purpose:
-   this file's breakpoints are not in source order, so a .brand-text sitting
-   in some other @media block further down would silently win over these. */
+/* Breakpoints here are not in source order, so the wordmark's steps stay
+   together, widest first; a rule in a later @media block would win. */
 @media (max-width: 640px) {
   .brand-mark { width: 28px; height: 28px; }
   .brand-mi { width: 34px; height: 34px; }
@@ -1289,7 +912,7 @@ ol.steps .scam {
 .brand:hover .brand-text { color: var(--accent); }
 .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 
-/* ---- theme switch ---- */
+/* ---- Theme switch ---- */
 .theme-switch {
   display: flex; gap: 0; background: var(--panel);
   border: 1.5px solid var(--line); border-radius: 8px;
@@ -1305,10 +928,7 @@ ol.steps .scam {
 .theme-switch button:hover { color: var(--fg); }
 .theme-switch button.on { color: var(--accent); background: var(--raise); }
 .theme-switch button svg { display: block; width: 15px; height: 15px; }
-/* The switch's own steps down, gathered here and ordered widest to narrowest
-   for the same reason the brand's are: the breakpoints in this file are not in
-   source order, so a .theme-switch button rule left in some other @media block
-   further down would quietly win over these. */
+/* Kept together and widest first, for the same reason as the wordmark's. */
 @media (max-width: 900px) {
   .theme-switch button { min-height: 34px; }
 }
@@ -1319,7 +939,7 @@ ol.steps .scam {
   .theme-switch button { padding: 5px 8px; }
 }
 
-/* ---- footer tools + about modal ---- */
+/* ---- About button and modal ---- */
 .about-btn {
   display: inline-flex; align-items: center; text-decoration: none;
   background: none; border: 1.5px solid var(--line); color: var(--dim);
@@ -1329,8 +949,7 @@ ol.steps .scam {
 }
 .about-btn:hover { color: var(--accent); border-color: var(--accent); }
 
-/* Pinned to the viewport, and above #siteHeader (z-index 700): below it, the
-   masthead covers the sheet's own title bar and close button on a phone. */
+/* Above #siteHeader (z-index 700), or the masthead covers the close button. */
 .modal-wrap { position: fixed; inset: 0; z-index: 1000; }
 .modal-veil { position: absolute; inset: 0; background: rgba(6, 8, 12, .55); }
 .modal {
@@ -1358,42 +977,24 @@ ol.steps .scam {
   text-transform: uppercase; color: var(--dim); margin: 22px 0 10px;
 }
 .modal-body h3:first-child { margin-top: 0; }
-/* The numbered reasons. Numerals rather than bullets because the list is an
-   argument in two parts, and being able to say "reason 2" is useful. */
 .why-list { margin: 0; padding-left: 22px; }
-/* Each reason leads with its claim and argues it underneath. The claim was
-   a bolded run-on at the head of the paragraph, which made a reader wade
-   into the argument to find out where the claim ended; as a heading it can
-   be read on its own, and the two reasons scan without being read. Full
-   ink and only a little larger than the prose, because these are whole
-   sentences rather than labels and a display size would wrap them badly. */
 .why-list h4 {
   margin: 0 0 8px; font-size: 1.05rem; font-weight: 600; line-height: 1.4;
   color: var(--fg);
 }
 .why-list p { margin: 0 0 10px; }
 .why-list p:last-child { margin-bottom: 0; }
-/* The state's own words, set apart as a quotation and not restyled into ours. */
 .why-list blockquote {
   margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--line);
   color: var(--dim); font-size: .92rem; line-height: 1.55;
 }
-/* Wider than the gap between paragraphs inside a reason, so the break
-   between the two reasons is the bigger one. */
 .why-list li { margin-bottom: 20px; }
 .why-list li:last-child { margin-bottom: 0; }
-/* Standfirst under the About header. Full-strength ink, not dim: it is the
-   page's claim, not a caption. Its sibling rule restores the heading rhythm
-   that h3:first-child gave up when this line took first place. */
 .modal-tagline {
   margin: 0 0 2px; font-size: 1.3rem; font-weight: 600;
   letter-spacing: -.01em; color: var(--fg);
 }
 .modal-tagline + h3 { margin-top: 18px; }
-/* The line that closes the sheet: who made this and on what terms. A rule
-   above it rather than a heading, because it is a signature and not another
-   section. Dim, but at reading size: the floor for anything a reader is
-   meant to actually read, not caption scale. */
 .modal-credit {
   margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--line);
   font-size: .9rem; line-height: 1.55; color: var(--dim); text-align: center;
@@ -1411,12 +1012,8 @@ ol.steps .scam {
   .about-btn { padding: 8px 12px; min-height: 40px; }
 }
 
-/* The field is the one control on the page, and at the full column width it
-   read as a banner rather than a box to type in. Capped above the phone
-   breakpoint only: a narrow screen needs every pixel, and the cap is on the
-   contents rather than on .searchbar itself, so the sticky bar's background
-   and its rule still span the column and the answer scrolls behind an
-   unbroken edge. */
+/* ---- Search bar ---- */
+/* Cap the contents, not .searchbar, so the sticky bar still spans the column. */
 @media (min-width: 601px) {
   .searchbar .field-label,
   .searchbar .field-row,
@@ -1426,7 +1023,7 @@ ol.steps .scam {
   }
 }
 
-/* ---- pin-drop toggle beside the address field ---- */
+/* ---- Pin drop ---- */
 .field-row { display: flex; gap: 8px; align-items: stretch; }
 .field-row .field { flex: 1; }
 .pin-btn {
@@ -1448,19 +1045,9 @@ ol.steps .scam {
   box-shadow: 0 0 0 2px var(--accent),
               0 0 0 5px color-mix(in srgb, var(--accent) 20%, transparent);
 }
-/* Armed, the whole map has one meaning: the spot you are starting from. A
-   browser gives a tap to the topmost element that will take it, so a marker
-   icon, an open popup or the scope readout would swallow it and drop
-   nothing, with nothing on screen saying the tap had missed. While the pin
-   is armed those give their taps up and the map itself hears them.
-
-   Written against the elements rather than their panes: leaflet.css says
-   .leaflet-marker-icon.leaflet-interactive { pointer-events: auto }, and a
-   value set on the child beats one inherited from the pane. The #map id
-   carries this rule past it.
-
-   .leaflet-control is deliberately NOT in the list: zoom and the gear are
-   how you frame the spot before you pick it, and they keep working. */
+/* While the pin is armed, markers, popups and the status pass taps to the map.
+   Set on the elements, with #map, to beat leaflet.css's pointer-events: auto.
+   Controls are left out on purpose: zoom and the gear still frame the spot. */
 #map.pin-armed .leaflet-marker-icon,
 #map.pin-armed .leaflet-marker-shadow,
 #map.pin-armed .leaflet-popup,
@@ -1468,11 +1055,7 @@ ol.steps .scam {
 #map.pin-armed .leaflet-tooltip,
 #map.pin-armed .map-status { pointer-events: none; }
 
-/* Source links under every place list. Where a source came from is not
-   affected by whether the reader has been there, so both states read the
-   same: body text with a quiet underline, accent under the pointer. The
-   underline is full --dim here, a shade firmer than the page-wide link rule
-   at the top of the file. */
+/* ---- Source links ---- */
 .bx-prov a, .bx-prov a:visited {
   color: var(--fg); text-decoration: underline;
   text-decoration-color: var(--dim); text-underline-offset: 2px;
@@ -1480,12 +1063,11 @@ ol.steps .scam {
 .bx-prov a:hover, .bx-prov a:focus-visible {
   color: var(--accent); text-decoration-color: var(--accent);
 }
-/* The provenance line itself: a footnote under the list, not part of it. */
 .bx-prov {
   margin: 10px 0 0; font-size: .82rem; line-height: 1.6; color: var(--dim);
 }
 
-/* ---- destination popup ---- */
+/* ---- Destination popup ---- */
 .destpop .dt {
   font-size: var(--label-size); font-weight: 700;
   letter-spacing: var(--label-track);
@@ -1500,32 +1082,14 @@ ol.steps .scam {
   letter-spacing: var(--label-track);
   text-transform: uppercase; color: var(--accent);
 }
-/* A second ward at the same building is another line of the same block, not
-   another block: one rule above the group, not one above each line. */
 .destpop .dw + .dw { margin-top: 3px; padding-top: 0; border-top: 0; }
 
-/* ==========================================================================
-   Page layout
-   The column has two states. Before a lookup it explains the tool; after one
-   it is the answer and the directions, with the intro and the countdown out
-   of the way.
-   ========================================================================== */
-
-/* Larger than the lede above it on purpose. This is the one thing the page
-   is asking anybody to do, and at .95rem it read as a caption on the box
-   rather than the instruction. */
+/* ---- Asking and answer states ---- */
 .field-label {
   display: block; margin: 0 0 9px;
   font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; color: var(--fg);
 }
-/* Once there is an answer the field is a tool you come back to, not the
-   question being asked, so its framing collapses along with the hint. */
 #col.has-result .field-label { display: none; }
-/* In the asking state the search bar is the one thing to do, so it gets room
-   and no rule under it. Once there is an answer it becomes a tool you return
-   to, so it sticks to the top and takes a divider. It carries the page
-   background, not the panel colour, so the sticky band is invisible against
-   what scrolls beneath it. */
 #col.has-result .searchbar {
   position: sticky; top: 0; z-index: 5;
   background: var(--bg);
@@ -1536,15 +1100,15 @@ ol.steps .scam {
   font-size: 1.06rem;
   padding: 15px 16px; padding-left: 40px;
 }
+/* Toggled by .has-result, not [hidden], whose !important would keep it hidden for good. */
 .reset-btn { display: none; }
 #col.has-result .reset-btn { display: flex; }
 #col.has-result #intro { display: none; }
 #col.has-result .searchbar .hint { display: none; }
 
-/* the answer, tightened */
 #resultBlock, #routeBlock { padding: 16px 0; }
 
-/* route choice as one compact control rather than two stacked cards */
+/* ---- Route toggle ---- */
 .route-toggle {
   display: flex; border: 1.5px solid var(--line); border-radius: 9px;
   overflow: hidden; margin-bottom: 10px;
@@ -1572,29 +1136,21 @@ ol.steps .scam {
 .one-route { font-size: .95rem; color: var(--fg); }
 .one-route b { font-weight: 700; }
 
-/* Narrow phones. The footer row is where it gets crowded, two buttons beside
-   a three-way switch, so those are what tighten. GitHub is also linked in
-   About. */
 @media (max-width: 520px) {
   .about-btn { padding: 7px 10px; }
 }
-/* --lg-* are published by basemap.js from the palette it is drawing with, so
-   these follow the theme; a literal colour here would be one theme's and
-   unreadable on the other. The fallback is only for the first paint, before
-   the map has rendered once. */
+
+/* ---- Legend swatches ---- */
+/* --lg-* come from map.js's palette; the fallback only covers first paint. */
 .map-legend .k.prec {
   height: 0; border-top: 2.5px dashed var(--lg-precinct, #b5a6f0); background: none;
 }
 
-/* The legend's three marks are the map's three marks: same drawing, filled
-   in by paintLegendSites(). */
+/* Filled by paintLegendSites() in app.js with the map's own marks. */
 .map-legend .sitek { width: 17px; height: 17px; margin-right: 6px; }
 
-/* ---- the three voting-place marks ---- */
-/* One shape each -- a ticked ring for the polling place, a slot for the drop
-   box, a clock for early voting -- so they separate without relying on
-   colour. Outlined rather than filled: two hundred solid marks fought the
-   precinct numbers and the route for attention. */
+/* ---- Voting place marks ---- */
+/* One shape per kind, so they separate without relying on colour. */
 @keyframes poll-pulse {
   0% { box-shadow: 0 0 0 0 rgba(35, 190, 105, .85); }
   100% { box-shadow: 0 0 0 26px rgba(35, 190, 105, 0); }
@@ -1615,8 +1171,6 @@ ol.steps .scam {
 }
 .site-early { color: var(--accent); }
 .site-dropbox { color: var(--warn); }
-/* The one that is yours: filled, so it reads as the answer rather than as
-   one more of the same kind. */
 .site-mark.active .sm-face {
   fill: color-mix(in srgb, currentColor 34%, var(--panel));
   stroke-width: 2.8;
@@ -1624,11 +1178,7 @@ ol.steps .scam {
 .site-mark.active .sm-ink { stroke-width: 2.6; }
 .site-mark:hover .sm-face { fill: var(--panel); }
 
-/* ---- map layer toggles ---- */
-/* The gear in the map's corner and the panel it opens. Leaflet stacks the
-   control in its corner furniture; the panel is transient and user-opened,
-   so it is allowed over the map in a way standing chrome is not. */
-
+/* ---- Map layer toggles ---- */
 .map-gear { position: relative; }
 .gear-btn {
   width: 34px; height: 34px;
@@ -1640,8 +1190,7 @@ ol.steps .scam {
 .gear-sec {
   margin: 10px 0 6px; padding-top: 9px;
   border-top: 1px solid var(--line);
-  /* Off the shared label role on purpose: the gear panel is a dense
-     settings surface where .74rem headings would crowd the controls. */
+  /* Off the label role: .74rem headings would crowd the dense gear panel. */
   font-size: .68rem; font-weight: 700; letter-spacing: var(--label-track);
   text-transform: uppercase; color: var(--dim);
 }

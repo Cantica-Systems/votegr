@@ -186,7 +186,7 @@ def representative_addresses():
 
 def expected_place(polling, precinct):
     """Where a precinct actually votes, honouring `consolidated_with` the way
-    site/precinct.js does: for one election a precinct can vote at another's
+    site/voting.js does: for one election a precinct can vote at another's
     location, which the clerk records only in the directory's footnotes."""
     place = polling.get(precinct)
     if not place:

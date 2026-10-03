@@ -15,7 +15,7 @@ not to answer a lookup.
 /simple is city-only and uses the file as it is. The main page covers the
 county, and fourteen of these fifteen jurisdictions are ones it CAN answer,
 so it filters this file through its address list when it loads
-(Precincts.unindexed in site/precinct.js). Most names here are streets that
+(Precincts.unindexed in site/voting.js). Most names here are streets that
 list already has under the county's spelling (E FULTON ST here, FULTON ST E
 there), and what is left is streets in Tallmadge Township, which is in Ottawa
 County, and streets in the other fourteen with no address in the parcel file.

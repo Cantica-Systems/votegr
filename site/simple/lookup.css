@@ -1,6 +1,4 @@
-/* Released into the public domain under the Unlicense, see UNLICENSE.
-   Kent County Precinct Lookup, the light version of votegr.org.
-   https://github.com/Cantica-Systems/votegr */
+/* Kent County Precinct Lookup (/simple), the light version of votegr.org. */
 
 :root {
   --bg: #0f1115;
@@ -37,8 +35,6 @@ body {
 main { max-width: 36rem; margin: 0 auto; }
 h1 { margin: 0 0 .3rem; font-size: 1.4rem; letter-spacing: -.01em; }
 
-/* Anything quiet: sub-headings and addresses. A note is quiet in size only;
-   its colour is set with it below. */
 .sub,
 .lead,
 .lead-2,
@@ -48,7 +44,6 @@ label { color: var(--dim); }
 .sub, .addr, .note { font-size: .93rem; }
 .lead, .lead-2 { font-size: .95rem; }
 .sub { margin: 0 0 1.6rem; }
-/* The why-tagline sits directly under the title; tuck the how-to line close. */
 .sub.why { margin-bottom: .6rem; }
 label { display: block; margin-bottom: .35rem; font-size: .85rem; }
 
@@ -62,16 +57,14 @@ label { display: block; margin-bottom: .35rem; font-size: .85rem; }
   background: color-mix(in srgb, var(--warn) 8%, transparent);
 }
 
-/* Same rule as the map page: body colour, quiet underline, and no change of
-   colour once followed -- the browser's blue and purple are both illegible
-   on a dark panel and the purple claims a meaning these links do not have. */
+/* Same link rule as style.css: visited links look unvisited. */
 a, a:visited {
   color: var(--fg); text-decoration: underline;
   text-decoration-color: var(--dim); text-underline-offset: 2px;
 }
 a:hover, a:focus-visible { color: var(--accent); text-decoration-color: var(--accent); }
 
-/* Search box and its suggestion list */
+/* ---- Search box ---- */
 
 .combo { position: relative; }
 
@@ -111,7 +104,7 @@ li[role=option] {
 li[role=option]:hover,
 li[role=option][aria-selected=true] { background: var(--line); }
 
-/* Result card */
+/* ---- Result card ---- */
 
 .card {
   margin-top: 1.5rem;
@@ -135,18 +128,13 @@ li[role=option][aria-selected=true] { background: var(--line); }
 .wp-value { margin-right: .6rem; font-size: 1.15rem; font-weight: 600; line-height: 1.3; }
 
 .lead-2 { margin-top: 1.2rem; }
-/* The voting day location is the answer to the question asked, so it carries
-   the most weight on the card. The early voting sites below are alternatives
-   and sit a step quieter. */
 .place { font-size: 1.15rem; font-weight: 700; color: var(--fg); }
 .ev-site .place { font-size: 1rem; font-weight: 600; }
-/* Where to go once you are there. Body-white under the grey address, set
-   apart from it, with the label weighted -- the same treatment as the map
-   page's cards, so a reader who checks both recognises the second. */
+/* Same treatment as .pp-meta in style.css. */
 .note { margin-top: .45rem; color: var(--fg); }
 .note-l { font-weight: 600; }
 
-/* Warnings: election banner, boundary and consolidation advisories */
+/* ---- Election banner and advisories ---- */
 
 .election,
 .advisory {
@@ -166,7 +154,7 @@ li[role=option][aria-selected=true] { background: var(--line); }
 }
 .election .ev { display: block; margin-top: .2rem; color: var(--dim); font-size: .85rem; }
 
-/* A location: text on the left, directions on the right. */
+/* ---- Location rows ---- */
 
 .loc {
   display: flex;
@@ -198,11 +186,9 @@ a.dir-btn svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
 .status { margin-top: 1rem; font-size: .92rem; color: var(--dim); }
 .status.err { padding-left: .75rem; border-left: 3px solid var(--warn); }
 
-/* Early voting block, appended to the result card */
+/* ---- Early voting ---- */
 
-/* Raised as one section, so early voting reads as a different kind of thing
-   from the voting day answer above it. The tint is the same accent the
-   election banner uses, so the blue means one thing across the page. */
+/* The election banner's accent tint, so blue means one thing on the page. */
 .ev-block {
   margin-top: 1.5rem;
   padding: 1.1rem;
@@ -212,19 +198,15 @@ a.dir-btn svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
   box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
 }
 .ev-block .lead-2 { margin-top: 0; }
-/* Only when the uncertainty note is above it, so it does not sit flush on the box. */
 .ev-block .advisory + .lead-2 { margin-top: 1rem; }
 
-/* This one answers the warning above it rather than adding another, so it
-   takes the banner's blue rather than the warning amber. */
 .advisory[data-kind=early-voting] {
   border-left-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 .ev-note { margin-top: .3rem; font-size: .88rem; color: var(--dim); }
 
-/* Days on the left, times on the right, so the columns line up and the row
-   that applies today can be picked out of them. */
+/* Matches .ev-hours in style.css. */
 .ev-hours {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -237,29 +219,16 @@ a.dir-btn svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
 
 .ev-site { margin-top: 1.3rem; }
 
-/* Which jurisdiction the street is in, said in the option itself; the same
-   grey on every row. */
 .opt-where { color: var(--dim); font-size: .9em; }
 
-/* The answer for a street this page cannot look up reads like the other
-   advisories, because that is what it is: an honest limit, not an error. */
 .advisory[data-kind=outside] { border-left-color: var(--dim); }
 
-/* The dates a heading applies to, under it rather than inside it. Quiet
-   enough to read as a subtitle, with the dates themselves picked out because
-   they are the part a reader is actually checking. */
 .sec-sub {
   font-size: .92rem; color: var(--dim); margin: -.05rem 0 .55rem;
   line-height: 1.45;
 }
 .sec-sub .when { color: var(--fg); font-weight: 650; }
 
-/* The heading of a block, as opposed to a line of prose inside one. Early
-   voting and the drop boxes each open a section of several places, and at the
-   body size and colour those openers read as the first sentence of the block
-   rather than its title -- so a reader skimming for "where do I drop this"
-   had nothing to land on. Sized and coloured like the voting day heading
-   above them, with a rule to mark where the section starts. */
 .sec-head {
   font-size: 1.06rem; font-weight: 700; color: var(--fg);
   padding-bottom: .45rem; margin-bottom: .45rem;
