@@ -335,6 +335,7 @@ function provenanceHtml(opt) {
 }
 
 // On a phone, head is the shut card's summary and fold is what opening it reveals.
+// state.now: the way of voting in person that is happening today (nowKind), badged.
 function whenCell(kind, state, extra) {
   const note = state.note ? `<div class="pp-note">${esc(state.note)}</div>` : '';
   let shown = extra || '';
@@ -342,27 +343,39 @@ function whenCell(kind, state, extra) {
   // Early voting's many hour lines fold away; election day's one line stays with the date.
   const fold = phone ? note + (kind === 'early' ? shown : '') : '';
   if (phone && kind === 'early') shown = '';
-  const head = `<div class="vi-when vi-when-${kind}">` +
-    `<div class="vi-lbl${state.live ? ' live' : ''}">${esc(state.label)}</div>` +
+  const lbl = `<div class="vi-lbl${state.live ? ' live' : ''}">${esc(state.label)}</div>`;
+  const head = `<div class="vi-when vi-when-${kind}${state.now ? ' is-now' : ''}">` +
+    (state.now
+      ? `<div class="vi-lbl-row">${lbl}<span class="vi-now">${esc(state.now)}</span></div>`
+      : lbl) +
     `<div class="vi-val">${esc(state.status)}</div>` +
     `${shown}${phone ? '' : note}</div>`;
-  return { head, fold };
+  return { head, fold, now: !!state.now };
 }
 
-// Both ends are statute, not per box: ballots go out on Elections.absenteeFrom and must
-// be back by poll close, so an open box accepts nothing before then.
+// 'none', 'upcoming', 'open' or 'closed'. Both ends are statute, not per box: ballots go
+// out on Elections.absenteeFrom and must be back by poll close, so an open box accepts
+// nothing before then.
+function absenteePhase() {
+  if (!activeEl) return 'none';
+  const today = Elections.todayISO();
+  if (today < Elections.absenteeFrom(activeEl)) return 'upcoming';
+  if (today > activeEl.date) return 'closed';
+  return 'open';
+}
+
 function absenteeState() {
-  if (!activeEl) return { label: 'Ballot drop box', status: 'No election scheduled' };
+  const phase = absenteePhase();
+  if (phase === 'none') return { label: 'Ballot drop box', status: 'No election scheduled' };
   const from = Elections.absenteeFrom(activeEl);
   const range = `${Elections.dayMonth(from)} to ${Elections.dayMonth(activeEl.date)}`;
-  const today = Elections.todayISO();
-  if (today < from) {
+  if (phase === 'upcoming') {
     return { label: 'Absentee voting upcoming', status: range, live: true,
              note: `Absentee ballots are mailed from ${Elections.monthDay(from)}. ` +
                    'They can be returned from then until the polls close on election day.' +
                    boxAccess() };
   }
-  if (today > activeEl.date) {
+  if (phase === 'closed') {
     return { label: 'Absentee voting closed', status: range };
   }
   return { label: 'Absentee voting open', status: range, live: true,
@@ -372,6 +385,15 @@ function absenteeState() {
 
 function isElectionDay() {
   return !!activeEl && Elections.todayISO() === activeEl.date;
+}
+
+// The way of voting in person that is happening today, and so the one highlighted: the
+// polls on election day and on no other day, early voting while its window is open.
+// Null otherwise. Separate from the routed default, which the drop box holds while
+// absentee voting is open (destinations()).
+function nowKind(r) {
+  if (isElectionDay()) return 'polling';
+  return Elections.windowState(evWindow(r)) === 'open' ? 'early' : null;
 }
 
 // Only the first letter: the rest may hold names the clerk cased on purpose.
@@ -405,7 +427,7 @@ function section(kind, where, when, opts) {
   const head = when?.head || '', fold = when?.fold || '';
   if (!isPhone()) return where + head;
   if (!head) return `<div class="vi-card vi-card-${kind}">${where}</div>`;
-  return `<div class="vi-card vi-card-${kind}">` +
+  return `<div class="vi-card vi-card-${kind}${when.now ? ' is-now' : ''}">` +
     `<details class="vi-fold"${opts?.collapsed ? '' : ' open'}>` +
     `<summary>${head}</summary>` +
     `<div class="vi-fold-body">${fold}${where}</div>` +
@@ -1302,7 +1324,8 @@ function earlyVotingCard(r) {
           : '') : '') +
     '</div>';
   return section('early', where,
-    whenCell('early', { label: evState.label, status: evState.status, live: true },
+    whenCell('early', { label: evState.label, status: evState.status, live: true,
+                        now: nowKind(r) === 'early' ? 'Open now' : null },
              ev ? evHoursHtml(activeEl) : ''),
     { collapsed: !!ev && !/open/i.test(evState.label) });
 }
@@ -1337,7 +1360,8 @@ function pollingCard(r, multi) {
   let when = null;
   if (activeEl) {
     when = whenCell('polling',
-      { label: 'Election day', status: Elections.withWeekday(activeEl.date) },
+      { label: 'Election day', status: Elections.withWeekday(activeEl.date),
+        now: nowKind(r) === 'polling' ? 'Today' : null },
       electionDayHours?.open && electionDayHours.close
         ? '<div class="vi-hours"><span class="vi-hours-lbl">Hours:</span> ' +
           `${esc(Elections.shortTime(electionDayHours.open))} to ` +
@@ -1373,7 +1397,8 @@ function show(r, focusKind, landOn) {
   const boxHtml = dropBoxCard(r), evHtml = earlyVotingCard(r),
       pollHtml = pollingCard(r, multi);
 
-  // The order a voter can act in, except on election day, when the polls come first.
+  // The drop box first, the order a voter can act in, except on election day, when the
+  // polls come first. destinations() puts the routed default in the same place.
   html += isElectionDay() ? pollHtml + boxHtml + evHtml
                           : boxHtml + evHtml + pollHtml;
 
@@ -1742,13 +1767,16 @@ function destinations(r) {
                all: boxes });
   }
 
-  // Early voting leads only while open, and never on election day itself.
-  if (out.length > 1 && (evState !== 'open' || isElectionDay())) {
-    out.sort((a, b) => {
-      const rank = { polling: 0, early: 1, dropbox: 2 };
-      return rank[a.kind] - rank[b.kind];
-    });
-  }
+  // The first is where the directions point before anything is clicked. On election day
+  // the polls; otherwise the drop box while absentee ballots are out, which covers every
+  // early voting window; otherwise early voting if open, then the polls.
+  const evNow = nowKind(r) === 'early';
+  const rank = evNow ? { early: 1, polling: 2, dropbox: 3 }
+                     : { polling: 1, early: 2, dropbox: 3 };
+  rank[isElectionDay() ? 'polling'
+     : absenteePhase() === 'open' ? 'dropbox'
+     : evNow ? 'early' : 'polling'] = 0;
+  out.sort((a, b) => rank[a.kind] - rank[b.kind]);
   return out;
 }
 

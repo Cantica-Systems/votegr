@@ -1048,6 +1048,18 @@ for (const w of WIDTHS) {
      seen.filter(v => v.grid).every(v => v.stickyTop === v.barH));
 }
 
+// --- the map stretch, on a calendar held still ------------------------
+// Everything from here to the next served = null measures the map as it
+// stands after an answer, and the answer fits the map to the route. Which
+// destination that route goes to is a function of today: the drop box while
+// absentee ballots are out, the polls before then and on the day. The drop
+// box nearest 300 Monroe Ave NW is at City Hall itself, so routing there
+// zooms the map to a few buildings, too few precincts for the ward tint and
+// too few labels for the drag probe. Sixty days out ballots have not gone
+// out, so the route goes to the polling place these checks were written
+// against, on every day the suite runs.
+served = pinned(60);
+
 // --- the map may not paint over the sticky bar on a phone ---
 // Leaflet numbers its own panes 200 to 700 and its controls 1000, against the
 // map. Those numbers only stay inside the map if its container is a stacking
@@ -1818,6 +1830,7 @@ for (const theme of ['dark', 'light']) {
 
   await ctx.close();
 }
+served = null;
 
 // --- a street the address list cannot answer --------------------------
 // A street the address list cannot answer has to be told so accurately, and

@@ -134,29 +134,52 @@ for (const [name, data, want] of CASES) {
   ok(`${name}: site ${want.site ? 'shown' : 'withheld'}`, got.site === want.site);
   await page.close();
 }
-// ---- election day itself ------------------------------------------------
-// On the day, the answer stops being a menu: early voting has closed and a
-// drop box is a race against the same 8pm the polls close at, so the polling
-// place leads the card and the directions point at it before anything is
-// clicked. Only reachable one day a year from real data, hence the fixture.
+// ---- which way of voting leads, and which is highlighted -----------------
+// Two separate questions, each a function of the date, so each case pins both.
 //
-// The routed default is a SEPARATE question and only checked on the day: away
-// from it the polls already lead the picker, because "where do I vote" is
-// answered by election day until early voting actually opens. The card order
-// is the thing that differs, and it is what these two cases contrast.
+// The ROUTED default is the one a reader gets by doing nothing, read off the
+// picker rather than the card, since that half is what saves a wrong trip.
+// While absentee ballots are out it is the drop box, and that covers every
+// early voting window, since ballots go out 40 days before the election. On
+// election day itself the answer stops being a menu: early voting has closed
+// and a drop box is a race against the same 8pm the polls close at, so the
+// polling place leads the card and the directions point at it. Before
+// ballots go out the polls lead the picker, though the drop box still heads
+// the card.
+//
+// The HIGHLIGHT marks the way of voting in person that is happening today:
+// early voting while its window is open, the polling place on election day
+// and on no other day. Read at desktop width (.vi-when), at phone width
+// (.vi-card, which folds) and on /simple (its badge), so the three cannot
+// disagree.
 const ORDER_CASES = [
-  ['election day', base({ date: iso(0),
-                          early_voting_from: iso(-10), early_voting_to: iso(-2),
-                          early_voting_sites: SITES, early_voting_hours: HOURS }),
-   ['polling', 'dropbox'], /election day/i],
-  ['a month out', base({ date: iso(30),
-                         early_voting_from: iso(5), early_voting_to: iso(10),
-                         early_voting_sites: SITES, early_voting_hours: HOURS }),
-   ['dropbox', 'polling'], null],
+  { name: 'election day',
+    data: base({ date: iso(0), early_voting_from: iso(-10), early_voting_to: iso(-2),
+                 early_voting_sites: SITES, early_voting_hours: HOURS }),
+    order: ['polling', 'dropbox'], routed: /^election day$/i, now: ['polling'],
+    badges: ['Today'] },
+  { name: 'early voting open',
+    data: base({ date: iso(10), early_voting_from: iso(-2), early_voting_to: iso(2),
+                 early_voting_sites: SITES, early_voting_hours: HOURS }),
+    order: ['dropbox', 'early', 'polling'], routed: /^drop box$/i, now: ['early'],
+    badges: ['Open now'] },
+  { name: 'a month out',
+    data: base({ date: iso(30), early_voting_from: iso(5), early_voting_to: iso(10),
+                 early_voting_sites: SITES, early_voting_hours: HOURS }),
+    order: ['dropbox', 'polling'], routed: /^drop box$/i, now: [], badges: [] },
+  { name: 'before ballots go out',
+    data: base({ date: iso(60), early_voting_from: iso(45), early_voting_to: iso(50),
+                 early_voting_sites: SITES, early_voting_hours: HOURS }),
+    order: ['dropbox', 'polling'], routed: /^election day$/i, now: [], badges: [] },
 ];
 
-for (const [name, data, want, routedWant] of ORDER_CASES) {
+// The kinds whose dates are highlighted, by the row's own class name.
+const nowKinds = (sel, prefix) => [...document.querySelectorAll(sel)]
+  .map(e => [...e.classList].find(c => c.startsWith(prefix)).slice(prefix.length));
+
+for (const { name, data, order: wantOrder, routed: routedWant, now, badges } of ORDER_CASES) {
   current = data;
+  const electionDay = wantOrder[0] === 'polling';
   const page = await browser.newPage();
   await page.goto(URL_, { waitUntil: 'networkidle' });
   await page.fill('#addr', '300 Monroe Ave NW');
@@ -166,13 +189,11 @@ for (const [name, data, want, routedWant] of ORDER_CASES) {
   const order = await page.evaluate(() =>
     [...document.querySelectorAll('#precinctInfo .vi-where[data-kind]')]
       .map(el => el.dataset.kind));
-  // Which destination the directions are already pointed at, read off the
-  // picker rather than the card: that is the one a reader gets by doing
-  // nothing, and it is the half of this that actually saves a wrong trip.
-  const routed = await page.evaluate(() => {
+  const routed = await page.waitForFunction(() => {
     const on = document.querySelector('#destPick button.on, #destPick button[aria-pressed="true"]');
     return on ? on.textContent.trim() : null;
-  });
+  }, null, { timeout: 15000 }).then(h => h.jsonValue()).catch(() => null);
+  const lit = await page.evaluate(`(${nowKinds})('#precinctInfo .vi-when.is-now', 'vi-when-')`);
 
   // On the day, the banner counts the polls rather than the day: one of
   // three labels, hours-minutes-seconds with no Days unit, and the sentence
@@ -184,7 +205,7 @@ for (const [name, data, want, routedWant] of ORDER_CASES) {
     units: [...document.querySelectorAll('#cdClock .cd-lab')].map((e) => e.textContent),
     said: document.getElementById('cdSaid').textContent,
   }));
-  if (want[0] === 'polling') {
+  if (electionDay) {
     ok(`${name}: the banner counts the polls (${banner.label})`,
        /^Polls (Open In|Close In|Have Closed):$/.test(banner.label));
     ok(`${name}: with no Days unit`, !banner.units.includes('Days'));
@@ -194,6 +215,16 @@ for (const [name, data, want, routedWant] of ORDER_CASES) {
     ok(`${name}: away from the day it counts to the day`,
        banner.label === 'Election Day is In:' && banner.units[0] === 'Days');
   }
+  await page.close();
+
+  // At phone width the rows are folding cards, and the card carries the mark.
+  const phone = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await phone.goto(URL_, { waitUntil: 'networkidle' });
+  await phone.fill('#addr', '300 Monroe Ave NW');
+  await phone.press('#addr', 'Enter');
+  await phone.waitForSelector('#precinctInfo .vi-card', { timeout: 10000 });
+  const litPhone = await phone.evaluate(`(${nowKinds})('#precinctInfo .vi-card.is-now', 'vi-card-')`);
+  await phone.close();
 
   // /simple reads the same calendar and the same hours, and must say the
   // same thing about the polls on the day, in its own single line.
@@ -201,21 +232,29 @@ for (const [name, data, want, routedWant] of ORDER_CASES) {
   await simple.goto(URL_.replace('/index.html', '/simple/index.html'), { waitUntil: 'networkidle' });
   await simple.waitForFunction(() => !document.getElementById('election').hidden, null, { timeout: 15000 });
   const line = await simple.evaluate(() => document.getElementById('election').textContent);
+  await simple.fill('#addr', '300 Monroe Ave NW');
+  await simple.press('#addr', 'Enter');
+  await simple.waitForSelector('#result .card', { timeout: 10000 });
+  const simpleBadges = await simple.evaluate(() =>
+    [...document.querySelectorAll('#result .now-badge')].map(e => e.textContent));
   await simple.close();
-  if (want[0] === 'polling') {
+  if (electionDay) {
     ok(`${name}: /simple counts the polls too (${line.slice(0, 22).trim()})`,
        /^Polls (open in \d+:\d\d:\d\d|close in \d+:\d\d:\d\d|have closed)/.test(line));
   } else {
     ok(`${name}: /simple names the next election away from the day`, /^Next election:/.test(line));
   }
 
-  console.log(`\n[${name}] order=${JSON.stringify(order)} routed=${JSON.stringify(routed)}`);
-  ok(`${name}: card order`, JSON.stringify(order) === JSON.stringify(want));
-  if (routedWant) {
-    ok(`${name}: directions already point at the polls`,
-       !!routed && routedWant.test(routed));
-  }
-  await page.close();
+  console.log(`\n[${name}] order=${JSON.stringify(order)} routed=${JSON.stringify(routed)} ` +
+              `lit=${JSON.stringify(lit)} litPhone=${JSON.stringify(litPhone)} ` +
+              `simple=${JSON.stringify(simpleBadges)}`);
+  ok(`${name}: card order`, JSON.stringify(order) === JSON.stringify(wantOrder));
+  ok(`${name}: directions already point at the ${routedWant.source.replace(/[$^]/g, '')}`,
+     !!routed && routedWant.test(routed));
+  ok(`${name}: highlighted ${now.join(', ') || 'nothing'}`,
+     JSON.stringify(lit) === JSON.stringify(now));
+  ok(`${name}: and the same at phone width`, JSON.stringify(litPhone) === JSON.stringify(now));
+  ok(`${name}: and on /simple`, JSON.stringify(simpleBadges) === JSON.stringify(badges));
 }
 
 await browser.close(); server.close();

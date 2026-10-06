@@ -133,7 +133,9 @@ function pollingPlace(found) {
   }
   const parts = [
     // No date: the banner gives it, and two dates on one screen read as two facts.
-    el('div', 'lead-2', 'Your voting day location'),
+    // Badged on election day and no other, as app.js highlights it (nowKind).
+    el('div', 'lead-2', 'Your voting day location',
+       isElectionDay() ? nowBadge('Today') : null),
     locationRow(place),
   ];
   if (place.consolidated_with) {
@@ -146,6 +148,9 @@ function pollingPlace(found) {
 }
 
 const isElectionDay = () => !!election && Elections.todayISO() === election.date;
+
+// The way of voting in person that is happening today, as app.js marks it.
+const nowBadge = (text) => el('span', 'now-badge', text);
 
 function render(found, text) {
   typed = { text, where: found.jurisdiction };
@@ -426,7 +431,8 @@ function earlyVoting(found, uncertain) {
       'Vote early and verify there. All early voting locations have your information.'));
   }
 
-  parts.push(el('div', 'lead-2 sec-head', 'Vote early'));
+  parts.push(el('div', 'lead-2 sec-head', 'Vote early',
+                open && !isElectionDay() ? nowBadge('Open now') : null));
   parts.push(open
     ? el('div', 'sec-sub', 'Through ', el('strong', 'when', Elections.withWeekday(to)))
     : el('div', 'sec-sub', el('strong', 'when', Elections.withWeekday(from)),
@@ -449,7 +455,7 @@ function earlyVoting(found, uncertain) {
     parts.push(table);
   }
 
-  return [el('div', 'ev-block ev-early', ...parts)];
+  return [el('div', `ev-block ev-early${open && !isElectionDay() ? ' is-now' : ''}`, ...parts)];
 }
 
 // The city clerk writes "24/7"; the county and the state write "24 hours a day, 7 days a week".
