@@ -8,6 +8,7 @@
   --line: #2a2f3a;
   --accent: #7cc4ff;
   --warn: #ffcf70;
+  --good: #6ee7a5;
 }
 
 @media (prefers-color-scheme: light) {
@@ -19,6 +20,7 @@
     --line: #dde1e8;
     --accent: #0b62b0;
     --warn: #8a5b00;
+    --good: #0f7a43;
   }
 }
 
@@ -234,3 +236,19 @@ a.dir-btn svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
   padding-bottom: .45rem; margin-bottom: .45rem;
   border-bottom: 1px solid var(--line);
 }
+
+/* The way of voting in person that is happening today: green, as on the map
+   page, so it never reads as the blue of the banner and the blocks. */
+.now-badge {
+  display: inline-block; margin-left: .55rem; padding: 0 .5em;
+  border-radius: 999px; vertical-align: .1em;
+  font-size: .7rem; font-weight: 700; letter-spacing: .06em; line-height: 1.6;
+  text-transform: uppercase; background: var(--good); color: var(--bg);
+}
+.ev-block.is-now {
+  border-left: 4px solid var(--good);
+  background: color-mix(in srgb, var(--good) 10%, var(--panel));
+}
+
+/* Early voting before its window opens: listed, greyed, and with no Directions. */
+.ev-block.is-off { opacity: .6; }
