@@ -544,6 +544,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   }
   .vi-fold[open] > summary { border-bottom: 1px solid var(--line); }
   .vi-fold-body > .pp-note, .vi-fold-body > .ev-hours { margin: 0 14px 12px; }
+  .vi-fold-body > .ev-hours-lbl { margin-left: 14px; margin-right: 14px; }
   .vi-fold-body > .pp-note { padding-top: 10px; border-top: 1px solid var(--line); }
   @media (hover: hover) {
     .vi-grid .pp-place:hover { background: var(--raise); }

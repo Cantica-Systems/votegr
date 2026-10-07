@@ -239,6 +239,25 @@ for (const [name, data, want] of CASES) {
        !!ev && ev.sites > 0 && ev.off === greyed && (greyed ? ev.links === 0 : ev.links > 0));
   }
 }
+current = CASES.find(([n]) => n === 'open')[1];
+for (const theme of ['dark', 'light']) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(t => localStorage.setItem('theme', t), theme);
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  await page.fill('#addr', '300 Monroe Ave NW');
+  await page.press('#addr', 'Enter');
+  await page.waitForSelector('#precinctInfo .vi-fold-body > .ev-hours-lbl', { timeout: 10000 });
+  const x = await page.evaluate(() => {
+    const body = document.querySelector('#precinctInfo .vi-fold-body > .ev-hours-lbl').parentElement;
+    const left = s => Math.round(body.querySelector(s).getBoundingClientRect().left);
+    return { card: Math.round(body.closest('.vi-card').getBoundingClientRect().left),
+             label: left('.ev-hours-lbl'), line: left('.ev-hours span') };
+  });
+  console.log(`\n[phone, ${theme}] card=${x.card} label=${x.label} hours=${x.line}`);
+  ok(`phone, ${theme}: "Hours:" lines up with the hours under it`, x.label === x.line);
+  ok(`phone, ${theme}: and is inset from the card's edge`, x.label > x.card);
+  await page.close();
+}
 // ---- which way of voting leads, and which is highlighted -----------------
 // Two separate questions, each a function of the date, so each case pins both.
 //
