@@ -113,7 +113,7 @@ const CASES = [
    { label: /early voting closed/i, site: false, off: true }],
   ['upcoming', base({ early_voting_from: iso(5), early_voting_to: iso(10),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting dates/i, site: false, off: true }],
+   { label: /early voting dates/i, site: true, off: true, note: /not opened yet/i }],
   ['none',     base({ early_voting_sites: SITES }),
    { label: null, site: false, off: false }],
 ].filter(([name, data]) => {
@@ -180,7 +180,10 @@ for (const [name, data, want] of CASES) {
     // early voting site from the polling place.
     return { label: (cell.querySelector('.vi-lbl') || {}).textContent.trim(),
              status: (cell.querySelector('.vi-val') || {}).textContent || null,
-             site: !!document.querySelector('.vi-ev-site .pp-name') };
+             site: !!document.querySelector('.vi-ev-site .pp-name'),
+             note: (cell.querySelector('.pp-note') || {}).textContent || null,
+             whereNote: /not opened yet/i.test(
+               (document.querySelector('.vi-ev-site') || {}).textContent || '') };
   });
 
   // Where a reader could pick early voting. The map's site markers land after
@@ -209,11 +212,15 @@ for (const [name, data, want] of CASES) {
                                            : !!(got.label && want.label.test(got.label)));
   ok(`${name}: site ${want.site ? 'shown' : 'withheld'}`, got.site === want.site);
   ok(`${name}: ${want.off ? 'shown disabled' : 'not disabled'}`, pick.disabled === want.off);
-  if (!want.site) {
+  if (want.note) {
+    ok(`${name}: the not-open note sits with the dates`, want.note.test(got.note || ''));
+    ok(`${name}: and not in the site cell`, !got.whereNote);
+  }
+  if (!want.site || want.off) {
     ok(`${name}: no early voting cell to route to`, !pick.routable);
     ok(`${name}: not in the directions picker`, !pick.picker.includes('early'));
     ok(`${name}: no early voting site on the map`, pick.markers === 0);
-  } else if (want.site) {
+  } else {
     ok(`${name}: routable, in the picker and on the map`,
        pick.routable && pick.picker.includes('early') && pick.markers > 0);
   }
