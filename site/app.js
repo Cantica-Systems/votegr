@@ -1321,13 +1321,11 @@ function earlyVotingCard(r) {
       ? `<div class="pp-name">${esc(displayCase(ev.place.name))}</div>` +
         `<div class="pp-addr">${esc(addressForDisplay(ev.place.address))}</div>` +
         metaBlock([locLine(ev.place.entrance_note)]) +
-        (ev.all.length > 1
+        (ev.all.length > 1 && !evState.ended
           ? '<div class="pp-note">Early voting is not tied to your ' +
             'precinct. Any Grand Rapids voter may use any of these ' +
             `${ev.all.length} sites.</div>`
           : '')
-      : evState.off
-      ? `<div class="pp-addr">${esc(evState.offNote)}</div>`
       : '<div class="pp-addr">No site published yet.</div>') +
     (routable ? actionRow('early', ev.all.length > 1
           ? '<button type="button" class="box-open" id="evListBtn">' +
@@ -1560,9 +1558,10 @@ function earlyVotingForBlock(r) {
       return null;
     case 'closed':
       return { label: 'Early voting closed',
-               status: `Ended ${Elections.dayMonth(to)}`, site: false, off: true,
-               offNote: 'Early voting has ended. Its sites no longer take ballots, ' +
-                        'so they are not offered for directions.' };
+               status: `Ended ${Elections.dayMonth(to)}`, site: inGrandRapids(r), off: true,
+               ended: true,
+               note: 'Early voting has ended. Its sites no longer take ballots, ' +
+                     'so they are not offered for directions.' };
     case 'before':
       return { label: 'Early voting dates',
                status: `${Elections.dayMonth(w.early_voting_from)} to ${Elections.dayMonth(to)}`,

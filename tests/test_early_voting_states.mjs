@@ -106,11 +106,11 @@ const CASES = [
    { label: /early voting open/i, site: true, off: false }],
   ['closed',   base({ early_voting_from: iso(-10), early_voting_to: iso(-2),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting closed/i, site: false, off: true }],
+   { label: /early voting closed/i, site: true, off: true, note: /has ended/i }],
   ['last day, before its sites close', lastDay(30),
    { label: /early voting open/i, site: true, off: false }],
   ['last day, after its sites closed', lastDay(-1),
-   { label: /early voting closed/i, site: false, off: true }],
+   { label: /early voting closed/i, site: true, off: true, note: /has ended/i }],
   ['upcoming', base({ early_voting_from: iso(5), early_voting_to: iso(10),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
    { label: /early voting dates/i, site: true, off: true, note: /not opened yet/i }],
@@ -182,8 +182,7 @@ for (const [name, data, want] of CASES) {
              status: (cell.querySelector('.vi-val') || {}).textContent || null,
              site: !!document.querySelector('.vi-ev-site .pp-name'),
              note: (cell.querySelector('.pp-note') || {}).textContent || null,
-             whereNote: /not opened yet/i.test(
-               (document.querySelector('.vi-ev-site') || {}).textContent || '') };
+             where: (document.querySelector('.vi-ev-site') || {}).textContent || '' };
   });
 
   // Where a reader could pick early voting. The map's site markers land after
@@ -213,8 +212,8 @@ for (const [name, data, want] of CASES) {
   ok(`${name}: site ${want.site ? 'shown' : 'withheld'}`, got.site === want.site);
   ok(`${name}: ${want.off ? 'shown disabled' : 'not disabled'}`, pick.disabled === want.off);
   if (want.note) {
-    ok(`${name}: the not-open note sits with the dates`, want.note.test(got.note || ''));
-    ok(`${name}: and not in the site cell`, !got.whereNote);
+    ok(`${name}: the note sits with the dates`, want.note.test(got.note || ''));
+    ok(`${name}: and not in the site cell`, !want.note.test(got.where));
   }
   if (!want.site || want.off) {
     ok(`${name}: no early voting cell to route to`, !pick.routable);
