@@ -408,6 +408,8 @@ const clerkWindow = () => {
     early_voting_to: clerk.early_voting.to,
     early_voting_sites: clerk.early_voting_sites || [],
     early_voting_hours: null,
+    // The per-date hours, so windowState() can close the last day when its sites do.
+    early_voting_days: clerk.early_voting.days || [],
   };
 };
 

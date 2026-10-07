@@ -460,6 +460,12 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
               inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
 }
 
+/* A way of voting that has ended (early voting after its last day closes):
+   still said, since silence would read as no early voting at all, but greyed
+   out, and app.js gives it nothing to click. */
+.vi-grid .is-over { opacity: .55; }
+.vi-grid .is-over .vi-lbl { color: var(--dim); }
+
 /* Hover inside a selected cell must not paint over the ring's inner edge. */
 @media (hover: hover) {
   .vi-dest.is-dest .pp-place:hover { background: var(--tint-hover); }
@@ -524,6 +530,9 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   /* The card, not its .vi-when, whose background is cleared above. The open
      fold paints over the card, so it carries the mark too. */
   .vi-card .vi-when.is-now { background: none; box-shadow: none; }
+  /* On the card as a whole, not each half, or the fade would compound. */
+  .vi-card .is-over { opacity: 1; }
+  .vi-card.is-over { opacity: .55; }
   .vi-card.is-now { background: color-mix(in srgb, var(--good) 14%, var(--tint)); }
   .vi-card.is-now,
   .vi-card.is-now .vi-fold[open] {

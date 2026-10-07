@@ -336,6 +336,7 @@ function provenanceHtml(opt) {
 
 // On a phone, head is the shut card's summary and fold is what opening it reveals.
 // state.now: the way of voting in person that is happening today (nowKind), badged.
+// state.over: a way of voting that has ended, shown disabled.
 function whenCell(kind, state, extra) {
   const note = state.note ? `<div class="pp-note">${esc(state.note)}</div>` : '';
   let shown = extra || '';
@@ -344,13 +345,14 @@ function whenCell(kind, state, extra) {
   const fold = phone ? note + (kind === 'early' ? shown : '') : '';
   if (phone && kind === 'early') shown = '';
   const lbl = `<div class="vi-lbl${state.live ? ' live' : ''}">${esc(state.label)}</div>`;
-  const head = `<div class="vi-when vi-when-${kind}${state.now ? ' is-now' : ''}">` +
+  const head = `<div class="vi-when vi-when-${kind}${state.now ? ' is-now' : ''}` +
+    `${state.over ? ' is-over' : ''}">` +
     (state.now
       ? `<div class="vi-lbl-row">${lbl}<span class="vi-now">${esc(state.now)}</span></div>`
       : lbl) +
     `<div class="vi-val">${esc(state.status)}</div>` +
     `${shown}${phone ? '' : note}</div>`;
-  return { head, fold, now: !!state.now };
+  return { head, fold, now: !!state.now, over: !!state.over };
 }
 
 // 'none', 'upcoming', 'open' or 'closed'. Both ends are statute, not per box: ballots go
@@ -427,7 +429,8 @@ function section(kind, where, when, opts) {
   const head = when?.head || '', fold = when?.fold || '';
   if (!isPhone()) return where + head;
   if (!head) return `<div class="vi-card vi-card-${kind}">${where}</div>`;
-  return `<div class="vi-card vi-card-${kind}${when.now ? ' is-now' : ''}">` +
+  return `<div class="vi-card vi-card-${kind}${when.now ? ' is-now' : ''}` +
+    `${when.over ? ' is-over' : ''}">` +
     `<details class="vi-fold"${opts?.collapsed ? '' : ' open'}>` +
     `<summary>${head}</summary>` +
     `<div class="vi-fold-body">${fold}${where}</div>` +
@@ -1304,8 +1307,12 @@ function earlyVotingCard(r) {
   const ev = evState.site
     ? destinations(r).find((o) => o.kind === 'early')
     : null;
-  const label = placeLabel('early', 'Early voting site nearest to you');
-  const where = `<div class="vi-where vi-ev-site${ev ? customClass('early') : ''}"` +
+  const label = evState.over ? 'Early voting sites'
+                             : placeLabel('early', 'Early voting site nearest to you');
+  // Over: shown disabled, with no site and no data-kind, so nothing routes to it.
+  // destinations() leaves it out too, which keeps it off the picker and the map.
+  const where = `<div class="vi-where vi-ev-site${ev ? customClass('early') : ''}` +
+    `${evState.over ? ' is-over' : ''}"` +
     `${ev ? ' data-kind="early"' : ''}>` +
     `<div class="vi-lbl">${esc(label)}</div>` +
     (ev
@@ -1317,6 +1324,9 @@ function earlyVotingCard(r) {
             'precinct. Any Grand Rapids voter may use any of these ' +
             `${ev.all.length} sites.</div>`
           : '')
+      : evState.over
+      ? '<div class="pp-addr">Early voting has ended. Its sites no longer take ballots, ' +
+        'so they are not offered for directions.</div>'
       : '<div class="pp-addr">No site published yet.</div>') +
     (ev ? actionRow('early', ev.all.length > 1
           ? '<button type="button" class="box-open" id="evListBtn">' +
@@ -1324,10 +1334,11 @@ function earlyVotingCard(r) {
           : '') : '') +
     '</div>';
   return section('early', where,
-    whenCell('early', { label: evState.label, status: evState.status, live: true,
+    whenCell('early', { label: evState.label, status: evState.status,
+                        live: !evState.over, over: evState.over,
                         now: nowKind(r) === 'early' ? 'Open now' : null },
              ev ? evHoursHtml(activeEl) : ''),
-    { collapsed: !!ev && !/open/i.test(evState.label) });
+    { collapsed: evState.over || (!!ev && !/open/i.test(evState.label)) });
 }
 
 // multi: there are other destinations to choose between.
@@ -1526,6 +1537,7 @@ function evWindow(r) {
   if (clerkForThisElection(r)) {
     return { early_voting_from: clerk.early_voting.from,
              early_voting_to: clerk.early_voting.to,
+             early_voting_days: clerk.early_voting.days || [],
              early_voting_sites: clerk.sites };
   }
   return activeEl;
@@ -1547,7 +1559,7 @@ function earlyVotingForBlock(r) {
       return null;
     case 'closed':
       return { label: 'Early voting closed',
-               status: `Ended ${Elections.dayMonth(to)}`, site: false };
+               status: `Ended ${Elections.dayMonth(to)}`, site: false, over: true };
     case 'before':
       return { label: 'Early voting dates',
                status: `${Elections.dayMonth(w.early_voting_from)} to ${Elections.dayMonth(to)}`,
@@ -1907,6 +1919,9 @@ function renderAll(fit) {
 
   if (routes.here) {
     drawCameras({});
+    // The other destinations still belong on the map, and redrawing clears the last
+    // answer's: the drop box default lands here for any address beside one.
+    drawSites(current);
     renderDestPicker();
     $('routes').innerHTML =
       '<div class="here"><div class="here-h">You\u2019re already here</div>' +

@@ -14,6 +14,7 @@ import { chromium } from 'playwright';
 import { createServer } from 'http';
 import { readFile } from 'fs/promises';
 import { join, extname, normalize } from 'path';
+import { Elections } from '../site/voting.js';
 
 process.chdir(fileURLToPath(new URL('..', import.meta.url)));   // paths below are from the repo root
 const ROOT = join(process.cwd(), 'site');
@@ -48,19 +49,77 @@ const base = extra => ({
   elections: [Object.assign({ date: iso(30), name: 'Test Election' }, extra)],
 });
 
+// ---- the last day closes when its sites do ------------------------------
+// Not at midnight: at 6 PM on the last day the window is over, and a page
+// that still offered a site would route a voter to a locked door. Pinned
+// here with an explicit clock, in both shapes the hours arrive in: the
+// clerk's per-date list (gr-clerk.json, "9 am - 5 pm") and the weekday rules
+// in elections.json. 2026-11-01 is a Sunday.
+{
+  const at = (h, m) => new Date(2026, 10, 1, h, m);
+  const byDate = { early_voting_from: '2026-10-20', early_voting_to: '2026-11-01',
+                   early_voting_days: [{ date: '2026-10-31', hours: '7 am - 3 pm' },
+                                       { date: '2026-11-01', hours: '9 am - 5 pm' }] };
+  const byRule = { early_voting_from: '2026-10-20', early_voting_to: '2026-11-01',
+                   early_voting_hours: [{ days: ['Sat', 'Sun'], open: '9:00 AM', close: '5:00 PM' },
+                                        { days: ['Mon'], open: '11:00 AM', close: '7:00 PM' }] };
+  const bare = { early_voting_from: '2026-10-20', early_voting_to: '2026-11-01' };
+  const cases = [
+    ['per-date hours, a minute before close', byDate, '2026-11-01', at(16, 59), 'open'],
+    ['per-date hours, at close', byDate, '2026-11-01', at(17, 0), 'closed'],
+    ['per-date hours, the evening before', byDate, '2026-10-31', new Date(2026, 9, 31, 23, 0), 'open'],
+    ['weekday rules, a minute before close', byRule, '2026-11-01', at(16, 59), 'open'],
+    ['weekday rules, at close', byRule, '2026-11-01', at(17, 0), 'closed'],
+    ['no hours: open until the day ends', bare, '2026-11-01', at(23, 59), 'open'],
+    ['the day after, whatever the hours', bare, '2026-11-02', at(9, 0), 'closed'],
+  ];
+  for (const [what, e, today, now, want] of cases) {
+    const got = Elections.windowState(e, today, now);
+    console.log((got === want ? '  ok  ' : '  FAIL') + `  last day: ${what} (${got})`);
+    if (got !== want) process.exitCode = 1;
+  }
+}
+
+// A clock time the given minutes from now, in the clerk's "9 am - 5 pm" style,
+// or null when that would cross midnight and land on another day.
+const clerkTime = (mins) => {
+  const now = new Date(), t = new Date(now.getTime() + mins * 60000);
+  if (t.getDate() !== now.getDate()) return null;
+  const h = t.getHours() % 12 || 12;
+  return `${h}:${String(t.getMinutes()).padStart(2, '0')} ${t.getHours() < 12 ? 'am' : 'pm'}`;
+};
+const lastDay = (mins) => {
+  const close = clerkTime(mins);
+  return close && base({ early_voting_from: iso(-3), early_voting_to: iso(0),
+                         early_voting_sites: SITES,
+                         early_voting_days: [{ date: iso(0), hours: `12:00 am - ${close}` }] });
+};
+
+// over: the window has ended, so the row is shown disabled and early voting
+// is offered nowhere a reader could pick it: not as a routable cell, not in
+// the directions picker, not as a site on the map.
 const CASES = [
   ['open',     base({ early_voting_from: iso(-2), early_voting_to: iso(2),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting open/i, site: true }],
+   { label: /early voting open/i, site: true, over: false }],
   ['closed',   base({ early_voting_from: iso(-10), early_voting_to: iso(-2),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting closed/i, site: false }],
+   { label: /early voting closed/i, site: false, over: true }],
+  ['last day, before its sites close', lastDay(30),
+   { label: /early voting open/i, site: true, over: false }],
+  ['last day, after its sites closed', lastDay(-1),
+   { label: /early voting closed/i, site: false, over: true }],
   ['upcoming', base({ early_voting_from: iso(5), early_voting_to: iso(10),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting dates/i, site: false }],
+   { label: /early voting dates/i, site: false, over: false }],
   ['none',     base({ early_voting_sites: SITES }),
-   { label: null, site: false }],
-];
+   { label: null, site: false, over: false }],
+].filter(([name, data]) => {
+  // The two last-day cases need a close time on today's date; within a
+  // minute or half an hour of midnight there is none, so they sit out.
+  if (!data) console.log(`  skip  ${name}: too near midnight to place a close time today`);
+  return !!data;
+});
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.json': 'application/json',
@@ -122,7 +181,22 @@ for (const [name, data, want] of CASES) {
              site: !!document.querySelector('.vi-ev-site .pp-name') };
   });
 
-  console.log(`\n[${name}] label=${JSON.stringify(got.label)} status=${JSON.stringify(got.status)} site=${got.site} pollHours=${JSON.stringify(hours)}`);
+  // Where a reader could pick early voting. The map's site markers land after
+  // the route, so the count waits for the drop boxes, which are drawn in the
+  // same pass: without that, "no early voting site on the map" would pass on
+  // a map not drawn yet. The open cases are the control that early ones show.
+  await page.waitForFunction(() => document.querySelectorAll('#map .site-dropbox').length > 0,
+                             null, { timeout: 15000 }).catch(() => {});
+  const pick = await page.evaluate(() => ({
+    routable: !!document.querySelector('#precinctInfo [data-kind="early"]'),
+    picker: [...document.querySelectorAll('#destPick button')].map(b => b.dataset.kind),
+    markers: document.querySelectorAll('#map .site-dropbox').length
+      ? document.querySelectorAll('#map .site-early').length : null,
+    disabled: !!document.querySelector('#precinctInfo .vi-when-early.is-over') &&
+              !!document.querySelector('#precinctInfo .vi-ev-site.is-over'),
+  }));
+
+  console.log(`\n[${name}] label=${JSON.stringify(got.label)} status=${JSON.stringify(got.status)} site=${got.site} pollHours=${JSON.stringify(hours)} pick=${JSON.stringify(pick)}`);
   // Statewide and statutory, so it shows in every state including the ones
   // where no early voting group renders at all.
   // Pins the "Hours:" label as well as the value: the label is the point of
@@ -132,6 +206,15 @@ for (const [name, data, want] of CASES) {
   ok(`${name}: label`, want.label === null ? got.label === null
                                            : !!(got.label && want.label.test(got.label)));
   ok(`${name}: site ${want.site ? 'shown' : 'withheld'}`, got.site === want.site);
+  ok(`${name}: ${want.over ? 'shown disabled' : 'not disabled'}`, pick.disabled === want.over);
+  if (want.over) {
+    ok(`${name}: no early voting cell to route to`, !pick.routable);
+    ok(`${name}: not in the directions picker`, !pick.picker.includes('early'));
+    ok(`${name}: no early voting site on the map`, pick.markers === 0);
+  } else if (want.site) {
+    ok(`${name}: routable, in the picker and on the map`,
+       pick.routable && pick.picker.includes('early') && pick.markers > 0);
+  }
   await page.close();
 }
 // ---- which way of voting leads, and which is highlighted -----------------
@@ -258,5 +341,6 @@ for (const { name, data, order: wantOrder, routed: routedWant, now, badges } of 
 }
 
 await browser.close(); server.close();
+if (process.exitCode) fails++;
 console.log(`\n${fails === 0 ? 'all state checks passed' : fails + ' FAILED'}`);
 process.exit(fails ? 1 : 0);
