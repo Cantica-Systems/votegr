@@ -134,6 +134,30 @@ for (const [name, data, want] of CASES) {
   ok(`${name}: site ${want.site ? 'shown' : 'withheld'}`, got.site === want.site);
   await page.close();
 }
+// ---- the hours label on a phone card ------------------------------------
+// At 700px and under, whenCell() moves the hours into the card's fold body,
+// which has no padding of its own. The hours took the cells' 14px inset and
+// the "Hours:" label did not, so it sat flush against the card's left edge.
+// Both themes: the colours differ, the layout must not.
+current = CASES.find(([n]) => n === 'open')[1];
+for (const theme of ['dark', 'light']) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.addInitScript(t => localStorage.setItem('theme', t), theme);
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  await page.fill('#addr', '300 Monroe Ave NW');
+  await page.press('#addr', 'Enter');
+  await page.waitForSelector('#precinctInfo .vi-fold-body > .ev-hours-lbl', { timeout: 10000 });
+  const x = await page.evaluate(() => {
+    const body = document.querySelector('#precinctInfo .vi-fold-body > .ev-hours-lbl').parentElement;
+    const left = s => Math.round(body.querySelector(s).getBoundingClientRect().left);
+    return { card: Math.round(body.closest('.vi-card').getBoundingClientRect().left),
+             label: left('.ev-hours-lbl'), line: left('.ev-hours span') };
+  });
+  console.log(`\n[phone, ${theme}] card=${x.card} label=${x.label} hours=${x.line}`);
+  ok(`phone, ${theme}: "Hours:" lines up with the hours under it`, x.label === x.line);
+  ok(`phone, ${theme}: and is inset from the card's edge`, x.label > x.card);
+  await page.close();
+}
 // ---- election day itself ------------------------------------------------
 // On the day, the answer stops being a menu: early voting has closed and a
 // drop box is a race against the same 8pm the polls close at, so the polling
