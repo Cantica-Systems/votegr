@@ -612,13 +612,20 @@ for (const w of WIDTHS) {
   ok('election day is open', (cards.filter(c => c.kind === 'polling')[0] || {}).open === true);
   ok('and the old pair of links is gone', await page.evaluate(() =>
      !document.querySelector('.vi-more, .vi-place')));
-  // The early voting sites on the map, checked here rather than with the
-  // other marks in the width loop: this calendar has the window ahead, so
-  // they are drawn on any date the suite runs. Inside #map, because the
+  // The early voting sites stay off the map until the window opens: a site
+  // is a locked door until then, so it is offered nowhere a reader could pick
+  // it. Checked here rather than with the other marks in the width loop:
+  // this calendar has the window ahead on any date the suite runs. The drop
+  // boxes are waited for first, since they are drawn in the same pass, so an
+  // undrawn map cannot pass for an empty one. Inside #map, because the
   // legend's swatch carries the same class.
-  ok('the early voting sites are on the map', await page.waitForFunction(() =>
-     document.querySelectorAll('#map .site-early').length > 0, null, { timeout: 15000 })
-     .then(() => true, () => false));
+  await page.waitForFunction(() => document.querySelectorAll('#map .site-dropbox').length > 0,
+                             null, { timeout: 15000 }).catch(() => {});
+  ok('the early voting sites are not on the map before the window opens',
+     await page.evaluate(() => document.querySelectorAll('#map .site-dropbox').length > 0 &&
+                               document.querySelectorAll('#map .site-early').length === 0));
+  ok('and the early voting card is greyed out',
+     await page.evaluate(() => !!document.querySelector('.vi-card-early.is-off')));
   // Tapping the head opens that card and nothing else.
   await page.tap('.vi-card-dropbox summary');
   await page.waitForTimeout(250);

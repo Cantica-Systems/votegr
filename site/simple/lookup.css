@@ -249,3 +249,6 @@ a.dir-btn svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
   border-left: 4px solid var(--good);
   background: color-mix(in srgb, var(--good) 10%, var(--panel));
 }
+
+/* Early voting before its window opens: listed, greyed, and with no Directions. */
+.ev-block.is-off { opacity: .6; }

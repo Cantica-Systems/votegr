@@ -95,25 +95,27 @@ const lastDay = (mins) => {
                          early_voting_days: [{ date: iso(0), hours: `12:00 am - ${close}` }] });
 };
 
-// over: the window has ended, so the row is shown disabled and early voting
-// is offered nowhere a reader could pick it: not as a routable cell, not in
-// the directions picker, not as a site on the map.
+// off: the window has not opened or has ended, so the row is shown disabled.
+// Outside an open window early voting is offered nowhere a reader could pick
+// it: not as a routable cell, not in the directions picker, not as a site on
+// the map. Undated sites ('none') draw no row at all and are not offered
+// either, since nothing says when they take ballots.
 const CASES = [
   ['open',     base({ early_voting_from: iso(-2), early_voting_to: iso(2),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting open/i, site: true, over: false }],
+   { label: /early voting open/i, site: true, off: false }],
   ['closed',   base({ early_voting_from: iso(-10), early_voting_to: iso(-2),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting closed/i, site: false, over: true }],
+   { label: /early voting closed/i, site: false, off: true }],
   ['last day, before its sites close', lastDay(30),
-   { label: /early voting open/i, site: true, over: false }],
+   { label: /early voting open/i, site: true, off: false }],
   ['last day, after its sites closed', lastDay(-1),
-   { label: /early voting closed/i, site: false, over: true }],
+   { label: /early voting closed/i, site: false, off: true }],
   ['upcoming', base({ early_voting_from: iso(5), early_voting_to: iso(10),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting dates/i, site: false, over: false }],
+   { label: /early voting dates/i, site: false, off: true }],
   ['none',     base({ early_voting_sites: SITES }),
-   { label: null, site: false, over: false }],
+   { label: null, site: false, off: false }],
 ].filter(([name, data]) => {
   // The two last-day cases need a close time on today's date; within a
   // minute or half an hour of midnight there is none, so they sit out.
@@ -192,8 +194,8 @@ for (const [name, data, want] of CASES) {
     picker: [...document.querySelectorAll('#destPick button')].map(b => b.dataset.kind),
     markers: document.querySelectorAll('#map .site-dropbox').length
       ? document.querySelectorAll('#map .site-early').length : null,
-    disabled: !!document.querySelector('#precinctInfo .vi-when-early.is-over') &&
-              !!document.querySelector('#precinctInfo .vi-ev-site.is-over'),
+    disabled: !!document.querySelector('#precinctInfo .vi-when-early.is-off') &&
+              !!document.querySelector('#precinctInfo .vi-ev-site.is-off'),
   }));
 
   console.log(`\n[${name}] label=${JSON.stringify(got.label)} status=${JSON.stringify(got.status)} site=${got.site} pollHours=${JSON.stringify(hours)} pick=${JSON.stringify(pick)}`);
@@ -206,8 +208,8 @@ for (const [name, data, want] of CASES) {
   ok(`${name}: label`, want.label === null ? got.label === null
                                            : !!(got.label && want.label.test(got.label)));
   ok(`${name}: site ${want.site ? 'shown' : 'withheld'}`, got.site === want.site);
-  ok(`${name}: ${want.over ? 'shown disabled' : 'not disabled'}`, pick.disabled === want.over);
-  if (want.over) {
+  ok(`${name}: ${want.off ? 'shown disabled' : 'not disabled'}`, pick.disabled === want.off);
+  if (!want.site) {
     ok(`${name}: no early voting cell to route to`, !pick.routable);
     ok(`${name}: not in the directions picker`, !pick.picker.includes('early'));
     ok(`${name}: no early voting site on the map`, pick.markers === 0);
@@ -216,6 +218,26 @@ for (const [name, data, want] of CASES) {
        pick.routable && pick.picker.includes('early') && pick.markers > 0);
   }
   await page.close();
+
+  // /simple has no picker or map; its early block lists the sites. Before the
+  // window opens it lists them greyed and with no Directions link.
+  if (name === 'upcoming' || name === 'open') {
+    const simple = await browser.newPage();
+    await simple.goto(URL_.replace('/index.html', '/simple/index.html'), { waitUntil: 'networkidle' });
+    await simple.fill('#addr', '300 Monroe Ave NW');
+    await simple.press('#addr', 'Enter');
+    await simple.waitForSelector('#result .card', { timeout: 10000 });
+    const ev = await simple.evaluate(() => {
+      const b = document.querySelector('#result .ev-early');
+      return b && { off: b.classList.contains('is-off'),
+                    sites: b.querySelectorAll('.ev-site').length,
+                    links: b.querySelectorAll('.ev-site a').length };
+    });
+    await simple.close();
+    const greyed = name === 'upcoming';
+    ok(`${name}: /simple lists the sites${greyed ? ', greyed, with no Directions' : ' with Directions'}`,
+       !!ev && ev.sites > 0 && ev.off === greyed && (greyed ? ev.links === 0 : ev.links > 0));
+  }
 }
 // ---- which way of voting leads, and which is highlighted -----------------
 // Two separate questions, each a function of the date, so each case pins both.
