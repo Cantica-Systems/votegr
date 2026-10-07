@@ -239,11 +239,6 @@ for (const [name, data, want] of CASES) {
        !!ev && ev.sites > 0 && ev.off === greyed && (greyed ? ev.links === 0 : ev.links > 0));
   }
 }
-// ---- the hours label on a phone card ------------------------------------
-// At 700px and under, whenCell() moves the hours into the card's fold body,
-// which has no padding of its own. The hours took the cells' 14px inset and
-// the "Hours:" label did not, so it sat flush against the card's left edge.
-// Both themes: the colours differ, the layout must not.
 current = CASES.find(([n]) => n === 'open')[1];
 for (const theme of ['dark', 'light']) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
