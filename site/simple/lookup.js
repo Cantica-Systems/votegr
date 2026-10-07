@@ -110,7 +110,8 @@ const mapLink = (place) => {
   return link;
 };
 
-function locationRow(place, extraClass) {
+// noLink: a place not taking voters yet, listed without a Directions link.
+function locationRow(place, extraClass, noLink) {
   const row = el('div', extraClass ? `loc ${extraClass}` : 'loc',
     el('div', 'loc-text',
       el('div', 'place', cased(place.name)),
@@ -118,7 +119,7 @@ function locationRow(place, extraClass) {
       place.entrance_note
         ? el('div', 'note', el('span', 'note-l', 'Location: '), sentence(place.entrance_note))
         : null));
-  if (place.address || (place.lat != null && place.lng != null)) {
+  if (!noLink && (place.address || (place.lat != null && place.lng != null))) {
     row.append(mapLink(place));
   }
   return row;
@@ -133,7 +134,9 @@ function pollingPlace(found) {
   }
   const parts = [
     // No date: the banner gives it, and two dates on one screen read as two facts.
-    el('div', 'lead-2', 'Your voting day location'),
+    // Badged on election day and no other, as app.js highlights it (nowKind).
+    el('div', 'lead-2', 'Your voting day location',
+       isElectionDay() ? nowBadge('Today') : null),
     locationRow(place),
   ];
   if (place.consolidated_with) {
@@ -146,6 +149,9 @@ function pollingPlace(found) {
 }
 
 const isElectionDay = () => !!election && Elections.todayISO() === election.date;
+
+// The way of voting in person that is happening today, as app.js marks it.
+const nowBadge = (text) => el('span', 'now-badge', text);
 
 function render(found, text) {
   typed = { text, where: found.jurisdiction };
@@ -403,6 +409,8 @@ const clerkWindow = () => {
     early_voting_to: clerk.early_voting.to,
     early_voting_sites: clerk.early_voting_sites || [],
     early_voting_hours: null,
+    // The per-date hours, so windowState() can close the last day when its sites do.
+    early_voting_days: clerk.early_voting.days || [],
   };
 };
 
@@ -426,7 +434,8 @@ function earlyVoting(found, uncertain) {
       'Vote early and verify there. All early voting locations have your information.'));
   }
 
-  parts.push(el('div', 'lead-2 sec-head', 'Vote early'));
+  parts.push(el('div', 'lead-2 sec-head', 'Vote early',
+                open && !isElectionDay() ? nowBadge('Open now') : null));
   parts.push(open
     ? el('div', 'sec-sub', 'Through ', el('strong', 'when', Elections.withWeekday(to)))
     : el('div', 'sec-sub', el('strong', 'when', Elections.withWeekday(from)),
@@ -434,7 +443,13 @@ function earlyVoting(found, uncertain) {
   parts.push(el('div', 'ev-note',
     'Any Grand Rapids voter may use any of these, whatever precinct they are in.'));
 
-  for (const site of sites) parts.push(locationRow(site, 'ev-site'));
+  // Before the window opens the sites are listed so a voter can plan, but greyed and
+  // with no Directions link, as app.js keeps them off its picker and map.
+  if (!open) {
+    parts.push(el('div', 'ev-note',
+      `Early voting has not opened yet. Directions are offered from ${Elections.withWeekday(from)}.`));
+  }
+  for (const site of sites) parts.push(locationRow(site, 'ev-site', !open));
 
   if ((hours || []).length) {
     const todayAbbr = open ? Elections.todayAbbr() : null;
@@ -449,7 +464,8 @@ function earlyVoting(found, uncertain) {
     parts.push(table);
   }
 
-  return [el('div', 'ev-block ev-early', ...parts)];
+  return [el('div', `ev-block ev-early${open && !isElectionDay() ? ' is-now' : ''}` +
+                    `${open ? '' : ' is-off'}`, ...parts)];
 }
 
 // The city clerk writes "24/7"; the county and the state write "24 hours a day, 7 days a week".

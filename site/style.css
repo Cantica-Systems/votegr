@@ -445,6 +445,27 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .vi-where.is-custom { outline: 2px dashed var(--warn); outline-offset: 3px; }
 .vi-where.is-custom .vi-lbl { color: var(--warn); }
 
+/* The way of voting in person that is happening today (nowKind in app.js):
+   green, so it never reads as the accent ring of the routed pick, which the
+   drop box usually holds at the same time. */
+.vi-lbl-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; }
+.vi-now {
+  font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  line-height: 1.5; padding: 0 .55em; border-radius: 999px;
+  background: var(--good); color: var(--bg);
+}
+.vi-grid .vi-when.is-now {
+  background: color-mix(in srgb, var(--good) 14%, var(--tint));
+  box-shadow: inset 4px 0 0 var(--good),
+              inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
+}
+
+/* A way of voting not open yet or over (early voting outside its window):
+   still said, since silence would read as no early voting at all, but greyed
+   out, and app.js gives it nothing to click. */
+.vi-grid .is-off { opacity: .55; }
+.vi-grid .is-off .vi-lbl { color: var(--dim); }
+
 /* Hover inside a selected cell must not paint over the ring's inner edge. */
 @media (hover: hover) {
   .vi-dest.is-dest .pp-place:hover { background: var(--tint-hover); }
@@ -506,6 +527,21 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
     box-shadow: inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
   }
   .vi-fold > summary:active { background: color-mix(in srgb, var(--fg) 9%, transparent); }
+  /* The card, not its .vi-when, whose background is cleared above. The open
+     fold paints over the card, so it carries the mark too. */
+  .vi-card .vi-when.is-now { background: none; box-shadow: none; }
+  /* On the card as a whole, not each half, or the fade would compound. */
+  .vi-card .is-off { opacity: 1; }
+  .vi-card.is-off { opacity: .55; }
+  .vi-card.is-now { background: color-mix(in srgb, var(--good) 14%, var(--tint)); }
+  .vi-card.is-now,
+  .vi-card.is-now .vi-fold[open] {
+    box-shadow: inset 4px 0 0 var(--good),
+                inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
+  }
+  .vi-card.is-now .vi-fold[open] {
+    background: color-mix(in srgb, var(--good) 14%, var(--tint-hover));
+  }
   .vi-fold[open] > summary { border-bottom: 1px solid var(--line); }
   .vi-fold-body > .pp-note, .vi-fold-body > .ev-hours { margin: 0 14px 12px; }
   .vi-fold-body > .pp-note { padding-top: 10px; border-top: 1px solid var(--line); }
