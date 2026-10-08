@@ -279,8 +279,13 @@ function wirePlaceLists(r) {
   };
 }
 
+// Nearest first (destinations() ranks them), the one routed to marked.
 function placeListHtml(kind, opt) {
-  let html = '<ul class="box-list">';
+  const opens = evOpensOn(opt, current);
+  let html = opens
+    ? `<p class="bx-lead">Not open yet: these sites take ballots from ${esc(opens)}.</p>`
+    : '';
+  html += '<ul class="box-list">';
   opt.all.forEach((b, i) => {
     const picked = i === chosen[kind] ? ' class="is-chosen"' : '';
     const dist = b.metres != null ? `<span class="bx-dist">${fmtMi(b.metres)}</span>` : '';
@@ -1304,13 +1309,12 @@ function earlyVotingCard(r) {
   const evState = earlyVotingForBlock(r);
   if (!evState) return '';
   // ev may be empty though a window is published: destinations() needs coords and an origin.
-  const ranked = evState.site && evState.off ? evRanked(r) : null;
-  const ev = !evState.site ? null
-    : evState.off ? ranked && { place: ranked[0], all: ranked }
-    : destinations(r).find((o) => o.kind === 'early');
-  // Off (not open yet, or over): shown disabled with no data-kind, so nothing routes to
-  // it. destinations() leaves it out too: no picker, no map.
-  const routable = !!ev && !evState.off;
+  const dest = destinations(r).find((o) => o.kind === 'early');
+  const ranked = evState.site && !dest ? evRanked(r) : null;
+  const ev = !evState.site ? null : dest || (ranked && { place: ranked[0], all: ranked });
+  // Over: shown disabled with no data-kind, so nothing routes to it. destinations()
+  // leaves it out too: no picker, no map.
+  const routable = !!dest;
   const label = routable ? placeLabel('early', 'Early voting site nearest to you')
               : ev ? 'Early voting site nearest to you' : 'Early voting sites';
   const where = `<div class="vi-where vi-ev-site${routable ? customClass('early') : ''}` +
@@ -1329,7 +1333,7 @@ function earlyVotingCard(r) {
       : '<div class="pp-addr">No site published yet.</div>') +
     (routable ? actionRow('early', ev.all.length > 1
           ? '<button type="button" class="box-open" id="evListBtn">' +
-            'Show all voting sites</button>'
+            'Show all locations</button>'
           : '') : '') +
     '</div>';
   return section('early', where,
@@ -1562,12 +1566,15 @@ function earlyVotingForBlock(r) {
                ended: true,
                note: 'Early voting has ended. Its sites no longer take ballots, ' +
                      'so they are not offered for directions.' };
+    // Not off: a reader may plan the trip ahead (destinations()), so every mention of a
+    // site before its first day says when that day is.
     case 'before':
       return { label: 'Early voting dates',
                status: `${Elections.dayMonth(w.early_voting_from)} to ${Elections.dayMonth(to)}`,
-               site: inGrandRapids(r), off: true,
-               note: 'Early voting has not opened yet. Its sites are offered for ' +
-                     `directions from ${Elections.dayMonth(w.early_voting_from)}.` };
+               site: inGrandRapids(r),
+               note: 'Early voting has not opened yet. Its sites take ballots from ' +
+                     `${Elections.dayMonth(w.early_voting_from)}, and you can plan ` +
+                     'directions to any of them now.' };
     default:
       return { label: 'Early voting open',
                status: `Through ${Elections.dayMonth(to)}`,
@@ -1751,9 +1758,17 @@ function normaliseHours(b) {
 }
 
 function destSub(pick, r) {
-  return pick.kind === 'early' ? 'Early voting site'
+  const opens = evOpensOn(pick, r);
+  return pick.kind === 'early' ? `Early voting site${opens ? `, opens ${opens}` : ''}`
        : pick.kind === 'dropbox' ? 'Absentee ballot drop box'
        : `Precinct ${r.precinct}`;
+}
+
+// 'Tuesday, October 20' for an early voting pick whose window has not opened, else null.
+function evOpensOn(pick, r) {
+  if (pick?.kind !== 'early' || pick.state !== 'before') return null;
+  const from = evWindow(r)?.early_voting_from;
+  return from ? Elections.dayMonth(from) : null;
 }
 
 // Grand Rapids sites only: offering them elsewhere would send voters to the wrong clerk.
@@ -1770,9 +1785,10 @@ function destinations(r) {
 
   const evState = Elections.windowState(evWindow(r));
   const ranked = evRanked(r);
-  // Only while open: before or after, a site is a locked door. Undated sites ('none')
-  // are no better, since nothing says when they take ballots.
-  if (ranked && evState === 'open') {
+  // Open, or not open yet, so a trip can be planned ahead; the ranking below never makes
+  // a site that has not opened the default. Never once closed, and never undated
+  // ('none'), since nothing says when those take ballots.
+  if (ranked && (evState === 'open' || evState === 'before')) {
     out.push({ kind: 'early', label: 'Early voting',
                place: ranked[chosen.early] || ranked[0],
                all: ranked, state: evState });

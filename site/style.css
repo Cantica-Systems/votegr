@@ -624,6 +624,11 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .box-list li.is-chosen .bx-name { color: var(--accent); }
 
 .box-list li.bx-noroute { opacity: .72; cursor: default; }
+/* Above an early voting list whose window has not opened: the day it does. */
+.bx-lead {
+  margin: 0 0 10px; padding: 0 12px; font-size: .87rem; font-weight: 600;
+  color: var(--warn);
+}
 
 .advisory {
   font-size: .87rem; color: var(--warn); line-height: 1.5; margin-top: 12px;

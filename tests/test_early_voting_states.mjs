@@ -95,11 +95,14 @@ const lastDay = (mins) => {
                          early_voting_days: [{ date: iso(0), hours: `12:00 am - ${close}` }] });
 };
 
-// off: the window has not opened or has ended, so the row is shown disabled.
-// Outside an open window early voting is offered nowhere a reader could pick
-// it: not as a routable cell, not in the directions picker, not as a site on
-// the map. Undated sites ('none') draw no row at all and are not offered
-// either, since nothing says when they take ballots.
+// off: the window has ended, so the row is shown disabled, and early voting
+// is offered nowhere a reader could pick it: not as a routable cell, not in
+// the directions picker, not as a site on the map. Undated sites ('none')
+// draw no row at all and are not offered either, since nothing says when
+// they take ballots. Before the window opens the sites ARE offered, so a
+// trip can be planned ahead, with the opening day said wherever one is
+// picked (upcoming: below); the ORDER_CASES further down check that one is
+// never the default destination.
 const CASES = [
   ['open',     base({ early_voting_from: iso(-2), early_voting_to: iso(2),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
@@ -113,7 +116,8 @@ const CASES = [
    { label: /early voting closed/i, site: true, off: true, note: /has ended/i }],
   ['upcoming', base({ early_voting_from: iso(5), early_voting_to: iso(10),
                       early_voting_sites: SITES, early_voting_hours: HOURS }),
-   { label: /early voting dates/i, site: true, off: true, note: /not opened yet/i }],
+   { label: /early voting dates/i, site: true, off: false, note: /not opened yet/i,
+     upcoming: true }],
   ['none',     base({ early_voting_sites: SITES }),
    { label: null, site: false, off: false }],
 ].filter(([name, data]) => {
@@ -222,6 +226,40 @@ for (const [name, data, want] of CASES) {
   } else {
     ok(`${name}: routable, in the picker and on the map`,
        pick.routable && pick.picker.includes('early') && pick.markers > 0);
+
+    // "Show all locations" lists every site, nearest first, with the nearest
+    // already chosen; picking another routes there. Before the window the
+    // list says the day it opens, and an open window's list does not.
+    // Looked up rather than clicked blind, so a missing button is a FAIL
+    // line and not a timeout that stops the suite.
+    const btn = await page.$('#evListBtn');
+    ok(`${name}: a "Show all locations" button`,
+       !!btn && (await btn.textContent()).trim() === 'Show all locations');
+    if (!btn) { await page.close(); continue; }
+    await btn.click();
+    const list = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('#placeModalBody li[data-pick]')];
+      const mi = (li) => parseFloat(li.querySelector('.bx-dist')?.textContent);
+      return { n: rows.length, dists: rows.map(mi),
+               chosen: rows.findIndex((li) => li.classList.contains('is-chosen')),
+               second: rows[1]?.querySelector('.bx-name')?.firstChild?.textContent || null,
+               lead: (document.querySelector('#placeModalBody .bx-lead') || {}).textContent || '' };
+    });
+    ok(`${name}: "Show all locations" lists every site`, list.n === SITES.length);
+    ok(`${name}: nearest first`,
+       list.dists.every((d, i) => i === 0 || d >= list.dists[i - 1]));
+    ok(`${name}: with the nearest already chosen`, list.chosen === 0);
+    ok(`${name}: ${want.upcoming ? 'and says the day it opens' : 'with no "not open yet" line'}`,
+       want.upcoming ? /not open yet/i.test(list.lead) && /\d/.test(list.lead) : !list.lead);
+    await page.click('#placeModalBody li[data-pick="1"]');
+    await page.waitForFunction(() => document.getElementById('placeModal').hidden, null,
+                               { timeout: 5000 }).catch(() => {});
+    const after = await page.evaluate(() => ({
+      name: (document.querySelector('.vi-ev-site .pp-name') || {}).textContent || null,
+      on: (document.querySelector('#destPick button.on') || {}).dataset?.kind || null,
+    }));
+    ok(`${name}: picking another site routes there`,
+       after.on === 'early' && !!list.second && after.name === list.second);
   }
   await page.close();
 
@@ -296,11 +334,13 @@ const ORDER_CASES = [
   { name: 'a month out',
     data: base({ date: iso(30), early_voting_from: iso(5), early_voting_to: iso(10),
                  early_voting_sites: SITES, early_voting_hours: HOURS }),
-    order: ['dropbox', 'polling'], routed: /^drop box$/i, now: [], badges: [] },
+    order: ['dropbox', 'early', 'polling'], routed: /^drop box$/i, now: [], badges: [] },
+  // Early voting is offered ahead of its window, and is still not where the
+  // directions point: the polls lead the picker until ballots go out.
   { name: 'before ballots go out',
     data: base({ date: iso(60), early_voting_from: iso(45), early_voting_to: iso(50),
                  early_voting_sites: SITES, early_voting_hours: HOURS }),
-    order: ['dropbox', 'polling'], routed: /^election day$/i, now: [], badges: [] },
+    order: ['dropbox', 'early', 'polling'], routed: /^election day$/i, now: [], badges: [] },
 ];
 
 // The kinds whose dates are highlighted, by the row's own class name.
