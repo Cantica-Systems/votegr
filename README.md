@@ -26,7 +26,8 @@ state's Voter Information Center asks for your name, birth month and year and
 ZIP code, runs the lookup on its servers, and notes that "information such as
 a name or address may be disclosed in response to a FOIA request." Your voter
 record is already public, but asking could create a second record, that you
-looked yourself up from this address on this day. This site is a proof of
+looked yourself up from this address on this day, and whether that one is
+disclosable is a separate question. This site is a proof of
 concept that the lookup can happen entirely on your device, leaving no query
 log that could identify you.
 
@@ -112,9 +113,8 @@ This tool is an estimate, and these are the ways it is wrong.
 - An absentee ballot goes only to your own clerk (MCL 168.764a), so the page
   never sends you to a neighbor's drop box, and names your clerk's office where
   it has no box to show.
-- Early voting is shown for Grand Rapids addresses only, since the City Clerk
-  is the one source publishing current sites and dates. Elsewhere, ask your
-  clerk.
+- Early voting is shown for Grand Rapids addresses only, where the City Clerk
+  publishes current sites and dates. Elsewhere, ask your clerk.
 - The map draws water, parks and rail only around Grand Rapids.
 
 ## Privacy
@@ -137,6 +137,7 @@ over from the earlier vote-gr project.
 The data is public record of Kent County, the City of Grand Rapids and the
 State of Michigan, and is not ours to license; every file says where it came
 from. Camera locations, turn restrictions, water, parks and rail come from
-OpenStreetMap under the ODbL, which BUILD.md covers. Much of the camera mapping
+OpenStreetMap under the ODbL, so the graph chunks, `graph.json`, `cameras.json`
+and `landcover.json` keep its attribution and share alike. Much of the camera mapping
 is the work of the [DeFlock](https://deflock.org/) community, where you can
 contribute to the plate reader database.
