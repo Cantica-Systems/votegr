@@ -95,7 +95,6 @@ for (const w of WIDTHS) {
   console.log('\n' + w + 'px');
   const ctx = await browser.newContext({ viewport: { width: w, height: 900 } });
   const page = await ctx.newPage();
-  // The favicon 404 is the page not having one; everything else is a bug.
   const errors = [];
   // Every URL the page asks for, so the claim the About sheet now makes in
   // absolute terms can be checked rather than trusted. A Cache/OSM toggle used
@@ -104,7 +103,7 @@ for (const w of WIDTHS) {
   const offsite = [];
   page.on('request', r => { if (new URL(r.url()).origin !== ORIGIN) offsite.push(r.method() + ' ' + r.url()); });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  page.on('response', r => { if (r.status() >= 400 && !/favicon\.ico$/.test(r.url())) errors.push(r.status() + ' ' + r.url()); });
+  page.on('response', r => { if (r.status() >= 400) errors.push(r.status() + ' ' + r.url()); });
   await page.goto(URL_, { waitUntil: 'networkidle' });
 
   // --- masthead and footer geometry ---
@@ -2088,6 +2087,53 @@ served = null;
     document.getElementById('countdown').hidden));
   served = null;
   await ctx.close();
+}
+
+// --- what search engines read ---
+// None of it shows on the page, so nothing above would notice it break.
+// Every other spelling of the address (http, www, the old hosts) redirects
+// to the canonical one, and everything here has to name that one.
+{
+  const CANONICAL = 'https://votegr.org/';
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  const head = await page.evaluate(() => {
+    const attr = (sel, a) => document.querySelector(sel)?.getAttribute(a) ?? null;
+    let ld = null;
+    try { ld = JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent); } catch {}
+    return {
+      title: document.title,
+      description: attr('meta[name="description"]', 'content'),
+      robots: attr('meta[name="robots"]', 'content'),
+      canonical: attr('link[rel="canonical"]', 'href'),
+      icon: attr('link[rel="icon"]', 'href'),
+      ogUrl: attr('meta[property="og:url"]', 'content'),
+      ogTitle: attr('meta[property="og:title"]', 'content'),
+      ogDescription: attr('meta[property="og:description"]', 'content'),
+      ogSiteName: attr('meta[property="og:site_name"]', 'content'),
+      ld,
+    };
+  });
+  ok('the canonical address is the live one', head.canonical === CANONICAL);
+  ok('og:url agrees with it', head.ogUrl === CANONICAL);
+  ok('the sharing title and description are the search ones',
+     head.ogTitle === head.title && head.ogDescription === head.description);
+  ok('the structured data parses and names the same site',
+     head.ld?.['@type'] === 'WebSite' && head.ld.url === CANONICAL && head.ld.name === head.ogSiteName);
+  ok('the page does not ask to be left out of search', head.robots === null);
+  const icon = head.icon ? await page.request.get(new URL(head.icon, URL_).href) : null;
+  ok('the favicon it declares is served', !!icon && icon.ok() && /svg/.test(icon.headers()['content-type']));
+  await ctx.close();
+
+  // /simple stays out of search by its own noindex, which a crawler only
+  // reads if robots.txt lets it fetch the page, so nothing is disallowed.
+  const robots = await readFile(join(ROOT, 'robots.txt'), 'utf8');
+  ok('robots.txt names the sitemap', robots.includes('Sitemap: ' + CANONICAL + 'sitemap.xml'));
+  ok('robots.txt keeps nothing from crawlers', !/^Disallow:\s*\S/m.test(robots));
+  const locs = [...(await readFile(join(ROOT, 'sitemap.xml'), 'utf8')).matchAll(/<loc>([^<]*)<\/loc>/g)]
+    .map(m => m[1]);
+  ok('the sitemap lists the home page and nothing unlisted', locs.length === 1 && locs[0] === CANONICAL);
 }
 
 await browser.close();
