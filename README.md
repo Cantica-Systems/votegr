@@ -40,7 +40,10 @@ passes the fewest.
 
 ## Layout
 
-There is no build step. Copy `site/` to any web host and it works.
+There is no build step. Copy `site/` to any web host and it works. A copy
+served from another address should put its own address in place of
+`https://votegr.org/` in the head of `index.html`, in `robots.txt` and in
+`sitemap.xml`, or search engines will treat it as a duplicate of this one.
 
 - `site/` holds the page (`index.html`, `app.js`, `style.css`), the shared
   lookup in `voting.js`, the canvas map in `map.js`, routing and geocoding in
