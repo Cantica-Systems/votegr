@@ -140,12 +140,12 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=
 const CLERK = { ...JSON.parse(await readFile(join(ROOT, 'data/gr-clerk.json'), 'utf8')),
                 election: null };
 
-let current = null;
+let current = null, clerkFile = CLERK;
 const server = createServer(async (req, res) => {
   const rel = normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
   if (rel === '/data/elections.json' || rel === '/data/gr-clerk.json') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(rel === '/data/gr-clerk.json' ? CLERK : current)); return;
+    res.end(JSON.stringify(rel === '/data/gr-clerk.json' ? clerkFile : current)); return;
   }
   const file = join(ROOT, rel === '/' ? 'index.html' : rel);
   if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
@@ -302,6 +302,68 @@ for (const theme of ['dark', 'light']) {
   ok(`phone, ${theme}: and is inset from the card's edge`, x.label > x.card);
   await page.close();
 }
+// ---- the clerk's own hours, date by date ---------------------------------
+// Grand Rapids lists every date with its hours, and they are not a weekly
+// pattern: in November 2026 one Saturday runs 9 to 5 and the next 7 to 3.
+// Served naming the fixture election, so both pages take the window from it.
+// Today keeps hours of its own, and tomorrow's weekday differs from the same
+// weekday six days ago, so the rows must fold the steady weekdays and list
+// that one by date. Expected labels are built here, not by voting.js.
+{
+  const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const day = (d) => { const x = new Date(); x.setDate(x.getDate() + d); return x; };
+  const dated = (d) => `${WD[day(d).getDay()]}, ${MON[day(d).getMonth()]} ${day(d).getDate()}`;
+  const days = [];
+  for (let d = -6; d <= 6; d++) {
+    days.push({ date: iso(d),
+                hours: d === 0 ? '7 am - 3 pm' : d === 1 ? '11 am - 7 pm' : '9 am - 5 pm' });
+  }
+  current = base({});
+  clerkFile = { ...CLERK, election: iso(30),
+                early_voting: { from: iso(-6), to: iso(6), days } };
+  const want = { rows: 4, today: `${WD[day(0).getDay()]} (today)`, todayHours: '7 AM to 3 PM',
+                 split: [[dated(-6), '9 AM to 5 PM'], [dated(1), '11 AM to 7 PM']] };
+  // [label, hours, marked today] per row, read in the page.
+  const read = (cells) => {
+    const spans = [...document.querySelectorAll(cells)];
+    const rows = [];
+    for (let i = 0; i + 1 < spans.length; i += 2) {
+      rows.push([spans[i].textContent.trim(), spans[i + 1].textContent.trim(),
+                 spans[i].classList.contains('is-today')]);
+    }
+    return rows;
+  };
+  const check = (where, rows) => {
+    console.log(`\n[clerk hours, ${where}] ${JSON.stringify(rows)}`);
+    ok(`clerk hours, ${where}: one row per steady weekday set, the split weekday by date`,
+       rows.length === want.rows);
+    const marked = rows.filter((r) => r[2]);
+    ok(`clerk hours, ${where}: today marked, with its own hours`,
+       marked.length === 1 && marked[0][0] === want.today && marked[0][1] === want.todayHours);
+    ok(`clerk hours, ${where}: a weekday whose hours change is listed by date`,
+       want.split.every(([label, hours]) => rows.some((r) => r[0] === label && r[1] === hours)));
+  };
+
+  const page = await browser.newPage();
+  await page.goto(URL_, { waitUntil: 'networkidle' });
+  await page.fill('#addr', '300 Monroe Ave NW');
+  await page.press('#addr', 'Enter');
+  await page.waitForSelector('#precinctInfo .vi-when-early .ev-hours', { timeout: 10000 })
+    .catch(() => {});
+  check('main page', await page.evaluate(read, '#precinctInfo .ev-hours span'));
+  await page.close();
+
+  const simple = await browser.newPage();
+  await simple.goto(URL_.replace('/index.html', '/simple/index.html'), { waitUntil: 'networkidle' });
+  await simple.fill('#addr', '300 Monroe Ave NW');
+  await simple.press('#addr', 'Enter');
+  await simple.waitForSelector('#result .ev-early .ev-hours', { timeout: 10000 }).catch(() => {});
+  check('/simple', await simple.evaluate(read, '#result .ev-early .ev-hours span'));
+  await simple.close();
+  clerkFile = CLERK;
+}
+
 // ---- which way of voting leads, and which is highlighted -----------------
 // Two separate questions, each a function of the date, so each case pins both.
 //

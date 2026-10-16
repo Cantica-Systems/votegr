@@ -1340,7 +1340,7 @@ function earlyVotingCard(r) {
     whenCell('early', { label: evState.label, status: evState.status, note: evState.note,
                         live: !evState.off, off: evState.off,
                         now: nowKind(r) === 'early' ? 'Open now' : null },
-             routable ? evHoursHtml(activeEl) : ''),
+             routable ? evHoursHtml(evWindow(r)) : ''),
     { collapsed: evState.off || (!!ev && !/open/i.test(evState.label)) });
 }
 
@@ -1517,18 +1517,15 @@ function show(r, focusKind, landOn) {
 // arithmetic is Elections in voting.js, shared with /simple; only the wording is here.
 
 // Same shape as /simple's hours, so the two pages read alike.
-function evHoursHtml(e) {
-  const rules = e?.early_voting_hours || [];
-  if (!rules.length) return '';
-  const today = Elections.todayAbbr();
+function evHoursHtml(w) {
+  const rows = Elections.hoursRows(w, Elections.todayISO());
+  if (!rows.length) return '';
   let out = '<div class="vi-hours-lbl ev-hours-lbl">Hours:</div>' +
             '<div class="ev-hours">';
-  for (const rule of rules) {
-    const days = rule.days || [];
-    const mark = days.includes(today) ? ' class="is-today"' : '';
-    out += `<span${mark}>${esc(days.join(', '))}${mark ? ' (today)' : ''}</span>` +
-           `<span${mark}>${esc(Elections.shortTime(rule.open))} to ` +
-           `${esc(Elections.shortTime(rule.close))}</span>`;
+  for (const row of rows) {
+    const mark = row.today ? ' class="is-today"' : '';
+    out += `<span${mark}>${esc(row.label)}${mark ? ' (today)' : ''}</span>` +
+           `<span${mark}>${esc(row.hours)}</span>`;
   }
   return `${out}</div>`;
 }
