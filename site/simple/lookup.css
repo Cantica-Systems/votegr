@@ -128,6 +128,7 @@ li[role=option][aria-selected=true] { background: var(--line); }
 }
 .wp-label { font-size: .85rem; color: var(--dim); }
 .wp-value { margin-right: .6rem; font-size: 1.15rem; font-weight: 600; line-height: 1.3; }
+.clerk-line { margin-top: .4rem; font-size: .85rem; color: var(--dim); }
 
 .lead-2 { margin-top: 1.2rem; }
 .place { font-size: 1.15rem; font-weight: 700; color: var(--fg); }

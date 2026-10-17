@@ -17,6 +17,7 @@ let pinArmed = false;
 let ac = null;      // the suggestion list (attachSuggestions, below)
 let clerk = null;   // gr-clerk.json: early voting, drop boxes, and registering in person
 let sources = {};   // sources.json: every upstream this site reads, by id
+let clerkPages = {};   // clerks.json: each jurisdiction's clerk page, by MCD
 // Which place in each kind's list the reader picked; reset on every new lookup.
 let chosen = { dropbox: 0, early: 0 };
 let routes = null, selected = 'avoid';
@@ -853,11 +854,12 @@ function loadData() {
     loadJson('cameras'), loadCountyIndex(),
     calendarP, loadJson('landcover', true),
     loadJson('neighbors', true),
-    loadJson('gr-clerk', true), loadJson('sources', true)
+    loadJson('gr-clerk', true), loadJson('sources', true), loadJson('clerks', true)
   ]).then((res) => {
     const cameraData = res[1], county = res[2], landcover = res[4];
     const neighborData = res[5], clerkData = res[6];
     const sourceData = res[7];
+    clerkPages = res[8]?.clerks || {};
 
     graph = res[0];
     P = county.P;
@@ -1126,6 +1128,17 @@ function choose(item) {
   // Blur first, so show() fits the map to the viewport without the phone keyboard.
   input.blur();
   show(r);
+}
+
+// The voter's own clerk's page, read by hand from each clerk's site (clerks.json): the
+// county's pages link town homepages, not the clerk.
+function clerkPage(r) {
+  return (r?.mcd && clerkPages[r.mcd]?.url) || null;
+}
+
+function clerkLink(r, text) {
+  return `<a href="${esc(clerkPage(r))}" target="_blank" rel="noopener">` +
+    `${esc(text || 'Your clerk')}</a>`;
 }
 
 // Grand Rapids is the only jurisdiction whose clerk file this page carries. Elsewhere drop
@@ -1438,7 +1451,9 @@ function show(r, focusKind, landOn) {
   // Rows may omit their where-cell, so style.css places the grid columns explicitly.
   let html = '<div class="vi-rows"><div class="vi-grid"><div class="vi-rail">' +
     (r.jurisdiction ? '<div><div class="vi-lbl">Where you vote</div>' +
-                      `<div class="vi-name">${esc(r.jurisdiction)}</div></div>` : '') +
+                      `<div class="vi-name">${esc(r.jurisdiction)}</div>` +
+                      (clerkPage(r) ? `<div class="vi-clerk">${clerkLink(r)}</div>` : '') +
+                      '</div>' : '') +
     // .vi-idn marks the Ward and Precinct rows; tests/test_page.mjs finds them by it.
     (r.ward != null && r.ward !== ''
       ? '<div class="vi-idn"><div class="vi-lbl">Ward</div>' +
@@ -1520,11 +1535,10 @@ function show(r, focusKind, landOn) {
   // The page's only disclaimer (tests check it appears once). The ballot follows the voter's
   // registration, not the address typed here; the clerk named is the jurisdiction's own.
   const office = !inGrandRapids(r) && P && r.mcd ? P.clerkOf(r.mcd) : null;
-  const whom = inGrandRapids(r)
-    ? 'the <a href="https://www.grandrapidsmi.gov/departments/clerks-office/" ' +
-      'target="_blank" rel="noopener">Grand Rapids City Clerk</a>'
-    : r.jurisdiction
-    ? `the ${esc(r.jurisdiction)} clerk` +
+  const clerkName = inGrandRapids(r) ? 'Grand Rapids City Clerk'
+    : r.jurisdiction ? `${r.jurisdiction} clerk` : null;
+  const whom = clerkName
+    ? `the ${clerkPage(r) ? clerkLink(r, clerkName) : esc(clerkName)}` +
       (office?.phone ? ` (${esc(office.phone)})` : '')
     : 'your clerk';
   const adv = ['<strong>Not an official government tool.</strong> Your voting ' +

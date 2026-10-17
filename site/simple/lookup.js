@@ -16,6 +16,7 @@ const input = $('addr'), optionList = $('opts'), statusLine = $('status'), resul
 let P = null;           // Precincts.county(): every parcel address in the county
 let outside = null;     // street -> jurisdictions, for streets the address list cannot answer
 let clerk = null;       // gr-clerk.json: the city's early voting, drop boxes and registering
+let clerkPages = {};    // clerks.json: each jurisdiction's clerk page, by MCD
 let election = null;    // the next election, or null once every date has passed
 let pollHours = null;   // election_day_hours: registering in person ends when the polls close
 let calendarElections = [];   // the whole calendar, for the day the line rolls over
@@ -170,6 +171,8 @@ function render(found, text) {
         ? [el('span', 'wp-label', 'Ward:'), el('span', 'wp-value', String(ward))]
         : []),
       el('span', 'wp-label', 'Precinct:'), el('span', 'wp-value', String(precinct))),
+    // Its own line: in the row above it would break across lines on a phone.
+    clerkPages[found.mcd]?.url ? el('div', 'clerk-line', 'Your clerk: ', clerkLink(found)) : null,
     // Same order as app.js: polling place first on election day, last on every other day,
     // and registering after them all.
     ...(isElectionDay()
@@ -471,6 +474,17 @@ function earlyVoting(found, uncertain) {
                     `${open ? '' : ' is-off'}`, ...parts)];
 }
 
+// The voter's own clerk's page, as app.js links it: read by hand from each clerk's site.
+function clerkLink(found) {
+  const name = found.mcd === GR_MCD ? 'Grand Rapids City Clerk'
+    : `${placeLabel(found.jurisdiction)} Clerk`;
+  const link = el('a', null, name);
+  link.href = clerkPages[found.mcd].url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  return link;
+}
+
 // ---- registering -------------------------------------------------------
 // Statute is Elections in ../voting.js, as for app.js; the wording matches app.js's.
 
@@ -643,7 +657,8 @@ async function boot() {
     // The index comes first: it names the jurisdictions whose files load next.
     const index = await getJSON('../data/precincts.json');
     const mcds = (index.jurisdictions || []).map((j) => j.mcd);
-    const [addresses, pollingFiles, cityPolling, calendar, neighbourData, clerkData] =
+    const [addresses, pollingFiles, cityPolling, calendar, neighbourData, clerkData,
+           clerkPageData] =
       await Promise.all([
         Promise.all(mcds.map((m) => getJSON(`../data/addresses/${m}.json`))),
         Promise.all(mcds.map((m) => optional(`../data/polling/${m}.json`))),
@@ -652,6 +667,7 @@ async function boot() {
         // Optional: a copy hosted without them still finds the polling place.
         optional('../data/neighbors.json'),
         optional('../data/gr-clerk.json'),
+        optional('../data/clerks.json'),
       ]);
     P = Precincts.county({
       index, addresses, polling: pollingFiles.filter(Boolean), cityPolling, cityMcd: GR_MCD,
@@ -659,6 +675,7 @@ async function boot() {
     // neighbors.json: street names around the city, in the state's spelling.
     outside = neighbourData?.streets ? P.unindexed(neighbourData.streets) : null;
     clerk = clerkData || null;
+    clerkPages = clerkPageData?.clerks || {};
 
     election = Elections.next(calendar.elections);
     calendarElections = calendar.elections;

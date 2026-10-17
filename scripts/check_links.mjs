@@ -47,6 +47,12 @@ export const TEXT_FILES = [
   // into DATA_FILES would silently stop checking all of them, because that
   // loop reads one block and this file has no such block.
   SOURCES_REGISTRY,
+  // Each jurisdiction's clerk page, read by hand, one URL per town. Scanned
+  // whole for the same reason as the registry: the links ARE the data, so a
+  // provenance-only read would check none of them. They are what a reader
+  // clicks, so they report as page links, and a clerk whose site is
+  // redesigned shows up here on the Monday after.
+  'site/data/clerks.json',
 ];
 
 // Which files make a URL a SOURCE rather than a page link: the registry and
