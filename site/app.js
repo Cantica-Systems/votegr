@@ -24,8 +24,8 @@ let originArrow = null;   // the blue you-are-here arrow; steps advance it
 const GR = [42.9634, -85.6681];
 const GR_MCD = '34000';             // the state's MCD code for the City of Grand Rapids
 const METERS_PER_MILE = 1609.344;   // the international mile, exactly
-// What counts as proof of residency, and registering online: the state's page, linked
-// rather than restated, since the list is the state's to change.
+// What counts as proof of residency: the state's page, linked rather than restated, since
+// the list is the state's to change.
 const REGISTER_URL = 'https://www.michigan.gov/sos/elections/voting/register-to-vote';
 
 // No tile layer: tiles would be third-party requests on every pan, and nothing the user
@@ -1657,7 +1657,6 @@ function renderCountdown() {
 
   const target = Elections.dayStart(activeEl.date);
   if (!target) { box.hidden = true; return; }
-  renderRegistrationLine();
   const left = target.getTime() - Date.now();
 
   // Days unpadded; the rest zero-padded so the row keeps its width as the seconds tick.
@@ -1713,38 +1712,6 @@ function renderCountdown() {
   if (said) said.textContent = `${days}${days === 1 ? ' day' : ' days'} until the ` +
     `${activeEl.name} on ${Elections.withWeekday(activeEl.date)}.`;
   box.hidden = false;
-}
-
-// For anyone not registered, before an address is typed. Written only when it changes:
-// the countdown ticks every second, and a link replaced mid-click goes nowhere.
-function registrationLine() {
-  const phase = registrationNow();
-  if (phase === 'mail') {
-    return `Not registered? <a href="${REGISTER_URL}" target="_blank" rel="noopener">` +
-      'Register online</a> or by mail through ' +
-      `${esc(Elections.dayMonth(Elections.registerByMailUntil(activeEl)))}, or in person ` +
-      'at your clerk\u2019s office through election day.';
-  }
-  if (phase === 'in-person') {
-    const close = electionDayHours?.close;
-    const day = isElectionDay() ? 'today' : 'on election day';
-    const until = close ? `until ${esc(Elections.shortTime(close))} ${day}`
-                        : `through ${isElectionDay() ? 'today' : 'election day'}`;
-    return 'Not registered? You can still register in person at your clerk\u2019s ' +
-      `office, ${until}, and usually vote at the same visit.`;
-  }
-  return '';
-}
-
-function renderRegistrationLine() {
-  const line = $('cdReg');
-  if (!line) return;
-  const html = registrationLine();
-  if (line.dataset.html !== html) {
-    line.innerHTML = html;
-    line.dataset.html = html;
-  }
-  line.hidden = !html;
 }
 
 // The clerk publishes addresses only; geocoding them against the routing graph keeps them

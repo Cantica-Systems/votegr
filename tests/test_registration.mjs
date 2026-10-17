@@ -3,8 +3,10 @@
 // by mail through the 15th day before an election, and from the 14th only in
 // person at the voter's own clerk's office, until the polls close on election
 // day (MCL 168.497). So the card that says where to go exists for two weeks
-// before each election, and a line under the countdown says which way applies.
-// Each phase is reached by serving a pinned calendar (pinned_calendar.mjs).
+// before each election, and on /simple a line under the banner says which way
+// applies. The main page says nothing about registering until an address is
+// looked up. Each phase is reached by serving a pinned calendar
+// (pinned_calendar.mjs).
 //
 // What would fail silently: the card missing in the two weeks it matters, the
 // card naming the wrong office, the clerk's office becoming where the
@@ -43,8 +45,6 @@ const iso = (d) => {
   return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
 };
 const short = (t) => String(t).replace(/:00(?=\s*[AP]M\b)/i, '');
-// app.js writes a curly apostrophe and /simple a straight one, each its own habit.
-const plain = (t) => String(t).replace(/\u2019/g, "'");
 
 // ---- the phase, with an explicit clock ------------------------------------
 // The two edges that matter: the day after the 15th day before, and 8 PM on
@@ -160,6 +160,11 @@ async function simpleLookUp(page, addr) {
   await page.waitForSelector('#result .card', { timeout: 15000 });
 }
 
+// The main page before a search: the countdown and the intro, nothing about registering.
+const startSilent = (page) => page.evaluate(() =>
+  !/regist/i.test(document.getElementById('countdown').textContent +
+                  document.getElementById('intro').textContent));
+
 const line = (page, id) => page.evaluate((i) => {
   const el = document.getElementById(i);
   return { shown: !!el && !el.hidden, text: el?.textContent || '',
@@ -191,11 +196,8 @@ const rowsMatch = (got, want) => got.length === want.length &&
   const office = clerk.registration.office;
 
   const page = await open('/index.html');
-  const before = await line(page, 'cdReg');
-  ok('in person: the countdown says registering is still open, in person',
-     before.shown && /still register in person/.test(before.text) &&
-     before.text.includes(short(POLL_HOURS.close)) && /on election day/.test(before.text));
-  ok('in person: and no longer offers registering online', !/online/i.test(before.text));
+  ok('in person: the main page says nothing about registering before a search',
+     await startSilent(page));
 
   await lookUp(page, GR_ADDR);
   const gr = await readCard(page);
@@ -258,8 +260,10 @@ const rowsMatch = (got, want) => got.length === want.length &&
 
   const simple = await open('/simple/index.html');
   const sline = await line(simple, 'register');
-  ok('in person: /simple says the same under its banner',
-     sline.shown && plain(sline.text) === plain(before.text));
+  ok('in person: /simple says under its banner that registering is in person now',
+     sline.shown && /still register in person/.test(sline.text) &&
+     sline.text.includes(short(POLL_HOURS.close)) && /on election day/.test(sline.text));
+  ok('in person: and no longer offers registering online', !/online/i.test(sline.text));
   await simpleLookUp(simple, GR_ADDR);
   const sgr = await readSimple(simple);
   console.log(`[in person, /simple Grand Rapids] ${JSON.stringify(sgr)}`);
@@ -288,10 +292,8 @@ const rowsMatch = (got, want) => got.length === want.length &&
   served = pinnedCalendar(ROOT, 30);
   const until = Elections.dayMonth(iso(15));
   const page = await open('/index.html');
-  const before = await line(page, 'cdReg');
-  ok(`by mail: the countdown offers registering online, through ${until}`,
-     before.shown && before.link === STATE && before.text.includes(until) &&
-     /in person/.test(before.text));
+  ok('by mail: the main page says nothing about registering before a search',
+     await startSilent(page));
   await lookUp(page, GR_ADDR);
   ok('by mail: no registration card', !(await readCard(page)));
   ok('by mail: and the clerk is not a destination',
@@ -300,8 +302,9 @@ const rowsMatch = (got, want) => got.length === want.length &&
 
   const simple = await open('/simple/index.html');
   const sline = await line(simple, 'register');
-  ok('by mail: /simple says the same', sline.shown && plain(sline.text) === plain(before.text) &&
-     sline.link === STATE);
+  ok(`by mail: /simple offers registering online, through ${until}, then in person`,
+     sline.shown && sline.link === STATE && sline.text.includes(until) &&
+     /in person/.test(sline.text));
   await simpleLookUp(simple, GR_ADDR);
   ok('by mail: and has no registration section', !(await readSimple(simple)));
   await simple.close();
@@ -316,10 +319,8 @@ const rowsMatch = (got, want) => got.length === want.length &&
     ['at close', close, false],
   ]) {
     const page = await open('/index.html', { clock });
-    const reg = await line(page, 'cdReg');
-    ok(`election day, ${what}: the countdown ${open_ ? 'says until close today' : 'says nothing'}`,
-       open_ ? reg.shown && /today/.test(reg.text) && reg.text.includes(short(POLL_HOURS.close))
-             : !reg.shown);
+    ok(`election day, ${what}: the main page says nothing about registering before a search`,
+       await startSilent(page));
     await lookUp(page, GR_ADDR);
     const card = await readCard(page);
     ok(`election day, ${what}: ${open_ ? 'the card reads today' : 'no card'}`,
@@ -329,6 +330,10 @@ const rowsMatch = (got, want) => got.length === want.length &&
     await page.close();
 
     const simple = await open('/simple/index.html', { clock });
+    const reg = await line(simple, 'register');
+    ok(`election day, ${what}: /simple's line ${open_ ? 'says until close today' : 'is gone'}`,
+       open_ ? reg.shown && /today/.test(reg.text) && reg.text.includes(short(POLL_HOURS.close))
+             : !reg.shown);
     await simpleLookUp(simple, GR_ADDR);
     ok(`election day, ${what}: /simple ${open_ ? 'has' : 'has no'} registration section`,
        !!(await readSimple(simple)) === open_);
