@@ -26,12 +26,8 @@
 <script>
   try {
     const theme = localStorage.getItem('theme');
-    if (theme !== 'system') {
-      document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
-    }
-  } catch {
-    document.documentElement.dataset.theme = 'dark';
-  }
+    if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+  } catch {}
 </script>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="style.css">

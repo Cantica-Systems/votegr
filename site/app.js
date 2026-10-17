@@ -46,12 +46,12 @@ function setHint(text) { $('hint').textContent = text || ''; }
 // data-theme on <html> (absent: follow the system) is mirrored to localStorage, which the
 // inline script in index.html reads before first paint.
 
-// Dark by default on purpose; choosing 'system' is stored as a choice of its own.
+// Follows the device until the reader picks Light or Dark.
 function themeChoice() {
   try {
     const t = localStorage.getItem('theme');
-    return (t === 'light' || t === 'dark' || t === 'system') ? t : 'dark';
-  } catch (e) { return 'dark'; }
+    return (t === 'light' || t === 'dark' || t === 'system') ? t : 'system';
+  } catch (e) { return 'system'; }
 }
 
 function prefersDark() {
@@ -61,13 +61,16 @@ function prefersDark() {
   return !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 }
 
-function applyTheme(choice) {
+// remember: only a click is stored, so a reader who never chose keeps following the device.
+function applyTheme(choice, remember) {
   const root = document.documentElement;
   if (choice === 'system') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', choice);
-  try {
-    localStorage.setItem('theme', choice);
-  } catch (e) { /* private mode: the page still works, it just forgets */ }
+  if (remember) {
+    try {
+      localStorage.setItem('theme', choice);
+    } catch (e) { /* private mode: the page still works, it just forgets */ }
+  }
 
   const sw = $('themeSwitch');
   if (sw) {
@@ -165,7 +168,7 @@ function initTheme() {
   if (sw) {
     sw.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-theme-choice]');
-      if (b) applyTheme(b.dataset.themeChoice);
+      if (b) applyTheme(b.dataset.themeChoice, true);
     });
   }
   applyTheme(themeChoice());
