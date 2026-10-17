@@ -85,14 +85,15 @@ node tests/audit_routes.mjs              # hundreds of real trips countywide, ev
 node tests/test_page.mjs                 # the page in a browser, at three widths
 node tests/test_simple_page.mjs          # /simple in a browser, at three widths
 node tests/test_early_voting_states.mjs  # early voting states and election day, both pages
+node tests/test_registration.mjs         # registering by mail, then in person, both pages
 node tests/test_check_links.mjs          # what the link checker makes of a response
 node tests/test_check_links_inputs.mjs   # that it can still read every file it names
 node scripts/compare_osrm.mjs 30         # our routes against OSRM
 node scripts/check_links.mjs             # every external link in the docs, pages and data
 ```
 
-The three browser suites need `npm ci` and `npx playwright install chromium`
-first, which is all `package.json` is for. The ten suites run on every pull
+The four browser suites need `npm ci` and `npx playwright install chromium`
+first, which is all `package.json` is for. The eleven suites run on every pull
 request and push to `main`. The last two commands reach other people's
 servers, so they run by hand, and the link check also runs weekly.
 
@@ -118,6 +119,9 @@ This tool is an estimate, and these are the ways it is wrong.
   it has no box to show.
 - Early voting is shown for Grand Rapids addresses only, where the City Clerk
   publishes current sites and dates. Elsewhere, ask your clerk.
+- In the two weeks before an election, when registering is in person only,
+  the page names your clerk's office. Only Grand Rapids publishes its hours
+  for that; elsewhere the page gives the clerk's phone number.
 - The map draws water, parks and rail only around Grand Rapids.
 
 ## Privacy

@@ -15,7 +15,7 @@ let ownBase = null;
 let neighbors = null, precincts = null;
 let pinArmed = false;
 let ac = null;      // the suggestion list (attachSuggestions, below)
-let clerk = null;   // gr-clerk.json: early voting sites and drop boxes
+let clerk = null;   // gr-clerk.json: early voting, drop boxes, and registering in person
 let sources = {};   // sources.json: every upstream this site reads, by id
 // Which place in each kind's list the reader picked; reset on every new lookup.
 let chosen = { dropbox: 0, early: 0 };
@@ -24,6 +24,9 @@ let originArrow = null;   // the blue you-are-here arrow; steps advance it
 const GR = [42.9634, -85.6681];
 const GR_MCD = '34000';             // the state's MCD code for the City of Grand Rapids
 const METERS_PER_MILE = 1609.344;   // the international mile, exactly
+// What counts as proof of residency, and registering online: the state's page, linked
+// rather than restated, since the list is the state's to change.
+const REGISTER_URL = 'https://www.michigan.gov/sos/elections/voting/register-to-vote';
 
 // No tile layer: tiles would be third-party requests on every pan, and nothing the user
 // looks up may leave the browser. The basemap is drawn from local files (map.js).
@@ -346,9 +349,10 @@ function whenCell(kind, state, extra) {
   const note = state.note ? `<div class="pp-note">${esc(state.note)}</div>` : '';
   let shown = extra || '';
   const phone = isPhone();
-  // Early voting's many hour lines fold away; election day's one line stays with the date.
-  const fold = phone ? note + (kind === 'early' ? shown : '') : '';
-  if (phone && kind === 'early') shown = '';
+  // Hour tables fold away; election day's one line stays with the date.
+  const folds = kind === 'early' || kind === 'register';
+  const fold = phone ? note + (folds ? shown : '') : '';
+  if (phone && folds) shown = '';
   const lbl = `<div class="vi-lbl${state.live ? ' live' : ''}">${esc(state.label)}</div>`;
   const head = `<div class="vi-when vi-when-${kind}${state.now ? ' is-now' : ''}` +
     `${state.off ? ' is-off' : ''}">` +
@@ -970,7 +974,9 @@ function drawSites(r) {
   siteLayer.clearLayers();
   if (!r) return;
   destinations(r).forEach((opt) => {
-    if (opt.kind === 'polling') return;      // drawn with all the others
+    // Polling places are drawn with all the others. The clerk's office has no marker of
+    // its own: the route's end flag marks it.
+    if (opt.kind === 'polling' || opt.kind === 'register') return;
     const list = opt.all?.length ? opt.all : [opt.place];
     list.forEach((place) => {
       if (!place || place.lat == null) return;
@@ -1385,6 +1391,39 @@ function pollingCard(r, multi) {
   return section('polling', html, when, { collapsed: false });
 }
 
+// From the 14th day before an election until the polls close, registering is in person at
+// the voter's own clerk's office, with a ballot at the same visit. Shut on a phone at first:
+// most readers are registered already.
+function registrationCard(r) {
+  if (registrationNow() !== 'in-person') return '';
+  const office = registrationOffice(r);
+  if (!office) return '';
+  const routable = destinations(r).some((o) => o.kind === 'register');
+  const where = `<div class="vi-where vi-register"${routable ? ' data-kind="register"' : ''}>` +
+    '<div class="vi-lbl">Where to register in person</div>' +
+    `<div class="pp-name">${esc(office.name)}</div>` +
+    (office.address
+      ? `<div class="pp-addr">${esc(addressForDisplay(office.address))}</div>` : '') +
+    metaBlock([locLine(office.note)]) +
+    (routable ? actionRow('register') : '') +
+    '</div>';
+  const hours = office.rows?.length ? hoursTableHtml(office.rows)
+    : office.phone ? '<div class="vi-hours"><span class="vi-hours-lbl">Hours:</span> ' +
+                     `call ${esc(office.phone)}</div>`
+    : '';
+  const note = '<div class="pp-note">Register here in person, and you can vote at the ' +
+    'same visit. The same goes if you have moved since you registered. Bring something ' +
+    'with your name and current address on it, on paper or on your phone ' +
+    `(<a href="${REGISTER_URL}" target="_blank" rel="noopener">what counts</a>).</div>`;
+  const close = electionDayHours?.close;
+  const status = !isElectionDay() ? `Through ${Elections.dayMonth(activeEl.date)}`
+    : close ? `Today, until ${Elections.shortTime(close)}` : 'Today';
+  return section('register', where,
+    whenCell('register', { label: 'Not registered yet?', status, live: true },
+             hours + note),
+    { collapsed: true });
+}
+
 // landOn: the block to scroll to afterwards, the voting info by default.
 function show(r, focusKind, landOn) {
   current = r;
@@ -1409,12 +1448,12 @@ function show(r, focusKind, landOn) {
 
   const multi = destinations(r).length > 1;
   const boxHtml = dropBoxCard(r), evHtml = earlyVotingCard(r),
-      pollHtml = pollingCard(r, multi);
+      pollHtml = pollingCard(r, multi), regHtml = registrationCard(r);
 
   // The drop box first, the order a voter can act in, except on election day, when the
   // polls come first. destinations() puts the routed default in the same place.
-  html += isElectionDay() ? pollHtml + boxHtml + evHtml
-                          : boxHtml + evHtml + pollHtml;
+  html += (isElectionDay() ? pollHtml + boxHtml + evHtml
+                           : boxHtml + evHtml + pollHtml) + regHtml;
 
   html += '</div></div>';
   $('precinctInfo').innerHTML = html;
@@ -1516,9 +1555,12 @@ function show(r, focusKind, landOn) {
 // offered; on election day only the voter's own polling place will do. The calendar
 // arithmetic is Elections in voting.js, shared with /simple; only the wording is here.
 
-// Same shape as /simple's hours, so the two pages read alike.
 function evHoursHtml(w) {
-  const rows = Elections.hoursRows(w, Elections.todayISO());
+  return hoursTableHtml(Elections.hoursRows(w, Elections.todayISO()));
+}
+
+// Same shape as /simple's hours, so the two pages read alike.
+function hoursTableHtml(rows) {
   if (!rows.length) return '';
   let out = '<div class="vi-hours-lbl ev-hours-lbl">Hours:</div>' +
             '<div class="ev-hours">';
@@ -1615,6 +1657,7 @@ function renderCountdown() {
 
   const target = Elections.dayStart(activeEl.date);
   if (!target) { box.hidden = true; return; }
+  renderRegistrationLine();
   const left = target.getTime() - Date.now();
 
   // Days unpadded; the rest zero-padded so the row keeps its width as the seconds tick.
@@ -1672,6 +1715,38 @@ function renderCountdown() {
   box.hidden = false;
 }
 
+// For anyone not registered, before an address is typed. Written only when it changes:
+// the countdown ticks every second, and a link replaced mid-click goes nowhere.
+function registrationLine() {
+  const phase = registrationNow();
+  if (phase === 'mail') {
+    return `Not registered? <a href="${REGISTER_URL}" target="_blank" rel="noopener">` +
+      'Register online</a> or by mail through ' +
+      `${esc(Elections.dayMonth(Elections.registerByMailUntil(activeEl)))}, or in person ` +
+      'at your clerk\u2019s office through election day.';
+  }
+  if (phase === 'in-person') {
+    const close = electionDayHours?.close;
+    const day = isElectionDay() ? 'today' : 'on election day';
+    const until = close ? `until ${esc(Elections.shortTime(close))} ${day}`
+                        : `through ${isElectionDay() ? 'today' : 'election day'}`;
+    return 'Not registered? You can still register in person at your clerk\u2019s ' +
+      `office, ${until}, and vote at the same visit.`;
+  }
+  return '';
+}
+
+function renderRegistrationLine() {
+  const line = $('cdReg');
+  if (!line) return;
+  const html = registrationLine();
+  if (line.dataset.html !== html) {
+    line.innerHTML = html;
+    line.dataset.html = html;
+  }
+  line.hidden = !html;
+}
+
 // The clerk publishes addresses only; geocoding them against the routing graph keeps them
 // on their streets, which a stored coordinate would not. canonStreet (router.js) absorbs
 // the clerk's spelled-out or missing street types.
@@ -1688,6 +1763,11 @@ function placeCoords(data) {
     sites: (data.early_voting_sites || []).map(fix).filter(Boolean),
     // Boxes without a street address go to unrouted, which the full list still names.
     boxes: (data.drop_boxes || []).map(fix).filter(Boolean),
+    // Kept unplaced if the address will not geocode: still shown, just not routed to.
+    registration: data.registration?.office
+      ? { ...data.registration,
+          office: fix(data.registration.office) || data.registration.office }
+      : null,
     unrouted: (data.drop_boxes || []).filter((b) => !b.address)
   };
 }
@@ -1710,19 +1790,45 @@ function boxesFor(r) {
     .filter((b) => b.lat && b.lng)
     .map(normaliseHours);
   if (boxes.length) return boxes;
-  // No box published: by law the ballot goes back to the voter's own clerk. office: true
-  // keeps anything downstream from calling it a box or giving it box hours.
+  // No box published: by law the ballot goes back to the voter's own clerk.
+  const office = clerkOffice(r);
+  return office ? [office] : [];
+}
+
+// The county's record of the voter's own clerk's office, placed, or null. office: true
+// keeps anything downstream from calling it a box or giving it box hours.
+function clerkOffice(r) {
   const office = P ? P.clerkOf(r.mcd) : null;
-  if (!office || !office.lat || !office.lng) return [];
+  if (!office || !office.lat || !office.lng) return null;
   // The county often trails a P.O. Box after the street line, so keep the first part.
   const street = String(office.address || '').split(',')[0].trim();
-  return [{
+  return {
     name: `${r.jurisdiction || 'Your'} Clerk\u2019s Office`,
     address: street || String(office.address || '').trim() || null,
     phone: (office.phone && String(office.phone).trim()) || null,
     lat: office.lat, lng: office.lng,
     hours: null, office: true
-  }];
+  };
+}
+
+function registrationNow() {
+  return Elections.registrationPhase(activeEl, electionDayHours);
+}
+
+// Where this address registers in person. Grand Rapids: the city clerk's file, with its
+// hours. Elsewhere: the county's record, with a phone number and no hours. None in Grand
+// Rapids when the clerk's file is for another election, since the county's record there
+// has no coordinates and its phone is the city's main line.
+function registrationOffice(r) {
+  if (!inGrandRapids(r)) return clerkOffice(r);
+  const reg = clerkForThisElection(r) ? clerk.registration : null;
+  if (!reg?.office) return null;
+  return {
+    name: 'Grand Rapids City Clerk\u2019s Office',
+    address: reg.office.address, note: reg.office.note,
+    lat: reg.office.lat, lng: reg.office.lng,
+    rows: Elections.registrationRows(reg, activeEl, electionDayHours, Elections.todayISO())
+  };
 }
 
 // Other hours are labelled, in amber, so they do not read as the building's hours. The
@@ -1758,6 +1864,7 @@ function destSub(pick, r) {
   const opens = evOpensOn(pick, r);
   return pick.kind === 'early' ? `Early voting site${opens ? `, opens ${opens}` : ''}`
        : pick.kind === 'dropbox' ? 'Absentee ballot drop box'
+       : pick.kind === 'register' ? 'Clerk\u2019s office, to register'
        : `Precinct ${r.precinct}`;
 }
 
@@ -1802,12 +1909,16 @@ function destinations(r) {
                all: boxes });
   }
 
+  const office = registrationNow() === 'in-person' ? registrationOffice(r) : null;
+  if (office?.lat != null) out.push({ kind: 'register', label: 'Register', place: office });
+
   // The first is where the directions point before anything is clicked. On election day
   // the polls; otherwise the drop box while absentee ballots are out, which covers every
-  // early voting window; otherwise early voting if open, then the polls.
+  // early voting window; otherwise early voting if open, then the polls. Registering is
+  // always last: most readers are registered already.
   const evNow = nowKind(r) === 'early';
-  const rank = evNow ? { early: 1, polling: 2, dropbox: 3 }
-                     : { polling: 1, early: 2, dropbox: 3 };
+  const rank = evNow ? { early: 1, polling: 2, dropbox: 3, register: 4 }
+                     : { polling: 1, early: 2, dropbox: 3, register: 4 };
   rank[isElectionDay() ? 'polling'
      : absenteePhase() === 'open' ? 'dropbox'
      : evNow ? 'early' : 'polling'] = 0;
