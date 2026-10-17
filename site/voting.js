@@ -132,14 +132,22 @@ function next(list, today) {
 
 function sites(e) { return e?.early_voting_sites || []; }
 
-// Statute, not a clerk's choice: Michigan mails absentee ballots 40 days out.
-const ABSENTEE_LEAD_DAYS = 40;
-function absenteeFrom(e) {
+function daysBefore(e, n) {
   const d = dayStart(e?.date);
   if (!d) return null;
-  d.setDate(d.getDate() - ABSENTEE_LEAD_DAYS);
+  d.setDate(d.getDate() - n);
   return isoOf(d);
 }
+
+// Statute, not a clerk's choice: Michigan mails absentee ballots 40 days out.
+const ABSENTEE_LEAD_DAYS = 40;
+function absenteeFrom(e) { return daysBefore(e, ABSENTEE_LEAD_DAYS); }
+
+// Statute too (MCL 168.497): online, by mail or at a Secretary of State office through
+// the 15th day before an election; from the 14th, only in person at the voter's own
+// clerk's office, until the polls close on election day.
+const REGISTER_BY_MAIL_DAYS = 15;
+function registerByMailUntil(e) { return daysBefore(e, REGISTER_BY_MAIL_DAYS); }
 
 // "8:00 PM" on a Y-M-D date -> that local instant, or null if unreadable.
 const CLOCK = /^\s*(\d{1,2})(?::(\d{2}))?\s*([AP])\.?M\.?\s*$/i;
@@ -164,6 +172,18 @@ function pollsPhase(e, hours, now) {
   if (t < open) return 'before';
   if (t < close) return 'open';
   return 'closed';
+}
+
+// 'mail' through the last day to register online or by mail, 'in-person' from then
+// until the polls close on election day, 'closed' after; null with no election.
+function registrationPhase(e, hours, now) {
+  const until = registerByMailUntil(e);
+  if (!until) return null;
+  const t = now || new Date(), today = isoOf(t);
+  if (today <= until) return 'mail';
+  if (today < e.date) return 'in-person';
+  if (today > e.date) return 'closed';
+  return pollsPhase(e, hours, t) === 'closed' ? 'closed' : 'in-person';
 }
 
 // The instant the last early voting day's sites close, or null when nothing
@@ -276,10 +296,45 @@ function hoursRows(e, today) {
     .concat(split.sort().map(dated));
 }
 
+// ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] -> 'Mon to Fri'; days that are not a run, listed.
+function weekdayRange(days) {
+  const at = days.map((d) => WEEK.indexOf(d));
+  const run = days.length > 2 && at.every((i, k) => i >= 0 && (k === 0 || i === at[k - 1] + 1));
+  return run ? `${days[0]} to ${days[days.length - 1]}` : days.join(', ');
+}
+
+// A clerk's in-person registration hours, as the same rows: weekday office hours, each
+// extra day the office opens, then election day, which ends when the polls close. today
+// marks its row only while registering is in person.
+function registrationRows(reg, e, hours, today) {
+  const until = registerByMailUntil(e);
+  if (!reg || !until) return [];
+  const inPerson = !!today && today > until && today <= e.date;
+  const extra = (reg.extra_days || [])
+    .filter((d) => d && dayStart(d.date) && d.date > until && d.date < e.date);
+  const special = today === e.date || extra.some((d) => d.date === today);
+  const abbr = inPerson && !special ? DAY_ABBR[dayStart(today).getDay()] : null;
+  const rows = (reg.office_hours || []).map((rule) => ({
+    label: weekdayRange(rule.days || []),
+    hours: clerkHours(rule.hours),
+    today: !!abbr && (rule.days || []).includes(abbr),
+  }));
+  for (const d of extra) {
+    rows.push({ label: shortDate(d.date), hours: clerkHours(d.hours),
+                today: inPerson && d.date === today });
+  }
+  const close = clockText(hours?.close);
+  if (close) {
+    rows.push({ label: 'Election day', hours: `Until ${close}`,
+                today: inPerson && today === e.date });
+  }
+  return rows;
+}
+
 const Elections = {
   todayISO, dayStart, monthDay, withWeekday, dayMonth, shortTime,
   next, sites, absenteeFrom, atTime, pollsPhase, earlyVotingEnds, windowState,
-  hoursRows
+  hoursRows, registerByMailUntil, registrationPhase, registrationRows
 };
 
 // ---- Precinct lookup ----

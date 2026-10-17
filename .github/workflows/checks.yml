@@ -4,7 +4,7 @@
 # merge is a release. This runs the suites before that happens, so nobody has
 # to remember to, and gives branch protection something real to require.
 #
-# Ten suites, cheapest first, so an obvious break fails in seconds rather
+# Eleven suites, cheapest first, so an obvious break fails in seconds rather
 # than after a browser download:
 #
 #   tests/test_display_case.mjs         display casing, over the real corpus
@@ -21,6 +21,8 @@
 #   tests/test_simple_page.mjs          /simple in a real browser at three widths
 #   tests/test_early_voting_states.mjs  the early voting states and election
 #                                       day, from a fixture
+#   tests/test_registration.mjs         registering by mail, then in person
+#                                       until the polls close, both pages
 #   tests/test_check_links.mjs          what the link checker makes of a response
 #   tests/test_check_links_inputs.mjs   that the link checker can still read
 #                                       every file it names
@@ -114,6 +116,11 @@ jobs:
       # dated fixture.
       - name: Early voting states
         run: node tests/test_early_voting_states.mjs
+
+      # Registering in person is a two-week window ending at 8 PM on election
+      # day, so this serves pinned calendars on either side of both edges.
+      - name: Registration
+        run: node tests/test_registration.mjs
 
       # Makes no request: it feeds fabricated responses to the link checker's
       # classifier. The live check runs weekly, from link-check.yml.

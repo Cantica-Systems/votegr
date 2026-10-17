@@ -51,6 +51,10 @@ export function pinnedCalendar(root, daysOut) {
   clerk.early_voting.to = shiftDate(realClerk.early_voting.to, by);
   clerk.early_voting.days = realClerk.early_voting.days.map(
     (d) => ({ ...d, date: shiftDate(d.date, by) }));
+  if (clerk.registration) {
+    clerk.registration.extra_days = (realClerk.registration.extra_days || []).map(
+      (d) => ({ ...d, date: shiftDate(d.date, by) }));
+  }
   // The real general election, moved, rather than an invented one: it keeps
   // whatever sites and hours ship with it.
   const general = realElections.elections[realElections.elections.length - 1];

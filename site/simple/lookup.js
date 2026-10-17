@@ -5,6 +5,8 @@ import { displayCase, Elections, Precincts } from '../voting.js';
 const NEAR_M = 10;              // metres: this close to a precinct line is too close to be certain
 const MAX_SUGGESTIONS = 6;
 const GR_MCD = '34000';         // the state's code for the City of Grand Rapids
+// What counts as proof of residency, and registering online: the state's page, as app.js.
+const REGISTER_URL = 'https://www.michigan.gov/sos/elections/voting/register-to-vote';
 
 const $ = (id) => document.getElementById(id);
 const input = $('addr'), optionList = $('opts'), statusLine = $('status'), resultBox = $('result');
@@ -13,8 +15,9 @@ const input = $('addr'), optionList = $('opts'), statusLine = $('status'), resul
 // Directions link. The lookup is ../voting.js, as on the map page, so both give one answer.
 let P = null;           // Precincts.county(): every parcel address in the county
 let outside = null;     // street -> jurisdictions, for streets the address list cannot answer
-let clerk = null;       // gr-clerk.json: the city's early voting and drop boxes
+let clerk = null;       // gr-clerk.json: the city's early voting, drop boxes and registering
 let election = null;    // the next election, or null once every date has passed
+let pollHours = null;   // election_day_hours: registering in person ends when the polls close
 let calendarElections = [];   // the whole calendar, for the day the line rolls over
 let suggestions = [];
 let active = -1;        // highlighted suggestion, -1 for none
@@ -167,10 +170,12 @@ function render(found, text) {
         ? [el('span', 'wp-label', 'Ward:'), el('span', 'wp-value', String(ward))]
         : []),
       el('span', 'wp-label', 'Precinct:'), el('span', 'wp-value', String(precinct))),
-    // Same order as app.js: polling place first on election day, last on every other day.
+    // Same order as app.js: polling place first on election day, last on every other day,
+    // and registering after them all.
     ...(isElectionDay()
       ? [...pollingPlace(found), ...dropBoxes(found), ...earlyVoting(found, uncertain)]
       : [...dropBoxes(found), ...earlyVoting(found, uncertain), ...pollingPlace(found)]),
+    ...registering(found),
 
     // Last on the card: they qualify the precinct and polling place, not the drop boxes.
     rivals ? advisory('ambiguous',
@@ -369,6 +374,7 @@ function showPolls(next, hours) {
           'Everyone in line when the polls closed must be allowed to vote.'));
     }
     banner.hidden = false;
+    showRegistrationLine();
   };
   tick();
   if (!pollsTimer) pollsTimer = setInterval(tick, 1000);
@@ -463,6 +469,94 @@ function earlyVoting(found, uncertain) {
 
   return [el('div', `ev-block ev-early${open && !isElectionDay() ? ' is-now' : ''}` +
                     `${open ? '' : ' is-off'}`, ...parts)];
+}
+
+// ---- registering -------------------------------------------------------
+// Statute is Elections in ../voting.js, as for app.js; the wording matches app.js's.
+
+const registrationPhase = () => Elections.registrationPhase(election, pollHours);
+
+const stateLink = (text) => {
+  const link = el('a', null, text);
+  link.href = REGISTER_URL;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  return link;
+};
+
+// Under the banner, for anyone not registered. Rebuilt only when it changes: the polls
+// banner ticks every second, and a link replaced mid-click goes nowhere.
+function showRegistrationLine() {
+  const line = $('register');
+  if (!line) return;
+  const phase = registrationPhase();
+  const day = isElectionDay() ? 'today' : 'on election day';
+  const until = pollHours?.close ? `until ${Elections.shortTime(pollHours.close)} ${day}`
+                                 : `through ${isElectionDay() ? 'today' : 'election day'}`;
+  const key = `${phase}|${isElectionDay()}`;
+  if (line.dataset.key === key) return;
+  line.dataset.key = key;
+  line.textContent = '';
+  if (phase === 'mail') {
+    line.append('Not registered? ', stateLink('Register online'), ' or by mail through ' +
+      `${Elections.dayMonth(Elections.registerByMailUntil(election))}, or in person at ` +
+      "your clerk's office through election day.");
+  } else if (phase === 'in-person') {
+    line.append("Not registered? You can still register in person at your clerk's " +
+      `office, ${until}, and usually vote at the same visit.`);
+  }
+  line.hidden = !line.textContent;
+}
+
+// Grand Rapids: the city clerk's file, with its hours, while it describes this election.
+// Elsewhere: the county's record, with a phone number. None in Grand Rapids otherwise, as
+// in app.js: the county's record there carries the city's main line, not the clerk's.
+function registrationOffice(found) {
+  if (found.mcd === GR_MCD) {
+    const reg = clerk && election && clerk.election === election.date ? clerk.registration : null;
+    if (!reg?.office) return null;
+    return { name: "Grand Rapids City Clerk's Office", address: reg.office.address,
+             entrance_note: reg.office.note,
+             rows: Elections.registrationRows(reg, election, pollHours, Elections.todayISO()) };
+  }
+  const office = P.clerkOf(found.mcd);
+  if (!office) return null;
+  return { name: `${found.jurisdiction} clerk's office`,
+           // The county often trails a P.O. Box after the street line.
+           address: String(office.address || '').split(',')[0].trim(),
+           phone: office.phone || null };
+}
+
+function registering(found) {
+  if (!election || registrationPhase() !== 'in-person') return [];
+  const office = registrationOffice(found);
+  if (!office) return [];
+  const close = pollHours?.close ? Elections.shortTime(pollHours.close) : null;
+  const parts = [
+    el('div', 'lead-2 sec-head', 'Not registered yet?'),
+    isElectionDay()
+      ? el('div', 'sec-sub', 'Register in person ',
+           el('strong', 'when', close ? `today, until ${close}` : 'today'))
+      : el('div', 'sec-sub', 'Register in person through ',
+           el('strong', 'when', Elections.withWeekday(election.date))),
+    el('div', 'ev-note', 'Register here in person, and you can usually vote at the same visit. ' +
+       'The same goes if you have moved since you registered. Bring something with your ' +
+       'name and current address on it, on paper or on your phone (',
+       stateLink('what counts'), ').'),
+    locationRow(office, 'ev-site'),
+  ];
+  if (office.rows?.length) {
+    const table = el('div', 'ev-hours');
+    for (const row of office.rows) {
+      const mark = row.today ? ' is-today' : '';
+      table.append(el('span', `ev-day${mark}`, row.label + (row.today ? ' (today)' : '')),
+                   el('span', `ev-time${mark}`, row.hours));
+    }
+    parts.push(table);
+  } else if (office.phone) {
+    parts.push(el('div', 'ev-note', `Hours: call ${office.phone}`));
+  }
+  return [el('div', 'ev-block ev-register', ...parts)];
 }
 
 // The city clerk writes "24/7"; the county and the state write "24 hours a day, 7 days a week".
@@ -568,7 +662,9 @@ async function boot() {
 
     election = Elections.next(calendar.elections);
     calendarElections = calendar.elections;
-    showNextElection(election, calendar.election_day_hours || null);
+    pollHours = calendar.election_day_hours || null;
+    showNextElection(election, pollHours);
+    showRegistrationLine();
 
     input.disabled = false;
     say('');
