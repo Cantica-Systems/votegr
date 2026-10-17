@@ -500,6 +500,17 @@ for (const { name, data, clock, order: wantOrder, routed: routedWant, now, badge
   await simple.waitForSelector('#result .card', { timeout: 10000 });
   const simpleBadges = await simple.evaluate(() =>
     [...document.querySelectorAll('#result .now-badge')].map(e => e.textContent));
+  // The badged heading is green, as on the map page, and no other heading is.
+  const simpleGreen = await simple.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--good');
+    document.body.append(probe);
+    const good = getComputedStyle(probe).color;
+    probe.remove();
+    return [...document.querySelectorAll('#result .lead-2')]
+      .filter((h) => getComputedStyle(h).color === good)
+      .map((h) => h.querySelector('.now-badge')?.textContent || 'unbadged');
+  });
   await simple.close();
   if (electionDay) {
     ok(`${name}: /simple counts the polls too (${line.slice(0, 22).trim()})`,
@@ -522,6 +533,8 @@ for (const { name, data, clock, order: wantOrder, routed: routedWant, now, badge
   ok(`${name}: with a green heading on ${now.join(', ') || 'nothing'}`,
      JSON.stringify(greenHeads) === JSON.stringify(now));
   ok(`${name}: and on /simple`, JSON.stringify(simpleBadges) === JSON.stringify(badges));
+  ok(`${name}: with /simple's badged heading green, and only that one`,
+     JSON.stringify(simpleGreen) === JSON.stringify(badges));
 }
 
 await browser.close(); server.close();
