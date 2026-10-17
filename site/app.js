@@ -1392,8 +1392,8 @@ function pollingCard(r, multi) {
 }
 
 // From the 14th day before an election until the polls close, registering is in person at
-// the voter's own clerk's office, with a ballot at the same visit. Shut on a phone at first:
-// most readers are registered already.
+// the voter's own clerk's office, usually with a ballot at the same visit: none is issued
+// after 4 PM the Monday before. Shut on a phone at first: most readers are registered already.
 function registrationCard(r) {
   if (registrationNow() !== 'in-person') return '';
   const office = registrationOffice(r);
@@ -1411,8 +1411,8 @@ function registrationCard(r) {
     : office.phone ? '<div class="vi-hours"><span class="vi-hours-lbl">Hours:</span> ' +
                      `call ${esc(office.phone)}</div>`
     : '';
-  const note = '<div class="pp-note">Register here in person, and you can vote at the ' +
-    'same visit. The same goes if you have moved since you registered. Bring something ' +
+  const note = '<div class="pp-note">Register here in person, and you can usually vote at ' +
+    'the same visit. The same goes if you have moved since you registered. Bring something ' +
     'with your name and current address on it, on paper or on your phone ' +
     `(<a href="${REGISTER_URL}" target="_blank" rel="noopener">what counts</a>).</div>`;
   const close = electionDayHours?.close;
@@ -1731,7 +1731,7 @@ function registrationLine() {
     const until = close ? `until ${esc(Elections.shortTime(close))} ${day}`
                         : `through ${isElectionDay() ? 'today' : 'election day'}`;
     return 'Not registered? You can still register in person at your clerk\u2019s ' +
-      `office, ${until}, and vote at the same visit.`;
+      `office, ${until}, and usually vote at the same visit.`;
   }
   return '';
 }

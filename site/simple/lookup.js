@@ -503,7 +503,7 @@ function showRegistrationLine() {
       "your clerk's office through election day.");
   } else if (phase === 'in-person') {
     line.append("Not registered? You can still register in person at your clerk's " +
-      `office, ${until}, and vote at the same visit.`);
+      `office, ${until}, and usually vote at the same visit.`);
   }
   line.hidden = !line.textContent;
 }
@@ -539,7 +539,7 @@ function registering(found) {
            el('strong', 'when', close ? `today, until ${close}` : 'today'))
       : el('div', 'sec-sub', 'Register in person through ',
            el('strong', 'when', Elections.withWeekday(election.date))),
-    el('div', 'ev-note', 'Register here in person, and you can vote at the same visit. ' +
+    el('div', 'ev-note', 'Register here in person, and you can usually vote at the same visit. ' +
        'The same goes if you have moved since you registered. Bring something with your ' +
        'name and current address on it, on paper or on your phone (',
        stateLink('what counts'), ').'),
