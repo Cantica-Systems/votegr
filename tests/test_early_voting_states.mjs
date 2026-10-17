@@ -171,7 +171,7 @@ for (const [name, data, want] of CASES) {
   await page.waitForSelector('#precinctInfo .vi-lbl', { timeout: 10000 });
 
   const hours = await page.evaluate(() =>
-    (document.querySelector('#precinctInfo .vi-hours') || {}).textContent || null);
+    (document.querySelector('#precinctInfo .vi-when-polling .vi-hours') || {}).textContent || null);
 
   const got = await page.evaluate(() => {
     // The row, by name. Three rows now share one shape -- drop box, early
@@ -290,16 +290,17 @@ for (const theme of ['dark', 'light']) {
   await page.goto(URL_, { waitUntil: 'networkidle' });
   await page.fill('#addr', '300 Monroe Ave NW');
   await page.press('#addr', 'Enter');
-  await page.waitForSelector('#precinctInfo .vi-fold-body > .ev-hours-lbl', { timeout: 10000 });
+  // The hours sit with the dates, as election day's do, not folded away under the note.
+  await page.waitForSelector('#precinctInfo .vi-card-early summary .ev-hours', { timeout: 10000 });
   const x = await page.evaluate(() => {
-    const body = document.querySelector('#precinctInfo .vi-fold-body > .ev-hours-lbl').parentElement;
-    const left = s => Math.round(body.querySelector(s).getBoundingClientRect().left);
-    return { card: Math.round(body.closest('.vi-card').getBoundingClientRect().left),
-             label: left('.ev-hours-lbl'), line: left('.ev-hours span') };
+    const card = document.querySelector('#precinctInfo .vi-card-early');
+    const left = s => Math.round(card.querySelector(s).getBoundingClientRect().left);
+    return { card: Math.round(card.getBoundingClientRect().left),
+             dates: left('summary .vi-val'), hours: left('summary .ev-hours') };
   });
-  console.log(`\n[phone, ${theme}] card=${x.card} label=${x.label} hours=${x.line}`);
-  ok(`phone, ${theme}: "Hours:" lines up with the hours under it`, x.label === x.line);
-  ok(`phone, ${theme}: and is inset from the card's edge`, x.label > x.card);
+  console.log(`\n[phone, ${theme}] card=${x.card} dates=${x.dates} hours=${x.hours}`);
+  ok(`phone, ${theme}: the hours line up under the dates`, x.hours === x.dates);
+  ok(`phone, ${theme}: and are inset from the card's edge`, x.hours > x.card);
   await page.close();
 }
 // ---- the clerk's own hours, date by date ---------------------------------
@@ -351,7 +352,7 @@ for (const theme of ['dark', 'light']) {
   await page.press('#addr', 'Enter');
   await page.waitForSelector('#precinctInfo .vi-when-early .ev-hours', { timeout: 10000 })
     .catch(() => {});
-  check('main page', await page.evaluate(read, '#precinctInfo .ev-hours span'));
+  check('main page', await page.evaluate(read, '#precinctInfo .ev-rows > span'));
   await page.close();
 
   const simple = await browser.newPage();

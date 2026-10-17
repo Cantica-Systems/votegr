@@ -475,15 +475,10 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 
 .vi-hours-lbl { color: var(--dim); font-weight: 600; }
-.ev-hours-lbl { font-size: .88rem; margin-top: 12px; }
-.ev-hours-lbl + .ev-hours { margin-top: 2px; }
 /* Off --label-size: these head whole columns, Ward and Precinct included. */
 .vi-grid .vi-lbl {
   font-size: .88rem; letter-spacing: .07em; margin-bottom: 4px;
 }
-/* Too narrow for days beside times, so they stack. */
-.vi-grid .ev-hours { grid-template-columns: 1fr; gap: .1rem 0; }
-.vi-grid .ev-hours span:nth-child(even) { margin-bottom: .3rem; }
 /* 700px, matches isPhone() in app.js, which writes rows as folding cards.
    Where the two disagree, card markup lands on the desktop grid. */
 @media (max-width: 700px) {
@@ -546,9 +541,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
     background: color-mix(in srgb, var(--good) 14%, var(--tint-hover));
   }
   .vi-fold[open] > summary { border-bottom: 1px solid var(--line); }
-  .vi-fold-body > .pp-note, .vi-fold-body > .ev-hours,
-  .vi-fold-body > .vi-hours { margin: 0 14px 12px; }
-  .vi-fold-body > .ev-hours-lbl { margin-left: 14px; margin-right: 14px; }
+  .vi-fold-body > .pp-note { margin: 0 14px 12px; }
   .vi-fold-body > .pp-note { padding-top: 10px; border-top: 1px solid var(--line); }
   @media (hover: hover) {
     .vi-grid .pp-place:hover { background: var(--raise); }
@@ -557,12 +550,9 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 /* One line: the 7 AM to 8 PM window is set by state law, the same every day. */
 .vi-hours { font-size: .88rem; color: var(--dim); margin-top: 4px; }
 
-/* Matches .ev-hours in simple/lookup.css. */
-.ev-hours {
-  display: grid; grid-template-columns: auto 1fr;
-  gap: .25rem 1.1rem; margin-top: 12px;
-  font-size: .88rem; color: var(--dim);
-}
+/* Several hours on the same "Hours:" line: days beside times, a line per row. */
+.ev-hours { display: flex; gap: .35em; }
+.ev-rows { display: grid; grid-template-columns: auto 1fr; gap: .15rem .9em; }
 .ev-hours .is-today { color: var(--fg); font-weight: 600; }
 /* The polling place block is also the show-on-map control. */
 .pp-place { cursor: pointer; border-radius: 8px; margin: 0 -8px; padding: 2px 8px; }

@@ -117,7 +117,7 @@ async function lookUp(page, addr) {
 const readCard = (page) => page.evaluate(() => {
   const where = document.querySelector('#precinctInfo .vi-register');
   const when = document.querySelector('#precinctInfo .vi-when-register');
-  const spans = [...(when?.querySelectorAll('.ev-hours span') || [])];
+  const spans = [...(when?.querySelectorAll('.ev-rows > span') || [])];
   const rows = [];
   for (let i = 0; i + 1 < spans.length; i += 2) {
     rows.push([spans[i].textContent.trim(), spans[i + 1].textContent.trim(),
@@ -243,19 +243,18 @@ const rowsMatch = (got, want) => got.length === want.length &&
     const fold = document.querySelector('.vi-card-register .vi-fold');
     return !!fold && !fold.open;
   }));
-  // Where no hours are published, the line saying to call sits inside the card's margin,
-  // with the note under it, not against the card's edge.
+  // Where no hours are published, the line saying to call sits under the dates, as
+  // election day's hours do, inside the card's margin rather than against its edge.
   await lookUp(phone, KW_ADDR);
   const inset = await phone.evaluate(() => {
     const card = document.querySelector('.vi-card-register');
-    card?.querySelector('.vi-fold')?.setAttribute('open', '');
     const left = (sel) => Math.round(card.querySelector(sel).getBoundingClientRect().left);
     return card && { card: Math.round(card.getBoundingClientRect().left),
-                     hours: left('.vi-fold-body > .vi-hours'), note: left('.vi-fold-body > .pp-note') };
+                     dates: left('summary .vi-val'), hours: left('summary .vi-hours') };
   });
   console.log(`[in person, phone Kentwood] ${JSON.stringify(inset)}`);
-  ok('in person: on a phone, "call" lines up with the note under it',
-     !!inset && inset.hours === inset.note && inset.hours > inset.card);
+  ok('in person: on a phone, "call" lines up under the dates',
+     !!inset && inset.hours === inset.dates && inset.hours > inset.card);
   await phone.close();
 
   const simple = await open('/simple/index.html');
