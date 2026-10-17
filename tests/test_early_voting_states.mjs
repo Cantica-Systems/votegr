@@ -382,12 +382,23 @@ for (const theme of ['dark', 'light']) {
 // and on no other day. Read at desktop width (.vi-when), at phone width
 // (.vi-card, which folds) and on /simple (its badge), so the three cannot
 // disagree.
+// Election day is three states by the clock, so each is held at a time of its own, an
+// hour either side of the statewide hours: the polls badged "Today" before they open and
+// "Open now" while they are, and nothing green once they have closed.
+const pollsAt = (clock, minutes) =>
+  new Date(Elections.atTime(iso(0), clock).getTime() + minutes * 60000);
+const onTheDay = {
+  data: base({ date: iso(0), early_voting_from: iso(-10), early_voting_to: iso(-2),
+               early_voting_sites: SITES, early_voting_hours: HOURS }),
+  order: ['polling', 'dropbox'], routed: /^election day$/i,
+};
 const ORDER_CASES = [
-  { name: 'election day',
-    data: base({ date: iso(0), early_voting_from: iso(-10), early_voting_to: iso(-2),
-                 early_voting_sites: SITES, early_voting_hours: HOURS }),
-    order: ['polling', 'dropbox'], routed: /^election day$/i, now: ['polling'],
-    badges: ['Today'] },
+  { ...onTheDay, name: 'election day, before the polls open',
+    clock: pollsAt(POLL_HOURS.open, -60), now: ['polling'], badges: ['Today'] },
+  { ...onTheDay, name: 'election day, polls open',
+    clock: pollsAt(POLL_HOURS.open, 60), now: ['polling'], badges: ['Open now'] },
+  { ...onTheDay, name: 'election day, polls closed',
+    clock: pollsAt(POLL_HOURS.close, 30), now: [], badges: [] },
   { name: 'early voting open',
     data: base({ date: iso(10), early_voting_from: iso(-2), early_voting_to: iso(2),
                  early_voting_sites: SITES, early_voting_hours: HOURS }),
@@ -409,10 +420,15 @@ const ORDER_CASES = [
 const nowKinds = (sel, prefix) => [...document.querySelectorAll(sel)]
   .map(e => [...e.classList].find(c => c.startsWith(prefix)).slice(prefix.length));
 
-for (const { name, data, order: wantOrder, routed: routedWant, now, badges } of ORDER_CASES) {
+for (const { name, data, clock, order: wantOrder, routed: routedWant, now, badges } of ORDER_CASES) {
   current = data;
   const electionDay = wantOrder[0] === 'polling';
-  const page = await browser.newPage();
+  const openPage = async (opts) => {
+    const p = await browser.newPage(opts);
+    if (clock) await p.clock.setFixedTime(clock);
+    return p;
+  };
+  const page = await openPage();
   await page.goto(URL_, { waitUntil: 'networkidle' });
   await page.fill('#addr', '300 Monroe Ave NW');
   await page.press('#addr', 'Enter');
@@ -426,6 +442,20 @@ for (const { name, data, order: wantOrder, routed: routedWant, now, badges } of 
     return on ? on.textContent.trim() : null;
   }, null, { timeout: 15000 }).then(h => h.jsonValue()).catch(() => null);
   const lit = await page.evaluate(`(${nowKinds})('#precinctInfo .vi-when.is-now', 'vi-when-')`);
+  // The badge's words, and which headings are green: --good, read from the page, so a
+  // theme change cannot leave this comparing against a stale colour.
+  const mainBadges = await page.evaluate(() =>
+    [...document.querySelectorAll('#precinctInfo .vi-when .vi-now')].map(e => e.textContent));
+  const greenHeads = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--good');
+    document.body.append(probe);
+    const good = getComputedStyle(probe).color;
+    probe.remove();
+    return [...document.querySelectorAll('#precinctInfo .vi-when')]
+      .filter((w) => getComputedStyle(w.querySelector('.vi-lbl')).color === good)
+      .map((w) => [...w.classList].find((c) => c.startsWith('vi-when-')).slice('vi-when-'.length));
+  });
 
   // On the day, the banner counts the polls rather than the day: one of
   // three labels, hours-minutes-seconds with no Days unit, and the sentence
@@ -450,7 +480,7 @@ for (const { name, data, order: wantOrder, routed: routedWant, now, badges } of 
   await page.close();
 
   // At phone width the rows are folding cards, and the card carries the mark.
-  const phone = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const phone = await openPage({ viewport: { width: 390, height: 844 } });
   await phone.goto(URL_, { waitUntil: 'networkidle' });
   await phone.fill('#addr', '300 Monroe Ave NW');
   await phone.press('#addr', 'Enter');
@@ -460,7 +490,7 @@ for (const { name, data, order: wantOrder, routed: routedWant, now, badges } of 
 
   // /simple reads the same calendar and the same hours, and must say the
   // same thing about the polls on the day, in its own single line.
-  const simple = await browser.newPage();
+  const simple = await openPage();
   await simple.goto(URL_.replace('/index.html', '/simple/index.html'), { waitUntil: 'networkidle' });
   await simple.waitForFunction(() => !document.getElementById('election').hidden, null, { timeout: 15000 });
   const line = await simple.evaluate(() => document.getElementById('election').textContent);
@@ -486,6 +516,10 @@ for (const { name, data, order: wantOrder, routed: routedWant, now, badges } of 
   ok(`${name}: highlighted ${now.join(', ') || 'nothing'}`,
      JSON.stringify(lit) === JSON.stringify(now));
   ok(`${name}: and the same at phone width`, JSON.stringify(litPhone) === JSON.stringify(now));
+  ok(`${name}: badged ${badges.join(', ') || 'nowhere'}`,
+     JSON.stringify(mainBadges) === JSON.stringify(badges));
+  ok(`${name}: with a green heading on ${now.join(', ') || 'nothing'}`,
+     JSON.stringify(greenHeads) === JSON.stringify(now));
   ok(`${name}: and on /simple`, JSON.stringify(simpleBadges) === JSON.stringify(badges));
 }
 

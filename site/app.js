@@ -404,7 +404,8 @@ function isElectionDay() {
 // Null otherwise. Separate from the routed default, which the drop box holds while
 // absentee voting is open (destinations()).
 function nowKind(r) {
-  if (isElectionDay()) return 'polling';
+  // On election day the polls, until they close: after that nothing is happening today.
+  if (isElectionDay()) return Elections.pollsToday(activeEl, electionDayHours) ? 'polling' : null;
   return Elections.windowState(evWindow(r)) === 'open' ? 'early' : null;
 }
 
@@ -1363,6 +1364,9 @@ function earlyVotingCard(r) {
     { collapsed: evState.off || (!!ev && !/open/i.test(evState.label)) });
 }
 
+// The polls' badge on election day, by Elections.pollsToday(); /simple says the same.
+const POLLS_BADGE = { open: 'Open now', today: 'Today' };
+
 // multi: there are other destinations to choose between.
 function pollingCard(r, multi) {
   let html = `<div class="vi-where${activeEl ? '' : ' vi-full'}" data-kind="polling">` +
@@ -1394,7 +1398,7 @@ function pollingCard(r, multi) {
   if (activeEl) {
     when = whenCell('polling',
       { label: 'Election day', status: Elections.withWeekday(activeEl.date),
-        now: nowKind(r) === 'polling' ? 'Today' : null },
+        now: POLLS_BADGE[Elections.pollsToday(activeEl, electionDayHours)] || null },
       electionDayHours?.open && electionDayHours.close
         ? '<div class="vi-hours"><span class="vi-hours-lbl">Hours:</span> ' +
           `${esc(Elections.shortTime(electionDayHours.open))} to ` +

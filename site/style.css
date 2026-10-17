@@ -455,6 +455,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   line-height: 1.5; padding: 0 .55em; border-radius: 999px;
   background: var(--good); color: var(--bg);
 }
+/* What is happening today says so in its heading too, not only in the badge. */
+.vi-when.is-now .vi-lbl { color: var(--good); }
 .vi-grid .vi-when.is-now {
   background: color-mix(in srgb, var(--good) 14%, var(--tint));
   box-shadow: inset 4px 0 0 var(--good),

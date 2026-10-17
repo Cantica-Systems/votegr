@@ -656,6 +656,13 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
   ok('polls: 8:00 PM is closed', E.pollsPhase(el, hours, at(20)) === 'closed');
   ok('polls: 11:59 PM is still closed, not the next election', E.pollsPhase(el, hours, at(23, 59)) === 'closed');
   ok('polls: no hours means no phase', E.pollsPhase(el, null, at(12)) === null);
+  ok('polls: the day after is not a phase either', E.pollsPhase(el, hours, new Date(2026, 10, 4, 9)) === null);
+  // What both pages badge: the polls as something happening today.
+  ok('polls today: before they open is today', E.pollsToday(el, hours, at(6, 59)) === 'today');
+  ok('polls today: while open is open', E.pollsToday(el, hours, at(12)) === 'open');
+  ok('polls today: once closed is nothing', E.pollsToday(el, hours, at(20)) === null);
+  ok('polls today: the day before is nothing', E.pollsToday(el, hours, new Date(2026, 10, 2, 12)) === null);
+  ok('polls today: unreadable hours still say today', E.pollsToday(el, null, at(12)) === 'today');
 }
 
 // --- inferred addresses must defer to the precinct boundary --------------
