@@ -117,7 +117,7 @@ python3 scripts/refresh_neighbors.py     # neighbouring street names -> site/dat
 python3 scripts/refresh_polling.py       # county polling places + drop boxes -> site/data/polling/
 python3 scripts/merge_foia_dropboxes.py  # the state's boxes, where the county lists none
 python3 scripts/refresh_early_voting.py  # county early voting sites -> site/data/early-voting.json
-python3 scripts/refresh_gr_clerk.py      # the city's dates, sites and boxes -> site/data/gr-clerk.json
+python3 scripts/refresh_gr_clerk.py      # the city's dates, sites, boxes and registration hours -> site/data/gr-clerk.json
 python3 scripts/geocode_places.py        # coordinates for all of the above, in place
 
 # Map furniture and cameras

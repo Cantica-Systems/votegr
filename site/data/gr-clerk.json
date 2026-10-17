@@ -1,9 +1,9 @@
 {
  "src":"gr-clerk-current-election",
  "provenance":{
-  "description":"Grand Rapids early voting dates, sites and absentee drop boxes, from the City Clerk.",
+  "description":"Grand Rapids early voting dates, sites and absentee drop boxes, and where and when to register in person, from the City Clerk.",
   "source_registry":"sources.json",
-  "generated":"2026-10-16",
+  "generated":"2026-10-17",
   "how_to_update":"Run refresh_gr_clerk.py AND READ WHAT IT WROTE. This is a prose page maintained by hand and it carries copy errors: under the November heading it currently names the August election in a registration deadline. The script checks the shape, not the sense.",
   "why_not_derived":"Michigan's minimum early voting window is nine days ending the Sunday before an election. Grand Rapids opens earlier than that, so the window is read from this page and never computed from the statute."
  },
@@ -170,5 +170,30 @@
    "hours":"Mon-Fri, 8am to 5pm",
    "src":"mvic-voter-lookup"
   }
- ]
+ ],
+ "registration":{
+  "office":{
+   "address":"300 Monroe Ave NW",
+   "note":"City Hall, 2nd Floor",
+   "src":"gr-clerk-current-election"
+  },
+  "office_hours":[
+   {
+    "days":[
+     "Mon",
+     "Tue",
+     "Wed",
+     "Thu",
+     "Fri"
+    ],
+    "hours":"8:00 am - 5:00 pm"
+   }
+  ],
+  "extra_days":[
+   {
+    "date":"2026-10-31",
+    "hours":"7 am - 3 pm"
+   }
+  ]
+ }
 }

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Released into the public domain under the Unlicense, see UNLICENSE.
 """Read the Grand Rapids City Clerk's current election page into
-site/data/gr-clerk.json: early voting dates, sites and drop boxes for the city.
+site/data/gr-clerk.json: early voting dates, sites and drop boxes for the city,
+and where and when to register in person once registering by mail has closed.
 
 This page is the SOURCE for Grand Rapids early voting, not a cross-check. It is
 the only one that publishes the actual dates rather than a weekday pattern, and
@@ -116,6 +117,85 @@ def iso(month_name, day, year):
     return f"{year:04d}-{MONTHS.index(month_name.title()) + 1:02d}-{int(day):02d}"
 
 
+def days_before(election, n):
+    return (datetime.date.fromisoformat(election) - datetime.timedelta(days=n)).isoformat()
+
+
+# The registration deadlines are statute (MCL 168.497), and the pages derive them
+# from the election date. The clerk's printed dates are read only to check that
+# derivation: a disagreement means one of the two is wrong, and that is a REFUSE.
+BY_MAIL_DAYS, IN_PERSON_DAYS = 15, 14
+MONTH = "(%s)" % "|".join(MONTHS)
+BY_MAIL = re.compile(r"^\w+day,\s*%s\s+(\d{1,2}),\s*(\d{4})\s*-\s*Deadline to register "
+                     r"by mail or online" % MONTH, re.I)
+IN_PERSON = re.compile(r"^\w+day,\s*%s\s+(\d{1,2})\s*-\s*\w+day,\s*%s\s+(\d{1,2})\s*-\s*"
+                       r"Registration must be done in person" % (MONTH, MONTH), re.I)
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+OFFICE_HOURS = re.compile(r"^(%s)\s*-\s*(%s)\s+(\d.*[ap]m)$"
+                          % ("|".join(WEEKDAYS), "|".join(WEEKDAYS)), re.I)
+OFFICE = re.compile(r"^Clerk['\u2019]s Office\s+(.+?),\s*(\d+\s+.+)$", re.I)
+EXTRA_DAY = re.compile(r"open on \w+day,\s*%s\s+(\d{1,2})\s+from\s+(.+?)\s+for voter "
+                       r"registration" % MONTH, re.I)
+
+
+def registration(lines, election):
+    """Where and when Grand Rapids registers voters in person, or None.
+
+    None, said on stdout, when the block is missing or reads differently: the
+    pages then fall back to the county's record of the clerk's office, which
+    early voting has no equivalent of, so this never holds up that data.
+    """
+    year = int(election[:4])
+    by_mail = in_person = None
+    for line in lines:
+        match = BY_MAIL.match(line)
+        if match and not by_mail:
+            by_mail = iso(match.group(1), match.group(2), int(match.group(3)))
+        match = IN_PERSON.match(line)
+        if match and not in_person:
+            in_person = (iso(match.group(1), match.group(2), year),
+                         iso(match.group(3), match.group(4), year))
+    if by_mail and by_mail != days_before(election, BY_MAIL_DAYS):
+        sys.exit(f"REFUSE: the clerk says registering by mail closes {by_mail}, and "
+                 f"statute says {days_before(election, BY_MAIL_DAYS)}")
+    if in_person and in_person != (days_before(election, IN_PERSON_DAYS), election):
+        sys.exit(f"REFUSE: the clerk says in-person registration runs {in_person[0]} "
+                 f"to {in_person[1]}, and statute says "
+                 f"{days_before(election, IN_PERSON_DAYS)} to {election}")
+
+    office, office_hours, extra_days = None, [], []
+    for line in section(lines, "Office Locations and Hours", "Drop Box Locations"):
+        match = OFFICE_HOURS.match(line)
+        if match:
+            first = WEEKDAYS.index(match.group(1).title())
+            last = WEEKDAYS.index(match.group(2).title())
+            office_hours.append({"days": [d[:3] for d in WEEKDAYS[first:last + 1]],
+                                 "hours": match.group(3).strip()})
+            continue
+        match = OFFICE.match(line)
+        if match:
+            office = {"address": street(match.group(2)), "note": match.group(1).strip(),
+                      "src": SOURCE_ID}
+            continue
+        match = EXTRA_DAY.search(line)
+        if match:
+            date = iso(match.group(1), match.group(2), year)
+            if days_before(election, IN_PERSON_DAYS) <= date < election:
+                extra_days.append({"date": date, "hours": match.group(3).strip()})
+            else:
+                print(f"NOTE: an extra registration day on {date} falls outside "
+                      f"in-person registration, so it is left out")
+
+    if not (by_mail and in_person and office and office_hours):
+        print("NOTE: no registration block read (deadlines "
+              f"{'found' if by_mail and in_person else 'missing'}, office "
+              f"{'found' if office else 'missing'}, hours "
+              f"{'found' if office_hours else 'missing'}); writing none, and the "
+              "pages fall back to the county's record of the clerk's office")
+        return None
+    return {"office": office, "office_hours": office_hours, "extra_days": extra_days}
+
+
 def main():
     request = urllib.request.Request(URL, headers=UA)
     with urllib.request.urlopen(request, timeout=60) as response:
@@ -205,6 +285,8 @@ def main():
         sys.exit(f"REFUSE: parsed {len(sites)} sites and {len(boxes)} drop "
                  f"boxes; the page has been rewritten")
 
+    register_in_person = registration(lines, election)
+
     # The source goes in the registry; the file keeps what is true of the file.
     snapshot = snapshot_or_note(URL)
     if corrected:
@@ -230,7 +312,8 @@ def main():
         url=URL,
         licence="Public record of the City of Grand Rapids.",
         archived=snapshot,
-        covers="Grand Rapids early voting dates, sites and absentee drop boxes",
+        covers="Grand Rapids early voting dates, sites and absentee drop boxes, "
+               "and the clerk's office hours for registering in person",
         note="The source of record for the city. The county's pages are the "
              "cross-check, not the other way round. GAP: the City Hall drop "
              "box appears here only as prose, with no address and no hours, "
@@ -241,7 +324,8 @@ def main():
         "src": src,
         "provenance": {
             "description": "Grand Rapids early voting dates, sites and absentee "
-                           "drop boxes, from the City Clerk.",
+                           "drop boxes, and where and when to register in "
+                           "person, from the City Clerk.",
             "source_registry": "sources.json",
             "generated": datetime.date.today().isoformat(),
             "how_to_update": "Run refresh_gr_clerk.py AND READ WHAT IT WROTE. "
@@ -260,6 +344,7 @@ def main():
         "early_voting": {"from": dates[0], "to": dates[-1], "days": days},
         "early_voting_sites": sites,
         "drop_boxes": boxes,
+        "registration": register_in_person,
     }
     OUT.write_text(json.dumps(document, separators=(",", ":"), indent=1) + "\n")
     print(f"next election {election}")
@@ -270,6 +355,13 @@ def main():
               f"{'  (' + site['entrance_note'] + ')' if site['entrance_note'] else ''}")
     print(f"{len(boxes)} drop boxes"
           + (f", {corrected} corrected from MVIC" if corrected else ""))
+    if register_in_person:
+        office = register_in_person["office"]
+        print(f"registering in person: {office['address']} ({office['note']}), "
+              + "; ".join(f"{'-'.join((h['days'][0], h['days'][-1]))} {h['hours']}"
+                          for h in register_in_person["office_hours"])
+              + "".join(f"; {d['date']} {d['hours']}"
+                        for d in register_in_person["extra_days"]))
     print(f"wrote {OUT} ({OUT.stat().st_size/1024:.0f} KB)")
 
 
