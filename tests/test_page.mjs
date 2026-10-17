@@ -171,6 +171,21 @@ for (const w of WIDTHS) {
   ok('the close button closes it', await page.evaluate(() => document.getElementById('aboutModal').hidden));
 
   // --- the theme switch ---
+  // With nothing chosen the page follows the device (Auto), and loading it
+  // stores nothing: only a click is a choice.
+  const fresh = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const first = await fresh.newPage();
+  await first.goto(URL_, { waitUntil: 'networkidle' });
+  const unset = await first.evaluate(() => ({
+    attr: document.documentElement.getAttribute('data-theme'),
+    auto: document.querySelector('#themeSwitch button[data-theme-choice="system"]').classList.contains('on'),
+    stored: localStorage.getItem('theme'),
+  }));
+  ok('with no choice saved the page follows the device, Auto marked',
+     unset.attr === null && unset.auto, JSON.stringify(unset));
+  ok('and loading the page saves no choice', unset.stored === null, JSON.stringify(unset));
+  await fresh.close();
+
   // System is the absence of the attribute, not a third value for it.
   for (const [choice, attr] of [['light', 'light'], ['dark', 'dark'], ['system', null]]) {
     await page.click(`#themeSwitch button[data-theme-choice="${choice}"]`);
@@ -1552,9 +1567,9 @@ for (const w of [390, 1280]) {
 // The tints are read off the real renderer rather than re-derived here: a copy
 // of the formula in the test would agree with a wrong formula in the source.
 //
-// Both themes, because the palettes differ and the page opens in dark unless
-// the reader has chosen otherwise, so a context left alone only ever sees
-// one of them. The choice is set the way the theme switch stores it.
+// Both themes, because the palettes differ and the page follows the device
+// unless the reader has chosen otherwise, so a context left alone only ever
+// sees one of them. The choice is set the way the theme switch stores it.
 for (const theme of ['dark', 'light']) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
   const page = await ctx.newPage();

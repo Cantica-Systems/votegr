@@ -168,10 +168,19 @@ function pollsPhase(e, hours, now) {
   const close = atTime(e.date, hours.close);
   if (!open || !close) return null;
   const t = now || new Date();
-  if (t < dayStart(e.date)) return null;
+  if (isoOf(t) !== e.date) return null;
   if (t < open) return 'before';
   if (t < close) return 'open';
   return 'closed';
+}
+
+// The polls as something happening today: 'open' while they are, 'today' before they
+// open (or when the hours cannot be read), null once they have closed and on any other day.
+function pollsToday(e, hours, now) {
+  const t = now || new Date();
+  if (!e || isoOf(t) !== e.date) return null;
+  const phase = pollsPhase(e, hours, t);
+  return phase === 'closed' ? null : phase === 'open' ? 'open' : 'today';
 }
 
 // 'mail' through the last day to register online or by mail, 'in-person' from then
@@ -333,7 +342,7 @@ function registrationRows(reg, e, hours, today) {
 
 const Elections = {
   todayISO, dayStart, monthDay, withWeekday, dayMonth, shortTime,
-  next, sites, absenteeFrom, atTime, pollsPhase, earlyVotingEnds, windowState,
+  next, sites, absenteeFrom, atTime, pollsPhase, pollsToday, earlyVotingEnds, windowState,
   hoursRows, registerByMailUntil, registrationPhase, registrationRows
 };
 

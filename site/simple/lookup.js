@@ -136,11 +136,11 @@ function pollingPlace(found) {
       `We do not have a polling place listed for precinct ${found.precinct}. ` +
       'Please check the Michigan Voter Information Center.')];
   }
+  // Badged on election day and no other, as app.js highlights it (nowKind).
+  const badge = POLLS_BADGE[Elections.pollsToday(election, pollHours)];
   const parts = [
     // No date: the banner gives it, and two dates on one screen read as two facts.
-    // Badged on election day and no other, as app.js highlights it (nowKind).
-    el('div', 'lead-2', 'Your voting day location',
-       isElectionDay() ? nowBadge('Today') : null),
+    el('div', 'lead-2', 'Your voting day location', badge ? nowBadge(badge) : null),
     locationRow(place),
   ];
   if (place.consolidated_with) {
@@ -153,6 +153,9 @@ function pollingPlace(found) {
 }
 
 const isElectionDay = () => !!election && Elections.todayISO() === election.date;
+
+// The polls' badge on election day, by Elections.pollsToday(), as app.js words it.
+const POLLS_BADGE = { open: 'Open now', today: 'Today' };
 
 // The way of voting in person that is happening today, as app.js marks it.
 const nowBadge = (text) => el('span', 'now-badge', text);
