@@ -34,6 +34,7 @@ import sys
 import urllib.request
 
 from archive import snapshot_or_note
+from geocode_places import centreline, norm_street
 from sources import register
 from useragent import USER_AGENT
 
@@ -81,6 +82,7 @@ BOX = re.compile(r"^(.+?),\s*(\d+\s+[^(]+?)(?:\s*\((.+)\))?$")
 
 MIN_SITES = 2
 MIN_BOXES = 5
+GR_MCD = "34000"
 
 # "1430 Quarry, NW": the current-election page puts a comma before the
 # quadrant on one site, and the early voting page writes the same site without.
@@ -89,6 +91,35 @@ QUADRANT_COMMA = re.compile(r",\s*(?=(?:NE|NW|SE|SW)\b)")
 
 def street(text):
     return QUADRANT_COMMA.sub(" ", text.strip())
+
+
+def full_streets(places):
+    """Write each address the way the polling places do, street type included.
+
+    The clerk writes "130 Delaware SW", and the polling place in the same
+    building is 130 DELAWARE ST SW, so the page showed one building two ways.
+    The road file names the street, through the page's own geocoder
+    (centreline_geocode.mjs, which geocode_places.centreline runs), and only an
+    EXACT house-number match is taken, so a guessed street type never replaces
+    what the clerk wrote. The clerk's text is kept as address_as_published.
+    Without node, every address stays as published. Returns how many changed.
+    """
+    pending = []
+    for i, place in enumerate(places):
+        match = re.match(r"^(\d+)\s+(.+)$", place.get("address") or "")
+        if match:
+            pending.append({"mcd": GR_MCD, "key": str(i), "number": int(match.group(1)),
+                            "street": norm_street(match.group(2))})
+    found = centreline(pending)
+    changed = 0
+    for item in pending:
+        hit, place = found.get(item["key"]), places[int(item["key"])]
+        full = hit and hit.get("exact") and f"{item['number']} {hit['street']}"
+        if full and full.upper() != place["address"].upper():
+            place["address_as_published"] = place["address"]
+            place["address"] = full
+            changed += 1
+    return changed
 
 
 def lines_of(page):
@@ -286,6 +317,8 @@ def main():
                  f"boxes; the page has been rewritten")
 
     register_in_person = registration(lines, election)
+    restreeted = full_streets(sites + boxes +
+                              ([register_in_person["office"]] if register_in_person else []))
 
     # The source goes in the registry; the file keeps what is true of the file.
     snapshot = snapshot_or_note(URL)
@@ -355,6 +388,7 @@ def main():
               f"{'  (' + site['entrance_note'] + ')' if site['entrance_note'] else ''}")
     print(f"{len(boxes)} drop boxes"
           + (f", {corrected} corrected from MVIC" if corrected else ""))
+    print(f"{restreeted} address(es) given the street type the road file carries")
     if register_in_person:
         office = register_in_person["office"]
         print(f"registering in person: {office['address']} ({office['note']}), "

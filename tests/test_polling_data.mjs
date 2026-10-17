@@ -135,6 +135,20 @@ const thin = [...new Set(cited.map(b => b.src))]
 ok('every cited source names a publisher and a URL', thin.length === 0,
    some(thin, id => id));
 
+// --- the city clerk's addresses read like the polling places' -------------
+// The clerk writes "130 Delaware SW"; the polling place in the same building is
+// 130 DELAWARE ST SW. refresh_gr_clerk.py takes the street from the road file,
+// so every address it can place names its street type.
+const grClerk = JSON.parse(await readFile(
+  new URL('../site/data/gr-clerk.json', import.meta.url), 'utf8'));
+const TYPED = /^\d+ .*\b(AVE|ST|DR|RD|BLVD|CT|LN|PL|PKWY|HWY|WAY|TER|CIR|TRL)\b/i;
+const clerkPlaces = [...grClerk.early_voting_sites, ...grClerk.drop_boxes,
+                     ...(grClerk.registration ? [grClerk.registration.office] : [])]
+  .filter(p => /^\d/.test(p.address || ''));
+const untyped = clerkPlaces.filter(p => !TYPED.test(p.address));
+ok(`every city clerk address names its street type (${clerkPlaces.length})`, untyped.length === 0,
+   some(untyped, p => p.address));
+
 // --- every town's clerk, linked -------------------------------------------
 // clerks.json is read by hand, one page per clerk, because the county links
 // town homepages. A town missing from it shows no link and says nothing, so

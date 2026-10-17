@@ -69,106 +69,121 @@
  "early_voting_sites":[
   {
    "name":"St. Peter and Paul School",
-   "address":"1430 Quarry NW",
+   "address":"1430 QUARRY AVE NW",
    "entrance_note":"gymnasium",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"1430 Quarry NW"
   },
   {
    "name":"GRPS University",
-   "address":"1400 Fuller NE",
+   "address":"1400 FULLER AVE NE",
    "entrance_note":"gymnasium",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"1400 Fuller NE"
   },
   {
    "name":"Ottawa Hills High School",
-   "address":"2055 Rosewood SE",
+   "address":"2055 ROSEWOOD AVE SE",
    "entrance_note":"old cafeteria",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"2055 Rosewood SE"
   },
   {
    "name":"New Hope Baptist Church",
-   "address":"130 Delaware SW",
+   "address":"130 DELAWARE ST SW",
    "entrance_note":"gymnasium",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"130 Delaware SW"
   }
  ],
  "drop_boxes":[
   {
    "name":null,
-   "address":"300 Ottawa NW",
+   "address":"300 OTTAWA AVE NW",
    "note":"Across from Calder Plaza",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"300 Ottawa NW"
   },
   {
    "name":"VanBelkum Library",
-   "address":"1563 Plainfield NE",
+   "address":"1563 PLAINFIELD AVE NE",
    "note":"curbside",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"1563 Plainfield NE"
   },
   {
    "name":"Yankee Clipper Library",
-   "address":"2025 Leonard NE",
+   "address":"2025 LEONARD ST NE",
    "note":"bike rack",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"2025 Leonard NE"
   },
   {
    "name":"Westside Library",
-   "address":"713 Bridge NW",
+   "address":"713 BRIDGE ST NW",
    "note":"parking lot side",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"713 Bridge NW"
   },
   {
    "name":"West Leonard Library",
-   "address":"1017 Leonard NW",
+   "address":"1017 LEONARD ST NW",
    "note":"east parking lot",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"1017 Leonard NW"
   },
   {
    "name":"Ottawa Hills Library",
-   "address":"1150 Giddings SE",
+   "address":"1150 GIDDINGS AVE SE",
    "note":"curbside",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"1150 Giddings SE"
   },
   {
    "name":"Madison Square Library",
-   "address":"1201 Madison SE",
+   "address":"1201 MADISON AVE SE",
    "note":"building entrance",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"1201 Madison SE"
   },
   {
    "name":"Main Library",
-   "address":"110 Fountain NE",
+   "address":"110 FOUNTAIN ST NE",
    "note":"north side across from the library",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"110 Fountain NE"
   },
   {
    "name":"Seymour Library Branch",
-   "address":"2350 Eastern Avenue SE",
+   "address":"2350 EASTERN AVE SE",
    "note":"parking lot behind library",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"2350 Eastern Avenue SE"
   },
   {
    "name":"GR Fire Department Division Station",
-   "address":"16 Elm Street SW",
+   "address":"16 ELM ST SW",
    "note":"curbside",
    "hours":"24/7",
-   "src":"gr-clerk-current-election"
+   "src":"gr-clerk-current-election",
+   "address_as_published":"16 Elm Street SW"
   },
   {
    "name":"City Hall",
-   "address":"300 Monroe NW",
+   "address":"300 MONROE AVE NW",
    "note":"Monroe lobby and plaza level",
    "hours":"Mon-Fri, 8am to 5pm",
-   "src":"mvic-voter-lookup"
+   "src":"mvic-voter-lookup",
+   "address_as_published":"300 Monroe NW"
   }
  ],
  "registration":{
