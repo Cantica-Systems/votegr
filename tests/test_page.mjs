@@ -69,6 +69,8 @@ const URL_ = ORIGIN + '/index.html';
 // test_simple_page.mjs, which has the same problem on the other page.
 const pinned = (daysOut) => pinnedCalendar(ROOT, daysOut);
 const realElections = JSON.parse(await readFile(join(ROOT, 'data/elections.json'), 'utf8'));
+// Each town's clerk page, by MCD: what the page should link, read rather than restated.
+const CLERKS = JSON.parse(await readFile(join(ROOT, 'data/clerks.json'), 'utf8')).clerks;
 
 // The shipped calendar running out is not a failure. elections.json's own
 // how_to_update calls it deliberate: "If every date has passed the page
@@ -327,6 +329,19 @@ for (const w of WIDTHS) {
      /ward\s*2\b/i.test(result.precinct) && /precinct\s*40\b/i.test(result.precinct));
   ok('and says it is in Grand Rapids', /Grand Rapids/.test(result.precinct));
 
+  // The town's own clerk, linked under its name and again in the disclaimer,
+  // both from clerks.json. Compared as URLs: the browser adds a trailing slash.
+  const clerkLinks = (mcd) => page.evaluate((want) => {
+    const links = [...document.querySelectorAll('#precinctInfo .vi-clerk a, #advisory a')]
+      .filter((a) => a.href === want);
+    return { n: links.length,
+             safe: links.every((a) => a.target === '_blank' && /noopener/.test(a.rel)),
+             rail: !!document.querySelector('#precinctInfo .vi-clerk a') };
+  }, new URL(CLERKS[mcd].url).href);
+  const grClerk = await clerkLinks('34000');
+  ok("and links the city clerk's page, under the name and in the disclaimer",
+     grClerk.rail && grClerk.n === 2 && grClerk.safe);
+
   // Outside the city. The Kentwood Activities Center is a polling place,
   // so its address is a fixture that names nobody's house. Kentwood has
   // wards; a township would show none, and neither may show a blank one.
@@ -346,6 +361,9 @@ for (const w of WIDTHS) {
      !/No polling place on file/i.test(kw.info));
   ok('and directions to it', kw.steps > 0 || /already here/i.test(kw.routes));
   ok('never a blank ward', !/Ward\s*(Precinct|$)/i.test(kw.info));
+  const kwClerk = await clerkLinks('42820');
+  ok("and links Kentwood's clerk, not the city's, in both places",
+     kwClerk.rail && kwClerk.n === 2 && kwClerk.safe);
 
   // A township whose drop box comes from the state rather than the county.
   // Ada Township was one of the 24 with no box on the county's page, and this

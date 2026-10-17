@@ -70,6 +70,8 @@ const URL_ = ORIGIN + '/simple/index.html';
 // What ships, so the assertions below describe the data rather than a memory
 // of it.
 const read = async (p) => JSON.parse(await readFile(join(ROOT, 'data', p), 'utf8'));
+// Each town's clerk page, by MCD, as the page should link it.
+const CLERKS = (await read('clerks.json')).clerks;
 const neighbours = await read('neighbors.json');
 const polling = await read('polling.json');
 
@@ -271,11 +273,22 @@ for (const width of [1280, 390, 320]) {
      kwBoxes === county.dropBoxes('42820').length);
   ok('and no early voting: the city clerk\'s dates are not Kentwood\'s',
      !(await page.$('.ev-early')));
+  // Its own clerk's page, from clerks.json, opening in a new tab.
+  const clerkLink = () => page.$eval('.clerk-line a', (a) =>
+    ({ href: a.href, text: a.textContent, safe: a.target === '_blank' && /noopener/.test(a.rel) }))
+    .catch(() => null);
+  const kwClerk = await clerkLink();
+  ok("and links Kentwood's clerk",
+     !!kwClerk && kwClerk.href === new URL(CLERKS['42820'].url).href && kwClerk.safe &&
+     /Kentwood/.test(kwClerk.text));
 
   const adaText = await answerFor('6330 Ada Dr SE');
   ok('a township address answers, naming the township',
      /Where you vote:\s*Ada Township/.test(adaText));
   ok('with no Ward at all, not a blank one', !/Ward:/.test(adaText) && /Precinct:\s*\d/.test(adaText));
+  const adaClerk = await clerkLink();
+  ok("and links Ada Township's clerk",
+     !!adaClerk && adaClerk.href === new URL(CLERKS['00240'].url).href && /Ada Township/.test(adaClerk.text));
   ok('and the drop box the state lists for it',
      county.dropBoxes('00240').every(b => adaText.toUpperCase().includes(b.address.toUpperCase())));
   ok('and a Directions link that names the township, not the city',

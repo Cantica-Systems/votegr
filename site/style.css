@@ -392,6 +392,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .vi-name {
   font-size: 1.05rem; font-weight: 700; letter-spacing: -.012em; line-height: 1.25;
 }
+.vi-clerk { margin-top: 3px; font-size: .85rem; }
 .vi-num {
   font-size: 1.42rem; font-weight: 700; letter-spacing: -.022em;
   line-height: 1.22;
