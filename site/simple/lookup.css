@@ -248,6 +248,7 @@ a.dir-btn svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
   font-size: .7rem; font-weight: 700; letter-spacing: .06em; line-height: 1.6;
   text-transform: uppercase; background: var(--good); color: var(--bg);
 }
+.lead-2.is-now { color: var(--good); }
 .ev-block.is-now {
   border-left: 4px solid var(--good);
   background: color-mix(in srgb, var(--good) 10%, var(--panel));

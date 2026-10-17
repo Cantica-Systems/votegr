@@ -140,7 +140,7 @@ function pollingPlace(found) {
   const badge = POLLS_BADGE[Elections.pollsToday(election, pollHours)];
   const parts = [
     // No date: the banner gives it, and two dates on one screen read as two facts.
-    el('div', 'lead-2', 'Your voting day location', badge ? nowBadge(badge) : null),
+    heading('lead-2', 'Your voting day location', badge),
     locationRow(place),
   ];
   if (place.consolidated_with) {
@@ -157,8 +157,11 @@ const isElectionDay = () => !!election && Elections.todayISO() === election.date
 // The polls' badge on election day, by Elections.pollsToday(), as app.js words it.
 const POLLS_BADGE = { open: 'Open now', today: 'Today' };
 
-// The way of voting in person that is happening today, as app.js marks it.
+// The way of voting in person that is happening today, as app.js marks it: badged, and
+// its heading green with the badge.
 const nowBadge = (text) => el('span', 'now-badge', text);
+const heading = (cls, text, badge) =>
+  el('div', badge ? `${cls} is-now` : cls, text, badge ? nowBadge(badge) : null);
 
 function render(found, text) {
   typed = { text, where: found.jurisdiction };
@@ -445,8 +448,7 @@ function earlyVoting(found, uncertain) {
       'Vote early and verify there. All early voting locations have your information.'));
   }
 
-  parts.push(el('div', 'lead-2 sec-head', 'Vote early',
-                open && !isElectionDay() ? nowBadge('Open now') : null));
+  parts.push(heading('lead-2 sec-head', 'Vote early', open && !isElectionDay() ? 'Open now' : null));
   parts.push(open
     ? el('div', 'sec-sub', 'Through ', el('strong', 'when', Elections.withWeekday(to)))
     : el('div', 'sec-sub', el('strong', 'when', Elections.withWeekday(from)),
