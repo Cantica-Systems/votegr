@@ -300,11 +300,6 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   clip-path: inset(50%); overflow: hidden; white-space: nowrap;
 }
 
-.cd-reg {
-  margin: 12px auto 0; max-width: 34rem;
-  font-size: .88rem; line-height: 1.5; color: var(--dim);
-}
-
 #col.has-result .countdown { display: none; }
 
 @media (max-width: 400px) {
