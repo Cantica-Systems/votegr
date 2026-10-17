@@ -43,6 +43,7 @@ script sends the same User-Agent, defined once in `scripts/useragent.py`.
 | `neighbors.json` | `refresh_neighbors.py` | Michigan Geographic Framework |
 | `polling.json` | **hand-edited, no script** | City Clerk precinct directory PDF |
 | `elections.json` | **hand-edited, no script** | Secretary of State and City Clerk |
+| `clerks.json` | **hand-edited, no script** | each clerk's own website, one page per jurisdiction, because the county's pages link town homepages; the weekly link check watches every URL |
 | `graph.json`, `addresses.json` | **no script: frozen** | the city-only files from before the county widening (see below) |
 
 `build/` holds intermediate pulls that are not committed. It is gitignored, and

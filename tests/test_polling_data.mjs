@@ -135,5 +135,24 @@ const thin = [...new Set(cited.map(b => b.src))]
 ok('every cited source names a publisher and a URL', thin.length === 0,
    some(thin, id => id));
 
+// --- every town's clerk, linked -------------------------------------------
+// clerks.json is read by hand, one page per clerk, because the county links
+// town homepages. A town missing from it shows no link and says nothing, so
+// the file is held to the state's list of jurisdictions here.
+const clerkFile = JSON.parse(await readFile(
+  new URL('../site/data/clerks.json', import.meta.url), 'utf8'));
+const towns = new Map(JSON.parse(await readFile(
+  new URL('../site/data/precincts.json', import.meta.url), 'utf8'))
+  .jurisdictions.map(j => [j.mcd, j.name || j.jurisdiction]));
+const clerkPages = clerkFile.clerks || {};
+const unlinked = [...towns.keys()].filter(m => !clerkPages[m]?.url);
+ok(`every jurisdiction links its clerk (${towns.size})`, unlinked.length === 0,
+   some(unlinked, m => `${m} ${towns.get(m)}`));
+const notHttps = Object.entries(clerkPages).filter(([, c]) => !/^https:\/\//.test(c.url || ''));
+ok('every clerk link is https', notHttps.length === 0, some(notHttps, ([m, c]) => `${m} ${c.url}`));
+const strays = Object.keys(clerkPages).filter(m => !towns.has(m));
+ok('and links no town the state does not list', strays.length === 0, some(strays, m => m));
+ok('the clerk links say when they were read', /^\d{4}-\d{2}-\d{2}$/.test(clerkFile.provenance?.read || ''));
+
 console.log(`\n${fails === 0 ? 'polling data: all passed' : fails + ' FAILED'}`);
 process.exit(fails ? 1 : 0);

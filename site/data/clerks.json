@@ -1,0 +1,161 @@
+{
+ "provenance": {
+  "description": "Each Kent County jurisdiction's clerk page, by the state's MCD code. Both pages link it under the jurisdiction's name and in the disclaimer.",
+  "read": "2026-10-17",
+  "how_read": "By hand, from each clerk's own website, and each URL then loaded once to confirm it answers, names the clerk, and is the Kent County jurisdiction (several township names repeat elsewhere in Michigan). Kent County's jurisdiction pages link town homepages, some misspelled and some missing, not the clerk, so they could not be used.",
+  "kind": "clerk: the clerk's own page. elections: the jurisdiction has no separate clerk page, so this is its elections page, which names the clerk.",
+  "how_to_update": "No script makes this file. scripts/check_links.mjs reads every URL in it weekly; when one is reported gone, find the clerk's new page on the jurisdiction's own site and confirm it names the clerk and the jurisdiction's address before replacing it."
+ },
+ "clerks": {
+  "00240": {
+   "jurisdiction": "Ada Township",
+   "url": "https://www.adamichigan.org/departments/clerks_office/index.php",
+   "kind": "clerk"
+  },
+  "01160": {
+   "jurisdiction": "Algoma Township",
+   "url": "https://www.algomatwp.org/departments/elections/index.php",
+   "kind": "elections"
+  },
+  "01840": {
+   "jurisdiction": "Alpine Township",
+   "url": "https://alpinetwp.gov/departments/clerk/index.php",
+   "kind": "clerk"
+  },
+  "09780": {
+   "jurisdiction": "Bowne Township",
+   "url": "https://www.bownetwp.org/general-8-1",
+   "kind": "elections"
+  },
+  "12240": {
+   "jurisdiction": "Byron Township",
+   "url": "https://www.byrontownship.org/government/clerk/index.php",
+   "kind": "clerk"
+  },
+  "12500": {
+   "jurisdiction": "Caledonia Township",
+   "url": "https://www.caledoniatownship.org/235/Clerk",
+   "kind": "clerk"
+  },
+  "13080": {
+   "jurisdiction": "Cannon Township",
+   "url": "https://www.cannontwp.gov/clerk",
+   "kind": "clerk"
+  },
+  "13660": {
+   "jurisdiction": "Cascade Township",
+   "url": "https://www.cascadetwp.com/departments/clerks-office/",
+   "kind": "clerk"
+  },
+  "14200": {
+   "jurisdiction": "Cedar Springs",
+   "url": "https://cityofcedarsprings.org/departments/city-clerk/",
+   "kind": "clerk"
+  },
+  "18500": {
+   "jurisdiction": "Courtland Township",
+   "url": "https://www.courtlandtwpmi.gov/1202/Clerk",
+   "kind": "clerk"
+  },
+  "23980": {
+   "jurisdiction": "East Grand Rapids",
+   "url": "https://www.eastgrmi.gov/131/Elections",
+   "kind": "elections"
+  },
+  "31240": {
+   "jurisdiction": "Gaines Township",
+   "url": "https://www.gainestownship.org/clerk/index.php",
+   "kind": "clerk"
+  },
+  "34000": {
+   "jurisdiction": "Grand Rapids",
+   "url": "https://www.grandrapidsmi.gov/departments/clerks-office/",
+   "kind": "clerk"
+  },
+  "34020": {
+   "jurisdiction": "Grand Rapids Township",
+   "url": "https://www.grandrapidstwp.org/services/clerk_s_office/index.php",
+   "kind": "clerk"
+  },
+  "34160": {
+   "jurisdiction": "Grandville",
+   "url": "https://www.cityofgrandville.com/government/departments/city_clerk/index.php",
+   "kind": "clerk"
+  },
+  "34560": {
+   "jurisdiction": "Grattan Township",
+   "url": "https://www.grattantownshipmi.gov/government/clerk_elections/index.php",
+   "kind": "clerk"
+  },
+  "42820": {
+   "jurisdiction": "Kentwood",
+   "url": "https://www.kentwood.us/city_services/city_government/clerk/index.php",
+   "kind": "clerk"
+  },
+  "49540": {
+   "jurisdiction": "Lowell",
+   "url": "https://www.lowellmi.gov/government/city_clerk/index.php",
+   "kind": "clerk"
+  },
+  "49560": {
+   "jurisdiction": "Lowell Township",
+   "url": "https://www.lowelltwp.org/government/clerk/index.php",
+   "kind": "clerk"
+  },
+  "56920": {
+   "jurisdiction": "Nelson Township",
+   "url": "https://www.nelsontownship.org/1197/Clerk",
+   "kind": "clerk"
+  },
+  "59580": {
+   "jurisdiction": "Oakfield Township",
+   "url": "https://www.oakfieldtwp.org/clerk",
+   "kind": "clerk"
+  },
+  "64660": {
+   "jurisdiction": "Plainfield Township",
+   "url": "https://www.plainfieldmi.org/180/Elections-and-Voting",
+   "kind": "elections"
+  },
+  "69080": {
+   "jurisdiction": "Rockford",
+   "url": "https://www.rockford.mi.us/city_hall/departments/city_clerk/index.php",
+   "kind": "clerk"
+  },
+  "74460": {
+   "jurisdiction": "Solon Township",
+   "url": "https://www.solontwp.org/elections/",
+   "kind": "elections"
+  },
+  "75440": {
+   "jurisdiction": "Sparta Township",
+   "url": "https://spartatownship.org/clerks-office.php",
+   "kind": "clerk"
+  },
+  "75560": {
+   "jurisdiction": "Spencer Township",
+   "url": "https://spencertwpmi.gov/elections/",
+   "kind": "elections"
+  },
+  "81140": {
+   "jurisdiction": "Tyrone Township",
+   "url": "https://tyronetownship.org/voter_information/index.php",
+   "kind": "elections"
+  },
+  "81920": {
+   "jurisdiction": "Vergennes Township",
+   "url": "https://vergennestwpmi.gov/clerks-office/",
+   "kind": "clerk"
+  },
+  "82960": {
+   "jurisdiction": "Walker",
+   "url": "https://walker.city/430/Clerk",
+   "kind": "clerk"
+  },
+  "88940": {
+   "jurisdiction": "Wyoming",
+   "url": "https://www.wyomingmi.gov/About-Wyoming/City-Departments/City-Clerk",
+   "kind": "clerk"
+  }
+ }
+}
