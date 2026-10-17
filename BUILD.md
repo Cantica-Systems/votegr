@@ -21,7 +21,8 @@ pip install -r requirements.txt
 `scripts/build_precincts.py` and `scripts/build_graph_chunks.py` need `shapely`
 alone; `scripts/geocode_places.py` needs `requests` for its parcel pull.
 `geocode_places.py` and `scripts/merge_foia_dropboxes.py` also need `node`, for
-the street centerline pass. Everything else runs on a bare interpreter. Every
+the street centerline pass, and `scripts/refresh_gr_clerk.py` uses it to give
+the clerk's addresses their street types (without it they stay as published). Everything else runs on a bare interpreter. Every
 script sends the same User-Agent, defined once in `scripts/useragent.py`.
 
 ## What generates what

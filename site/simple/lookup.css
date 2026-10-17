@@ -211,7 +211,7 @@ a.dir-btn svg { width: 1.15rem; height: 1.15rem; fill: currentColor; }
 }
 .ev-note { margin-top: .3rem; font-size: .88rem; color: var(--dim); }
 
-/* Matches .ev-hours in style.css. */
+/* Days beside their hours, a line per row. */
 .ev-hours {
   display: grid;
   grid-template-columns: auto 1fr;

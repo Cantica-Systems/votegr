@@ -349,14 +349,12 @@ function provenanceHtml(opt) {
 // On a phone, head is the shut card's summary and fold is what opening it reveals.
 // state.now: the way of voting in person that is happening today (nowKind), badged.
 // state.off: a way of voting not open yet or over, shown disabled.
+// Hours stay with the date at every width, as election day's do; on a phone the note folds
+// away with the place. noteHtml: a note carrying a link, already escaped.
 function whenCell(kind, state, extra) {
-  const note = state.note ? `<div class="pp-note">${esc(state.note)}</div>` : '';
-  let shown = extra || '';
+  const note = state.noteHtml ||
+    (state.note ? `<div class="pp-note">${esc(state.note)}</div>` : '');
   const phone = isPhone();
-  // Hour tables fold away; election day's one line stays with the date.
-  const folds = kind === 'early' || kind === 'register';
-  const fold = phone ? note + (folds ? shown : '') : '';
-  if (phone && folds) shown = '';
   const lbl = `<div class="vi-lbl${state.live ? ' live' : ''}">${esc(state.label)}</div>`;
   const head = `<div class="vi-when vi-when-${kind}${state.now ? ' is-now' : ''}` +
     `${state.off ? ' is-off' : ''}">` +
@@ -364,8 +362,8 @@ function whenCell(kind, state, extra) {
       ? `<div class="vi-lbl-row">${lbl}<span class="vi-now">${esc(state.now)}</span></div>`
       : lbl) +
     `<div class="vi-val">${esc(state.status)}</div>` +
-    `${shown}${phone ? '' : note}</div>`;
-  return { head, fold, now: !!state.now, off: !!state.off };
+    `${extra || ''}${phone ? '' : note}</div>`;
+  return { head, fold: phone ? note : '', now: !!state.now, off: !!state.off };
 }
 
 // 'none', 'upcoming', 'open' or 'closed'. Both ends are statute, not per box: ballots go
@@ -1439,8 +1437,8 @@ function registrationCard(r) {
   const status = !isElectionDay() ? `Through ${Elections.dayMonth(activeEl.date)}`
     : close ? `Today, until ${Elections.shortTime(close)}` : 'Today';
   return section('register', where,
-    whenCell('register', { label: 'Not registered yet?', status, live: true },
-             hours + note),
+    whenCell('register', { label: 'Not registered yet?', status, live: true, noteHtml: note },
+             hours),
     { collapsed: true });
 }
 
@@ -1580,17 +1578,16 @@ function evHoursHtml(w) {
   return hoursTableHtml(Elections.hoursRows(w, Elections.todayISO()));
 }
 
-// Same shape as /simple's hours, so the two pages read alike.
+// Election day's "Hours: 7 AM to 8 PM", with a line per set of days when there are several.
 function hoursTableHtml(rows) {
   if (!rows.length) return '';
-  let out = '<div class="vi-hours-lbl ev-hours-lbl">Hours:</div>' +
-            '<div class="ev-hours">';
-  for (const row of rows) {
+  const lines = rows.map((row) => {
     const mark = row.today ? ' class="is-today"' : '';
-    out += `<span${mark}>${esc(row.label)}${mark ? ' (today)' : ''}</span>` +
+    return `<span${mark}>${esc(row.label)}${row.today ? ' (today)' : ''}</span>` +
            `<span${mark}>${esc(row.hours)}</span>`;
-  }
-  return `${out}</div>`;
+  }).join('');
+  return '<div class="vi-hours ev-hours"><span class="vi-hours-lbl">Hours:</span>' +
+         `<span class="ev-rows">${lines}</span></div>`;
 }
 
 // One accessor for the answer block and the destination list, so they cannot disagree.
