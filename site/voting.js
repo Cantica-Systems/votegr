@@ -82,7 +82,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
                 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
                   'Friday', 'Saturday'];
-// The clerk publishes early voting hours by weekday; the data file uses these.
+// As elections.json's weekday hour rules write them.
 const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -95,8 +95,6 @@ function isoOf(d) {
 }
 
 function todayISO() { return isoOf(new Date()); }
-
-function todayAbbr() { return DAY_ABBR[new Date().getDay()]; }
 
 function dayStart(iso) {
   const m = ISO.exec(String(iso || ''));
@@ -198,9 +196,90 @@ function windowState(e, today, now) {
   return 'open';
 }
 
+// "11 am", "9:00 AM", "7:30 pm" -> "11 AM", "9 AM", "7:30 PM"; null if unreadable.
+function clockText(t) {
+  const m = CLOCK.exec(String(t || ''));
+  if (!m) return null;
+  const minutes = m[2] && m[2] !== '00' ? `:${m[2]}` : '';
+  return `${Number(m[1])}${minutes} ${m[3].toUpperCase()}M`;
+}
+
+// The clerk's "11 am - 7 pm" -> "11 AM to 7 PM"; anything else as given.
+function clerkHours(text) {
+  const [open, close] = String(text || '').split(/\s*[-–]\s*/);
+  const o = clockText(open), c = clockText(close);
+  return o && c ? `${o} to ${c}` : String(text || '');
+}
+
+// "2026-10-31" -> "Sat, Oct 31".
+function shortDate(iso) {
+  const d = dayStart(iso);
+  return d ? `${DAY_ABBR[d.getDay()]}, ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}`
+           : String(iso || '');
+}
+
+// True when the clerk's dates are exactly the days of the window, none missing.
+function coversWindow(e, dates) {
+  const listed = new Set(dates);
+  const d = dayStart(e?.early_voting_from), end = dayStart(e?.early_voting_to);
+  if (!d || !end) return false;
+  let n = 0;
+  for (; d <= end; d.setDate(d.getDate() + 1), n++) {
+    if (!listed.has(isoOf(d))) return false;
+  }
+  return listed.size === n;
+}
+
+const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// The early voting hours as { label, hours, today } rows, in either shape they
+// are published. The clerk's per-date list folds into one row per set of
+// weekdays that keep the same hours all window; a weekday whose hours change
+// is listed by date, so nothing is rounded off. Folding needs every day of
+// the window listed, or a weekday row would cover a day nobody said is open.
+// today marks its row only inside the window.
+function hoursRows(e, today) {
+  const inWindow = !!today && !!e?.early_voting_from &&
+    today >= e.early_voting_from && today <= e.early_voting_to;
+  const days = (e?.early_voting_days || []).filter((d) => d && dayStart(d.date));
+  if (!days.length) {
+    const abbr = inWindow ? DAY_ABBR[dayStart(today).getDay()] : null;
+    return (e?.early_voting_hours || []).map((rule) => ({
+      label: (rule.days || []).join(', '),
+      hours: `${shortTime(rule.open)} to ${shortTime(rule.close)}`,
+      today: !!abbr && (rule.days || []).includes(abbr),
+    }));
+  }
+
+  const hoursOn = {}, datesOf = {};
+  for (const d of days) {
+    hoursOn[d.date] = clerkHours(d.hours);
+    const abbr = DAY_ABBR[dayStart(d.date).getDay()];
+    (datesOf[abbr] = datesOf[abbr] || []).push(d.date);
+  }
+  const dated = (date) => ({ label: shortDate(date), hours: hoursOn[date],
+                             today: inWindow && date === today });
+  const all = Object.keys(hoursOn).sort();
+  if (!coversWindow(e, all)) return all.map(dated);
+
+  const rows = [], byHours = {}, split = [];
+  for (const abbr of WEEK) {
+    const dates = datesOf[abbr];
+    if (!dates) continue;
+    const hours = hoursOn[dates[0]];
+    if (dates.some((date) => hoursOn[date] !== hours)) { split.push(...dates); continue; }
+    if (!byHours[hours]) rows.push(byHours[hours] = { days: [], hours, today: false });
+    byHours[hours].days.push(abbr);
+    if (inWindow && dates.includes(today)) byHours[hours].today = true;
+  }
+  return rows.map(({ days: d, hours, today: t }) => ({ label: d.join(', '), hours, today: t }))
+    .concat(split.sort().map(dated));
+}
+
 const Elections = {
-  todayISO, todayAbbr, dayStart, monthDay, withWeekday, dayMonth, shortTime,
-  next, sites, absenteeFrom, atTime, pollsPhase, earlyVotingEnds, windowState
+  todayISO, dayStart, monthDay, withWeekday, dayMonth, shortTime,
+  next, sites, absenteeFrom, atTime, pollsPhase, earlyVotingEnds, windowState,
+  hoursRows
 };
 
 // ---- Precinct lookup ----

@@ -5,12 +5,13 @@
    "publisher": "City of Grand Rapids, City Clerk's Office",
    "url": "https://www.grandrapidsmi.gov/departments/clerks-office/elections/current-election-information/",
    "licence": "Public record of the City of Grand Rapids.",
-   "retrieved": "2026-09-08",
+   "retrieved": "2026-10-16",
    "covers": "Grand Rapids early voting dates, sites and absentee drop boxes",
    "note": "The source of record for the city. The county's pages are the cross-check, not the other way round. GAP: the City Hall drop box appears here only as prose, with no address and no hours, so it cannot be routed to or acted on from this page alone. Worth asking the clerk to publish it the way the other ten are.",
    "archived": "https://web.archive.org/web/20260908205129/https://www.grandrapidsmi.gov/departments/clerks-office/elections/current-election-information/",
    "archived_timestamp": "20260908205129",
-   "carried": true
+   "carried": true,
+   "archive_note": "This capture is 38 days old and predates the read that made this file. The Wayback Machine declined a new one, so the snapshot may show an earlier version of the page."
   },
   "mdos-dropbox-report-2026-11": {
    "publisher": "Michigan Department of State, Bureau of Elections",

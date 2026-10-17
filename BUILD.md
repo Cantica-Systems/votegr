@@ -224,10 +224,11 @@ Do not "fix" them back.
 **`elections.json`** holds the election dates, and, for an election the City
 Clerk's file does not describe, the early voting window, hours and sites. When
 `gr-clerk.json` names the next election, both pages take the early voting
-window from it instead, which is why the November 2026 entry carries only its
-date and name. Add the next election when it is announced. The page shows the
-first date that has not passed and ignores the rest, so a stale entry is
-harmless and no date at all is better than a wrong one.
+window from it instead, with the clerk's hours for each date, which is why the
+November 2026 entry carries only its date and name. Add the next election when
+it is announced. The page shows the first date that has not passed and ignores
+the rest, so a stale entry is harmless and no date at all is better than a
+wrong one.
 
 **`graph.json`** and **`addresses.json`** are frozen rather than hand-edited:
 the city-only road network and address index from before the county widening.

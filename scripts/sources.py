@@ -78,13 +78,17 @@ def register(source_id, publisher, url, licence, retrieved=None,
     if note:
         entry["note"] = note
     if archived:
-        # snapshot_or_note() shapes: {"archived": url, "archived_timestamp": ...}
+        # snapshot_or_note() shapes: {"archived": url, "archived_timestamp": ...},
+        # the same with an "archive_note" when the capture predates the read,
         # or {"archived": None, "archive_note": ...}. Keep a real capture over
-        # a failed attempt.
+        # a failed attempt, and an old capture's note with it.
         if archived.get("archived"):
             entry["archived"] = archived["archived"]
             entry["archived_timestamp"] = archived.get("archived_timestamp")
-            entry.pop("archive_note", None)
+            if archived.get("archive_note"):
+                entry["archive_note"] = archived["archive_note"]
+            else:
+                entry.pop("archive_note", None)
         elif "archived" not in entry:
             entry["archive_note"] = archived.get("archive_note")
     doc["sources"][source_id] = entry

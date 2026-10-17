@@ -81,6 +81,14 @@ BOX = re.compile(r"^(.+?),\s*(\d+\s+[^(]+?)(?:\s*\((.+)\))?$")
 MIN_SITES = 2
 MIN_BOXES = 5
 
+# "1430 Quarry, NW": the current-election page puts a comma before the
+# quadrant on one site, and the early voting page writes the same site without.
+QUADRANT_COMMA = re.compile(r",\s*(?=(?:NE|NW|SE|SW)\b)")
+
+
+def street(text):
+    return QUADRANT_COMMA.sub(" ", text.strip())
+
 
 def lines_of(page):
     text = re.sub(r"<script.*?</script>|<style.*?</style>", "", page, flags=re.S)
@@ -131,7 +139,7 @@ def main():
         match = SITE.match(line)
         if match:
             sites.append({"name": match.group(1).strip(),
-                          "address": match.group(2).strip(),
+                          "address": street(match.group(2)),
                           "entrance_note": (match.group(3) or "").strip() or None,
                           "src": SOURCE_ID})
 
@@ -175,7 +183,7 @@ def main():
         match = BOX.match(line)
         if match:
             boxes.append({"name": match.group(1).strip(),
-                          "address": match.group(2).strip(),
+                          "address": street(match.group(2)),
                           "note": (match.group(3) or "").strip() or None,
                           "hours": "24/7", "src": SOURCE_ID})
         elif re.match(r"^\d+\s", line):

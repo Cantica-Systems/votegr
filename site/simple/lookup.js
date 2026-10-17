@@ -408,8 +408,7 @@ const clerkWindow = () => {
     early_voting_from: clerk.early_voting.from,
     early_voting_to: clerk.early_voting.to,
     early_voting_sites: clerk.early_voting_sites || [],
-    early_voting_hours: null,
-    // The per-date hours, so windowState() can close the last day when its sites do.
+    // The per-date hours: shown as they are, and what closes the last day when its sites do.
     early_voting_days: clerk.early_voting.days || [],
   };
 };
@@ -419,7 +418,7 @@ function earlyVoting(found, uncertain) {
   if (!election || found.mcd !== GR_MCD) return [];
   const source = clerkWindow() || election;
   const { early_voting_from: from, early_voting_to: to,
-          early_voting_sites: sites, early_voting_hours: hours } = source;
+          early_voting_sites: sites } = source;
   if (!(sites || []).length) return [];
 
   const state = Elections.windowState(source);
@@ -451,15 +450,13 @@ function earlyVoting(found, uncertain) {
   }
   for (const site of sites) parts.push(locationRow(site, 'ev-site', !open));
 
-  if ((hours || []).length) {
-    const todayAbbr = open ? Elections.todayAbbr() : null;
+  const rows = Elections.hoursRows(source, open ? Elections.todayISO() : null);
+  if (rows.length) {
     const table = el('div', 'ev-hours');
-    for (const rule of hours) {
-      const isToday = todayAbbr !== null && (rule.days || []).includes(todayAbbr);
-      const mark = isToday ? ' is-today' : '';
-      table.append(
-        el('span', `ev-day${mark}`, rule.days.join(', ') + (isToday ? ' (today)' : '')),
-        el('span', `ev-time${mark}`, `${rule.open} to ${rule.close}`));
+    for (const row of rows) {
+      const mark = row.today ? ' is-today' : '';
+      table.append(el('span', `ev-day${mark}`, row.label + (row.today ? ' (today)' : '')),
+                   el('span', `ev-time${mark}`, row.hours));
     }
     parts.push(table);
   }
