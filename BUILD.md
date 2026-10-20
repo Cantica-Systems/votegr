@@ -235,7 +235,7 @@ wrong one.
 **`graph.json`** and **`addresses.json`** are frozen rather than hand-edited:
 the city-only road network and address index from before the county widening.
 No script rebuilds them and neither page loads them. `tests/test_router.mjs`
-still reads both, and `scripts/check_polling_civic.py` reads `addresses.json`.
+still reads both.
 `graph.json` also still holds the Grand Rapids sign inventory's turn
 restrictions, which the shipped graph no longer uses (see below).
 
