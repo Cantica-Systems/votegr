@@ -177,11 +177,15 @@ function wantRows(clerk, election) {
   const wd = new Date().getDay();
   const extra = reg.extra_days.map((d) => d.date);
   const special = today === election || extra.includes(today);
+  // Both pages add " (today)" to the label of the row marked today.
+  const label = (text, isToday) => (isToday ? `${text} (today)` : text);
   return [
-    ...reg.office_hours.map((h) => [`${h.days[0]} to ${h.days[h.days.length - 1]}`,
-      null, !special && h.days.includes(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][wd])]),
+    ...reg.office_hours.map((h) => {
+      const isToday = !special && h.days.includes(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][wd]);
+      return [label(`${h.days[0]} to ${h.days[h.days.length - 1]}`, isToday), null, isToday];
+    }),
     ...reg.extra_days.map((d) => [null, null, d.date === today]),
-    ['Election day', `Until ${short(POLL_HOURS.close)}`, today === election],
+    [label('Election day', today === election), `Until ${short(POLL_HOURS.close)}`, today === election],
   ];
 }
 const rowsMatch = (got, want) => got.length === want.length &&
