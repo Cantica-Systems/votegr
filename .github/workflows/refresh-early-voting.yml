@@ -81,9 +81,9 @@ jobs:
         with:
           python-version: '3.12'
 
-      # No dependency install: refresh_early_voting.py and the archive helper
-      # it imports are standard library only, so this job has no supply chain
-      # of its own.
+      # No dependency install: refresh_early_voting.py and the archive and
+      # page_text helpers it imports are standard library only, so this job
+      # has no supply chain of its own.
 
       - name: Record what the committed file describes
         id: before
