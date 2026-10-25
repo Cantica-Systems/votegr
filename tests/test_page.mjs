@@ -28,6 +28,13 @@ function ok(name, cond, detail = '') {
        : (fail++, console.log('  FAIL ' + name + (detail ? '  ' + detail : '')));
 }
 
+// Where a link goes. A check that the page links somewhere compares this, not
+// the whole URL, which would also pass for any page carrying the name in a
+// path or a query string.
+function hostOf(href) {
+  try { return new URL(href).hostname; } catch { return ''; }
+}
+
 // --- static server ----------------------------------------------------
 // Enough of one to load the page. Anything outside site/ is refused rather
 // than resolved, so a stray ../ in the page would fail loudly here.
@@ -464,8 +471,8 @@ for (const w of WIDTHS) {
   // else to live now.
   ok('the disclaimer still says to obey traffic signs', /Obey all traffic signs and laws\./.test(result.text));
   // Both official sources stay reachable no matter how the copy is reworded.
-  ok('the Voter Information Center is linked', result.links.some(h => h.includes('mvic.sos.state.mi.us')));
-  ok('the City Clerk is linked', result.links.some(h => h.includes('grandrapidsmi.gov')));
+  ok('the Voter Information Center is linked', result.links.some(h => hostOf(h) === 'mvic.sos.state.mi.us'));
+  ok('the City Clerk is linked', result.links.some(h => hostOf(h) === 'www.grandrapidsmi.gov'));
   ok('a result does not make the page scroll sideways', result.pageOverflow <= 0);
   ok('a result does not make the footer scroll sideways', result.footOverflow <= 0);
 

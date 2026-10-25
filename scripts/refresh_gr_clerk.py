@@ -26,7 +26,6 @@ that BUILD.md describes. Nothing here should run unattended.
 Usage: python3 refresh_gr_clerk.py
 """
 import datetime
-import html as html_module
 import json
 import pathlib
 import re
@@ -34,6 +33,7 @@ import sys
 import urllib.request
 
 from archive import snapshot_or_note
+from page_text import lines_of
 from geocode_places import centreline, norm_street
 from sources import register
 from useragent import USER_AGENT
@@ -120,13 +120,6 @@ def full_streets(places):
             place["address"] = full
             changed += 1
     return changed
-
-
-def lines_of(page):
-    text = re.sub(r"<script.*?</script>|<style.*?</style>", "", page, flags=re.S)
-    text = re.sub(r"<[^>]+>", "\n", text)
-    text = html_module.unescape(text).replace("\xa0", " ")
-    return [line.strip() for line in text.split("\n") if line.strip()]
 
 
 def section(lines, start_text, *stop_texts):

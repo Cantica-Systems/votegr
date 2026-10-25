@@ -36,9 +36,9 @@ import re
 import sys
 import urllib.error
 import urllib.request
-import html as html_module
 
 from archive import snapshot_or_note
+from page_text import lines_of
 from useragent import USER_AGENT
 
 URL = "https://www.kentcountymi.gov/250/Drop-Box-Polling-Locations"
@@ -79,13 +79,6 @@ WINDOW = re.compile(
 # Any month-and-day in the city's hours text, which is what reveals which
 # election that page is describing -- it never names one.
 DATE_HINT = re.compile(r"\b(%s)\s+(\d{1,2})\b" % "|".join(MONTHS), re.I)
-
-
-def lines_of(page):
-    text = re.sub(r"<script.*?</script>|<style.*?</style>", "", page, flags=re.S)
-    text = re.sub(r"<[^>]+>", "\n", text)
-    text = html_module.unescape(text).replace("\xa0", " ")
-    return [line.strip() for line in text.split("\n") if line.strip()]
 
 
 def iso(month_name, day, year):

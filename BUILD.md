@@ -23,7 +23,9 @@ alone; `scripts/geocode_places.py` needs `requests` for its parcel pull.
 `geocode_places.py` and `scripts/merge_foia_dropboxes.py` also need `node`, for
 the street centerline pass, and `scripts/refresh_gr_clerk.py` uses it to give
 the clerk's addresses their street types (without it they stay as published). Everything else runs on a bare interpreter. Every
-script sends the same User-Agent, defined once in `scripts/useragent.py`.
+script sends the same User-Agent, defined once in `scripts/useragent.py`, and
+every script that scrapes a page reads it as text through
+`scripts/page_text.py`.
 
 ## What generates what
 

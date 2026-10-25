@@ -32,7 +32,6 @@ town.
 
 Usage: python3 refresh_polling.py
 """
-import html
 import json
 import pathlib
 import re
@@ -42,6 +41,7 @@ import urllib.request
 from collections import defaultdict
 
 from archive import cite
+from page_text import lines_of
 from useragent import USER_AGENT
 
 BASE = "https://www.kentcountymi.gov"
@@ -104,16 +104,6 @@ DROPBOX_HEADING = "Absentee Voter Drop Box Locations"
 PRECINCT_LABEL = re.compile(
     r"^(?:Ward\s+(\d+)\s*,\s*)?Precincts?\s+((?:\d|,|&|\s|and\b)+?)\s*:?$", re.I)
 HOURS = re.compile(r"^Hours:\s*(.+)$", re.I)
-
-
-def lines_of(page):
-    """The page as visible text, one line per element, which is all the
-    structure this needs: every record here is a label followed by its name
-    and address on the next two lines."""
-    text = re.sub(r"<script.*?</script>|<style.*?</style>", "", page, flags=re.S)
-    text = re.sub(r"<[^>]+>", "\n", text)
-    text = html.unescape(text).replace("\xa0", " ")
-    return [line.strip() for line in text.split("\n") if line.strip()]
 
 
 def fetch(slug):
