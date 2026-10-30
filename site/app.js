@@ -347,7 +347,8 @@ function provenanceHtml(opt) {
 }
 
 // On a phone, head is the shut card's summary and fold is what opening it reveals.
-// state.now: the way of voting in person that is happening today (nowKind), badged.
+// state.now: the way of voting in person that is happening today (nowKind), badged. Its
+// place cell carries is-now too, so the pair is green side by side on the wide grid.
 // state.off: a way of voting not open yet or over, shown disabled.
 // Hours stay with the date at every width, as election day's do; on a phone the note folds
 // away with the place. noteHtml: a note carrying a link, already escaped.
@@ -1336,10 +1337,11 @@ function earlyVotingCard(r) {
   // Over: shown disabled with no data-kind, so nothing routes to it. destinations()
   // leaves it out too: no picker, no map.
   const routable = !!dest;
+  const now = nowKind(r) === 'early';
   const label = routable ? placeLabel('early', 'Early voting site nearest to you')
               : ev ? 'Early voting site nearest to you' : 'Early voting sites';
   const where = `<div class="vi-where vi-ev-site${routable ? customClass('early') : ''}` +
-    `${evState.off ? ' is-off' : ''}"` +
+    `${evState.off ? ' is-off' : ''}${now ? ' is-now' : ''}"` +
     `${routable ? ' data-kind="early"' : ''}>` +
     `<div class="vi-lbl">${esc(label)}</div>` +
     (ev
@@ -1360,7 +1362,7 @@ function earlyVotingCard(r) {
   return section('early', where,
     whenCell('early', { label: evState.label, status: evState.status, note: evState.note,
                         live: !evState.off, off: evState.off,
-                        now: nowKind(r) === 'early' ? 'Open now' : null },
+                        now: now ? 'Open now' : null },
              routable ? evHoursHtml(evWindow(r)) : ''),
     { collapsed: evState.off || (!!ev && !/open/i.test(evState.label)) });
 }
@@ -1370,7 +1372,9 @@ const POLLS_BADGE = { open: 'Open now', today: 'Today' };
 
 // multi: there are other destinations to choose between.
 function pollingCard(r, multi) {
-  let html = `<div class="vi-where${activeEl ? '' : ' vi-full'}" data-kind="polling">` +
+  const badge = POLLS_BADGE[Elections.pollsToday(activeEl, electionDayHours)] || null;
+  let html = `<div class="vi-where${activeEl ? '' : ' vi-full'}${badge ? ' is-now' : ''}"` +
+    ' data-kind="polling">' +
     '<div class="vi-lbl">Election day polling place</div>';
   const place = r.place;
   if (place) {
@@ -1399,7 +1403,7 @@ function pollingCard(r, multi) {
   if (activeEl) {
     when = whenCell('polling',
       { label: 'Election day', status: Elections.withWeekday(activeEl.date),
-        now: POLLS_BADGE[Elections.pollsToday(activeEl, electionDayHours)] || null },
+        now: badge },
       electionDayHours?.open && electionDayHours.close
         ? '<div class="vi-hours"><span class="vi-hours-lbl">Hours:</span> ' +
           `${esc(Elections.shortTime(electionDayHours.open))} to ` +

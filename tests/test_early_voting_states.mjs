@@ -380,7 +380,7 @@ for (const theme of ['dark', 'light']) {
 //
 // The HIGHLIGHT marks the way of voting in person that is happening today:
 // early voting while its window is open, the polling place on election day
-// and on no other day. Read at desktop width (.vi-when), at phone width
+// and on no other day. Read at desktop width (.vi-when and its .vi-where), at phone width
 // (.vi-card, which folds) and on /simple (its badge), so the three cannot
 // disagree.
 // Election day is three states by the clock, so each is held at a time of its own, an
@@ -457,6 +457,25 @@ for (const { name, data, clock, order: wantOrder, routed: routedWant, now, badge
       .filter((w) => getComputedStyle(w.querySelector('.vi-lbl')).color === good)
       .map((w) => [...w.classList].find((c) => c.startsWith('vi-when-')).slice('vi-when-'.length));
   });
+  // The place beside those dates goes green with them: the bar, the dates' own tint and a
+  // green heading. Read from computed style, so a rule that loses to the routed pick's
+  // ring (the polls on election day) fails here and not on a voter's screen.
+  const greenPlaces = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--good');
+    document.body.append(probe);
+    const good = getComputedStyle(probe).color;
+    probe.remove();
+    return [...document.querySelectorAll('#precinctInfo .vi-where[data-kind]')]
+      .filter((w) => {
+        const s = getComputedStyle(w), when = w.nextElementSibling;
+        return s.boxShadow.includes(good) &&
+          !!when?.classList.contains('vi-when') &&
+          s.backgroundColor === getComputedStyle(when).backgroundColor &&
+          getComputedStyle(w.querySelector('.vi-lbl')).color === good;
+      })
+      .map((w) => w.dataset.kind);
+  });
 
   // On the day, the banner counts the polls rather than the day: one of
   // three labels, hours-minutes-seconds with no Days unit, and the sentence
@@ -487,6 +506,10 @@ for (const { name, data, clock, order: wantOrder, routed: routedWant, now, badge
   await phone.press('#addr', 'Enter');
   await phone.waitForSelector('#precinctInfo .vi-card', { timeout: 10000 });
   const litPhone = await phone.evaluate(`(${nowKinds})('#precinctInfo .vi-card.is-now', 'vi-card-')`);
+  // Inside a card the place stays unpainted: the card is already green.
+  const phonePainted = await phone.evaluate(() =>
+    [...document.querySelectorAll('#precinctInfo .vi-card .vi-where')]
+      .filter((w) => getComputedStyle(w).backgroundColor !== 'rgba(0, 0, 0, 0)').length);
   await phone.close();
 
   // /simple reads the same calendar and the same hours, and must say the
@@ -527,7 +550,9 @@ for (const { name, data, clock, order: wantOrder, routed: routedWant, now, badge
      !!routed && routedWant.test(routed));
   ok(`${name}: highlighted ${now.join(', ') || 'nothing'}`,
      JSON.stringify(lit) === JSON.stringify(now));
+  ok(`${name}: and its place green beside it`, JSON.stringify(greenPlaces) === JSON.stringify(now));
   ok(`${name}: and the same at phone width`, JSON.stringify(litPhone) === JSON.stringify(now));
+  ok(`${name}: with no place painted again inside its card`, phonePainted === 0);
   ok(`${name}: badged ${badges.join(', ') || 'nowhere'}`,
      JSON.stringify(mainBadges) === JSON.stringify(badges));
   ok(`${name}: with a green heading on ${now.join(', ') || 'nothing'}`,

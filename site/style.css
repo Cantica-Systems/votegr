@@ -462,6 +462,30 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   box-shadow: inset 4px 0 0 var(--good),
               inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
 }
+/* Its place, beside it, goes green with it. Direct children only: on a phone
+   the place sits inside its card, which carries the mark for both. The ring
+   of the routed pick and the hover ring are drawn over the bar, not instead. */
+.vi-grid > .vi-where.is-now {
+  background: color-mix(in srgb, var(--good) 14%, var(--tint));
+  box-shadow: inset 4px 0 0 var(--good),
+              inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
+}
+.vi-grid > .vi-where.is-now:not(.is-custom) .vi-lbl { color: var(--good); }
+@media (hover: hover) {
+  .vi-grid > .vi-dest.is-now:hover {
+    background: color-mix(in srgb, var(--good) 14%, var(--tint-hover));
+    box-shadow: inset 4px 0 0 var(--good), inset 0 0 0 1.5px var(--accent),
+                inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
+  }
+  .vi-grid > .vi-where.is-now .pp-place:hover {
+    background: color-mix(in srgb, var(--good) 14%, var(--tint-hover));
+  }
+}
+.vi-grid > .vi-dest.is-now.is-dest,
+.vi-grid > .vi-dest.is-now.is-dest:hover {
+  box-shadow: inset 4px 0 0 var(--good), inset 0 0 0 2px var(--accent),
+              inset 0 1px 0 var(--bevel-hi), inset 0 -1px 0 var(--bevel-lo);
+}
 
 /* A way of voting not open yet or over (early voting outside its window):
    still said, since silence would read as no early voting at all, but greyed
