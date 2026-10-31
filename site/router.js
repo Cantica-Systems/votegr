@@ -947,15 +947,17 @@ class Graph {
     const out = [];
     for (let i = 0; i < legs.length; i++) {
       const leg = legs[i];
-      let text;
+      // head and turn carry the parts of text, so the page can word them in another language.
+      let text, head = null, turn = null;
       if (i === 0) {
-        text = `Head ${compassWord(legBearing(leg.points, true))}` +
-               (leg.name ? ` on ${leg.name}` : '');
+        head = compassWord(legBearing(leg.points, true));
+        text = `Head ${head}` + (leg.name ? ` on ${leg.name}` : '');
       } else {
         const delta = legBearing(leg.points, true) - legBearing(legs[i - 1].points, false);
-        text = turnWord(delta) + (leg.name ? ` onto ${leg.name}` : '');
+        turn = turnWord(delta);
+        text = turn + (leg.name ? ` onto ${leg.name}` : '');
       }
-      out.push({ text, street: leg.name, meters: leg.meters,
+      out.push({ text, head, turn, street: leg.name, meters: leg.meters,
                  cameras: leg.cameras, points: leg.points });
     }
     const lastLeg = legs[legs.length - 1];

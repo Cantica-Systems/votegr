@@ -85,6 +85,24 @@ const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
 // As elections.json's weekday hour rules write them.
 const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// The wording of dates and hours. English unless a page sets another; the data and every
+// comparison stay in English (DAY_ABBR above), only what is shown changes.
+const LOCALES = {
+  es: {
+    months: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+             'septiembre', 'octubre', 'noviembre', 'diciembre'],
+    weekdays: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'],
+    abbr: { Sun: 'dom', Mon: 'lun', Tue: 'mar', Wed: 'mié', Thu: 'jue', Fri: 'vie', Sat: 'sáb' },
+    monthAbbr: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct',
+                'nov', 'dic'],
+    to: 'a', until: (t) => `Hasta las ${t}`, electionDay: 'Día de las elecciones'
+  }
+};
+let L10N = null;
+function setLocale(lang) { L10N = LOCALES[lang] || null; }
+function abbrOf(a) { return L10N ? L10N.abbr[a] || a : a; }
+function toWord() { return L10N ? L10N.to : 'to'; }
+
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 // The local day, not toISOString's UTC one.
@@ -104,17 +122,20 @@ function dayStart(iso) {
 // "2026-11-03" -> "November 3, 2026"; anything unparseable comes back as given.
 function monthDay(iso) {
   const m = ISO.exec(String(iso || ''));
+  if (m && L10N) return `${Number(m[3])} de ${L10N.months[Number(m[2]) - 1]} de ${m[1]}`;
   return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}` : (iso || '');
 }
 
 // "2026-11-03" -> "Tuesday, November 3, 2026".
 function withWeekday(iso) {
   const d = dayStart(iso);
-  return d ? `${WEEKDAYS[d.getDay()]}, ${monthDay(iso)}` : (iso || '');
+  return d ? `${(L10N ? L10N.weekdays : WEEKDAYS)[d.getDay()]}, ${monthDay(iso)}` : (iso || '');
 }
 
 // "2026-11-03" -> "Tuesday, November 3".
-function dayMonth(iso) { return withWeekday(iso).replace(/, \d{4}$/, ''); }
+function dayMonth(iso) {
+  return L10N ? withWeekday(iso).replace(/ de \d{4}$/, '') : withWeekday(iso).replace(/, \d{4}$/, '');
+}
 
 // "7:00 AM" -> "7 AM"; half hours keep their minutes.
 function shortTime(t) {
@@ -237,12 +258,13 @@ function clockText(t) {
 function clerkHours(text) {
   const [open, close] = String(text || '').split(/\s*[-–]\s*/);
   const o = clockText(open), c = clockText(close);
-  return o && c ? `${o} to ${c}` : String(text || '');
+  return o && c ? `${o} ${toWord()} ${c}` : String(text || '');
 }
 
 // "2026-10-31" -> "Sat, Oct 31".
 function shortDate(iso) {
   const d = dayStart(iso);
+  if (d && L10N) return `${abbrOf(DAY_ABBR[d.getDay()])}, ${d.getDate()} ${L10N.monthAbbr[d.getMonth()]}`;
   return d ? `${DAY_ABBR[d.getDay()]}, ${MONTHS[d.getMonth()].slice(0, 3)} ${d.getDate()}`
            : String(iso || '');
 }
@@ -274,8 +296,8 @@ function hoursRows(e, today) {
   if (!days.length) {
     const abbr = inWindow ? DAY_ABBR[dayStart(today).getDay()] : null;
     return (e?.early_voting_hours || []).map((rule) => ({
-      label: (rule.days || []).join(', '),
-      hours: `${shortTime(rule.open)} to ${shortTime(rule.close)}`,
+      label: (rule.days || []).map(abbrOf).join(', '),
+      hours: `${shortTime(rule.open)} ${toWord()} ${shortTime(rule.close)}`,
       today: !!abbr && (rule.days || []).includes(abbr),
     }));
   }
@@ -301,7 +323,7 @@ function hoursRows(e, today) {
     byHours[hours].days.push(abbr);
     if (inWindow && dates.includes(today)) byHours[hours].today = true;
   }
-  return rows.map(({ days: d, hours, today: t }) => ({ label: d.join(', '), hours, today: t }))
+  return rows.map(({ days: d, hours, today: t }) => ({ label: d.map(abbrOf).join(', '), hours, today: t }))
     .concat(split.sort().map(dated));
 }
 
@@ -309,7 +331,8 @@ function hoursRows(e, today) {
 function weekdayRange(days) {
   const at = days.map((d) => WEEK.indexOf(d));
   const run = days.length > 2 && at.every((i, k) => i >= 0 && (k === 0 || i === at[k - 1] + 1));
-  return run ? `${days[0]} to ${days[days.length - 1]}` : days.join(', ');
+  return run ? `${abbrOf(days[0])} ${toWord()} ${abbrOf(days[days.length - 1])}`
+             : days.map(abbrOf).join(', ');
 }
 
 // A clerk's in-person registration hours, as the same rows: weekday office hours, each
@@ -334,13 +357,15 @@ function registrationRows(reg, e, hours, today) {
   }
   const close = clockText(hours?.close);
   if (close) {
-    rows.push({ label: 'Election day', hours: `Until ${close}`,
+    rows.push({ label: L10N ? L10N.electionDay : 'Election day',
+                hours: L10N ? L10N.until(close) : `Until ${close}`,
                 today: inPerson && today === e.date });
   }
   return rows;
 }
 
 const Elections = {
+  setLocale,
   todayISO, dayStart, monthDay, withWeekday, dayMonth, shortTime,
   next, sites, absenteeFrom, atTime, pollsPhase, pollsToday, earlyVotingEnds, windowState,
   hoursRows, registerByMailUntil, registrationPhase, registrationRows
