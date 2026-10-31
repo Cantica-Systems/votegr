@@ -10,7 +10,7 @@ export default {
   // ---- index.html ----
   '#title': 'VoteGR.org: herramienta anónima para saber dónde votar en el condado de Kent, Michigan',
   '#cd_label': 'Faltan para el día de las elecciones:',
-  '#lede': 'Una herramienta de información electoral para residentes del condado de Kent, ' +
+  '#lede': 'Este sitio es una herramienta única de información electoral para residentes del condado de Kent, ' +
     'Michigan, que protege su privacidad: sin rastreo y sin registros. Es 100 % gratuita y de ' +
     'código abierto, y todos los datos ya se cargaron en su dispositivo al abrir esta página. ' +
     '<a href="#" id="howLink" class="how-link">¿Cómo?</a> ' +
