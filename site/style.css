@@ -320,9 +320,10 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   max-width: 31rem;
 }
 
-/* Election Protection hotline: always shown, above the search. */
+/* Election Protection hotline: always shown, under the search, and under the
+   answer once there is one. */
 .help {
-  margin: 0 0 24px; padding: 12px 14px; border-left: 3px solid var(--warn);
+  margin: 24px 0 0; padding: 12px 14px; border-left: 3px solid var(--warn);
   background: var(--panel); border-radius: 0 6px 6px 0; max-width: 31rem;
   font-size: .9rem; line-height: 1.5; color: var(--dim);
 }
@@ -338,6 +339,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   font-size: 1.25rem; font-weight: 800; color: var(--fg); text-decoration: none;
 }
 .help-line span { font-weight: 600; color: var(--dim); font-size: .95rem; }
+.help-line .help-alt, .help-line .help-alt a { font-size: .95rem; font-weight: 700; }
 .help-more { font-size: .82rem; }
 #col.has-result .help { margin-top: 24px; }
 
@@ -1310,3 +1312,17 @@ ol.steps .scam {
 .map-legend .k.bordk {
   height: 0; border-top: 3px solid var(--lg-border, #ffd76a); border-radius: 2px;
 }
+
+/* ---- Language switch ----
+   Above the countdown, on the right, at every width: the header has no room for it on a
+   phone. It names the other language in that language. */
+.lang-row { display: flex; justify-content: flex-end; margin: 0 0 10px; }
+.lang-btn {
+  font: inherit; font-size: .92rem; font-weight: 700; color: var(--accent);
+  background: var(--panel); border: 1.5px solid var(--line); border-radius: 999px;
+  padding: 5px 14px; cursor: pointer; min-height: 32px;
+}
+.lang-btn:hover { border-color: var(--accent); }
+.lang-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* In a translation still in draft, the intro says so on a line of its own. */
+.lede .lang-note { display: block; margin-top: 8px; font-size: .88rem; color: var(--warn); }

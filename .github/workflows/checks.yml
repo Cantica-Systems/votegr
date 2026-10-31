@@ -122,6 +122,11 @@ jobs:
       - name: Registration
         run: node tests/test_registration.mjs
 
+      # Every key the page uses has a translation, then the page in Spanish: from
+      # ?lang=es, from a Spanish browser, and back to English by the switch.
+      - name: Translations
+        run: node tests/test_i18n.mjs
+
       # Makes no request: it feeds fabricated responses to the link checker's
       # classifier. The live check runs weekly, from link-check.yml.
       - name: Link checker rules
