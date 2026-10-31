@@ -162,11 +162,11 @@ const BasemapLayer = L.Layer.extend({
     this._outlines = {};
   },
 
-  setDark(d) { this._dark = !!d; this._redraw(); },
+  setDark(d) { this._dark = !!d; this._schedule(); },
 
   setPrecincts(list) {
     this._precincts = list || null;
-    this._redraw();
+    this._schedule();
   },
 
   // Outlines ship in precincts.json (scripts/build_precincts.py). They cannot be derived here
@@ -177,7 +177,7 @@ const BasemapLayer = L.Layer.extend({
       if (j?.outline) this._outlines[String(j.mcd)] = j.outline;
     }
     this._scopeBorder = this._outline(this._scopeMcd);
-    this._redraw();
+    this._schedule();
   },
 
   _outline(mcd) {
@@ -187,7 +187,7 @@ const BasemapLayer = L.Layer.extend({
   setScope(mcd) {
     this._scopeMcd = mcd == null ? null : String(mcd);
     this._scopeBorder = this._outline(this._scopeMcd);
-    this._redraw();
+    this._schedule();
   },
 
   // The state's 13-digit code: precinct numbers repeat across jurisdictions.
@@ -197,18 +197,18 @@ const BasemapLayer = L.Layer.extend({
 
   setLayerOpts(o) {
     this._opts = o || {};
-    this._redraw();
+    this._schedule();
   },
 
   setActivePrecinct(id) {
     this._activePrecinct = id == null ? null : String(id);
-    this._redraw();
+    this._schedule();
   },
 
   // Camera markers are DOM elements above the canvas, so labels learn their [lat, lng] here.
   setObstacles(pts) {
     this._obstacles = pts?.length ? pts : null;
-    this._redraw();
+    this._schedule();
   },
 
   setRouteStreets(names, pts) {
@@ -217,10 +217,10 @@ const BasemapLayer = L.Layer.extend({
       if (n) this._routeStreets[String(n).toUpperCase()] = 1;
     });
     this._routePts = pts || null;
-    this._redraw();
+    this._schedule();
   },
   setData(graph, land) {
-    this._graph = graph; this._land = land; this._buckets = null; this._redraw();
+    this._graph = graph; this._land = land; this._buckets = null; this._schedule();
   },
 
   onAdd(map) {
@@ -250,7 +250,7 @@ const BasemapLayer = L.Layer.extend({
     map.on('zoomanim', this._onZoomAnim, this);
     // Fires on every frame of a pinch; see _onZoom.
     map.on('zoom', this._onZoom, this);
-    this._redraw();
+    this._schedule();
   },
 
   onRemove(map) {
@@ -374,6 +374,13 @@ const BasemapLayer = L.Layer.extend({
     function pt(p) {
       return [(p[1] * xScale - cX) + halfX, (cY - mercY(p[0]) * yScale) + halfY];
     }
+    // The canvas in degrees, with a margin for line widths, so the draw loops can skip
+    // whatever lies wholly off it: every vertex in the county was projected on every
+    // redraw, and only a few percent of them are ever on screen.
+    const M = 40;
+    const toLat = (y) => Math.atan(Math.sinh(y / yScale)) / RAD;
+    pt.view = [toLat(cY - (ch - halfY + M)), (cX - halfX - M) / xScale,
+               toLat(cY + halfY + M), (cX + cw - halfX + M) / xScale];
 
     ctx.fillStyle = P.land;
     ctx.fillRect(0, 0, cw, ch);
@@ -486,7 +493,7 @@ const BasemapLayer = L.Layer.extend({
         const lp = pt(pr.label);
         if (lp[0] < 12 || lp[0] > cw - 12 || lp[1] < 12 || lp[1] > ch - 12) continue;
         const isA = actP && this._pid(pr) === actP;
-        const txt = z >= 14 ? `Precinct ${pr.precinct}` : String(pr.precinct);
+        const txt = z >= 14 ? t('Precinct {n}', { n: pr.precinct }) : String(pr.precinct);
         const fs = z >= 15 ? 13 : z >= 13 ? 12 : 11;
         lctx.font = `${isA ? 800 : 700} ${isA ? fs + 1 : fs}px ` +
           '"Hanken Grotesk", system-ui, sans-serif';
@@ -727,7 +734,7 @@ const BasemapLayer = L.Layer.extend({
     ctx.beginPath();
     for (let i = 0; i < rings.length; i++) {
       const r = rings[i];
-      if (!r || r.length < 3) continue;
+      if (!r || r.length < 3 || !onCanvas(r, pt.view)) continue;
       const a = pt(r[0]);
       ctx.moveTo(a[0], a[1]);
       for (let j = 1; j < r.length; j++) {
@@ -745,7 +752,8 @@ const BasemapLayer = L.Layer.extend({
     ctx.beginPath();
     for (let i = 0; i < rings.length; i++) {
       const r = rings[i];
-      if (!r || r.length < 3) continue;
+      // Off the canvas, a ring covers none of it, holes included, so evenodd is unchanged.
+      if (!r || r.length < 3 || !onCanvas(r, pt.view)) continue;
       const a = pt(r[0]);
       ctx.moveTo(a[0], a[1]);
       for (let j = 1; j < r.length; j++) {
@@ -764,7 +772,7 @@ const BasemapLayer = L.Layer.extend({
     ctx.beginPath();
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
-      if (!l || l.length < 2) continue;
+      if (!l || l.length < 2 || !onCanvas(l, pt.view)) continue;
       const a = pt(l[0]);
       ctx.moveTo(a[0], a[1]);
       for (let j = 1; j < l.length; j++) {
@@ -775,6 +783,30 @@ const BasemapLayer = L.Layer.extend({
     ctx.stroke();
   }
 });
+
+// Each line's [minLat, minLng, maxLat, maxLng], worked out once: the data never moves, so
+// a redraw only compares four numbers to skip a line that is off the canvas.
+const BOXES = new WeakMap();
+function boxOf(line) {
+  let b = BOXES.get(line);
+  if (!b) {
+    b = [Infinity, Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < line.length; i++) {
+      const p = line[i];
+      if (p[0] < b[0]) b[0] = p[0];
+      if (p[1] < b[1]) b[1] = p[1];
+      if (p[0] > b[2]) b[2] = p[0];
+      if (p[1] > b[3]) b[3] = p[1];
+    }
+    BOXES.set(line, b);
+  }
+  return b;
+}
+function onCanvas(line, view) {
+  if (!view) return true;
+  const b = boxOf(line);
+  return b[2] >= view[0] && b[0] <= view[2] && b[3] >= view[1] && b[1] <= view[3];
+}
 
 // ---- Camera marker and popup ----
 // SVG and HTML strings, no Leaflet: app.js wraps markerSvg() in an L.divIcon.
