@@ -339,6 +339,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   font-size: 1.25rem; font-weight: 800; color: var(--fg); text-decoration: none;
 }
 .help-line span { font-weight: 600; color: var(--dim); font-size: .95rem; }
+.help-line .help-alt, .help-line .help-alt a { font-size: .95rem; font-weight: 700; }
 .help-more { font-size: .82rem; }
 #col.has-result .help { margin-top: 24px; }
 

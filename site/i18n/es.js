@@ -35,8 +35,12 @@ export default {
   '#help_title': '¿Tiene problemas para votar?',
   '#help_body': 'Si no le dejan votar, le dicen que no aparece en la lista, alguien lo intimida, ' +
     'o encuentra su lugar de votación cerrado o sus máquinas sin funcionar, dígaselo primero a ' +
-    'un trabajador electoral. Luego llame o envíe un mensaje de texto a la línea no partidista ' +
+    'un trabajador electoral. Luego llame a la línea no partidista ' +
     'de Protección Electoral (Election Protection):',
+  // The coalition's Spanish-language line first, then the main one.
+  '#help_line': '<a href="tel:+18888398682">888-VE-Y-VOTA <span>(888-839-8682)</span></a>' +
+    '<br><span class="help-alt">o <a href="tel:+18666878683">866-OUR-VOTE ' +
+    '<span>(866-687-8683), también por mensaje de texto</span></a></span>',
   '#help_mi': '<a href="https://866ourvote.org/state/michigan/" target="_blank" ' +
     'rel="noopener">Ayuda para votar en Michigan</a>',
   '#help_ag': 'Denuncie la intimidación ante la ' +
