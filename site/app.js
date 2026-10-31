@@ -4,6 +4,10 @@
 import { displayCase, esc, Elections, Precincts } from './voting.js';
 import { basemapLayer, Cameras } from './map.js';
 import { Graph, haversine, bearing } from './router.js';
+import { t, lang, LANGS, translateDom, setLang } from './i18n.js';
+
+// Dates and hours in the page's language, before anything formats one.
+Elections.setLocale(lang);
 
 let map, graph, P, cameras;
 let pollLayer, siteLayer, camLayer, routeLayer, pinLayer;
@@ -32,7 +36,7 @@ const REGISTER_URL = 'https://www.michigan.gov/sos/elections/voting/register-to-
 // No tile layer: tiles would be third-party requests on every pan, and nothing the user
 // looks up may leave the browser. The basemap is drawn from local files (map.js).
 // One line on purpose: a two-line attribution eats the bottom of a card-sized map.
-const ATTR = 'Roads: Kent County (REGIS) · ' +
+const ATTR = t('Roads: Kent County (REGIS)') + ' · ' +
            '\u00a9 OpenStreetMap contributors (ODbL)';
 
 function $(id) { return document.getElementById(id); }
@@ -91,6 +95,19 @@ function onSchemeChanged() {
   else if (cameras) drawCameras();
   // The legend key reads --pin-ring too; without this it kept the first theme's ink.
   paintLegendCamera();
+}
+
+// ---- Language ----
+// One button, naming the other language in that language, so a reader who cannot read
+// the page as it is can still find their own. With a third language this becomes a list.
+function initLang() {
+  const btn = $('langBtn');
+  if (!btn) return;
+  const other = Object.keys(LANGS).find((l) => l !== lang);
+  btn.textContent = LANGS[other];
+  btn.lang = other;
+  btn.hidden = false;
+  btn.onclick = () => setLang(other);
 }
 
 // ---- Modals ----
@@ -222,7 +239,7 @@ function updateMapScope() {
 
 function scopeText(lat, lng) {
   const pr = precinctAt(lat, lng);
-  return pr ? placeLine(pr) : 'Outside Kent County';
+  return pr ? placeLine(pr) : t('Outside Kent County');
 }
 
 // "3-58" where the jurisdiction has wards, else the bare number; never the 13-digit code.
@@ -238,17 +255,17 @@ function precinctNumber(id, context) {
 // Plain text, not HTML: callers set it as textContent or escape it.
 function placeLine(pr) {
   return (pr.jurisdiction ? `${pr.jurisdiction} \u00b7 ` : '') +
-    (pr.ward != null && pr.ward !== '' ? `Ward ${pr.ward} \u00b7 ` : '') +
-    `Precinct ${pr.precinct}`;
+    (pr.ward != null && pr.ward !== '' ? `${t('Ward {n}', { n: pr.ward })} \u00b7 ` : '') +
+    t('Precinct {n}', { n: pr.precinct });
 }
 
 function listTitle(kind) {
-  const where = current?.jurisdiction || 'your area';
+  const where = current?.jurisdiction || t('your area');
   if (kind === 'dropbox' && officeOnly(boxesFor(current))) {
-    return `Returning an absentee ballot in ${where}`;
+    return t('Returning an absentee ballot in {where}', { where });
   }
-  const what = kind === 'dropbox' ? 'Ballot drop boxes' : 'Early voting sites';
-  return `${what} in ${where}`;
+  return kind === 'dropbox' ? t('Ballot drop boxes in {where}', { where })
+    : t('Early voting sites in {where}', { where });
 }
 
 // The list lives in a modal outside the row: nested inside it, a pick bubbled to the
@@ -290,18 +307,18 @@ function wirePlaceLists(r) {
 function placeListHtml(kind, opt) {
   const opens = evOpensOn(opt, current);
   let html = opens
-    ? `<p class="bx-lead">Not open yet: these sites take ballots from ${esc(opens)}.</p>`
+    ? `<p class="bx-lead">${esc(t('Not open yet: these sites take ballots from {date}.', { date: opens }))}</p>`
     : '';
   html += '<ul class="box-list">';
   opt.all.forEach((b, i) => {
     const picked = i === chosen[kind] ? ' class="is-chosen"' : '';
     const dist = b.metres != null ? `<span class="bx-dist">${fmtMi(b.metres)}</span>` : '';
     const loc = b.entrance_note || b.note
-      ? '<span class="bx-where"><span class="pp-loc-l">Location:</span> ' +
+      ? `<span class="bx-where"><span class="pp-loc-l">${esc(t('Location:'))}</span> ` +
         `${esc(sentenceCase(b.entrance_note || b.note))}</span>`
       : '';
     html += `<li data-pick="${i}" data-kind="${kind}"` +
-      ` role="button" tabindex="0" title="Get directions here"${picked}>` +
+      ` role="button" tabindex="0" title="${esc(t('Get directions here'))}"${picked}>` +
       `<span class="bx-name">${esc(boxLabel(b))}${dist}</span>` +
       `<span class="bx-addr">${esc(addressForDisplay(b.address))}</span>` +
       loc +
@@ -313,8 +330,7 @@ function placeListHtml(kind, opt) {
     (clerk?.unrouted || []).forEach((b) => {
       html += `<li class="bx-noroute"><span class="bx-name">${esc(boxLabel(b))}</span>` +
         `<span class="bx-where">${esc(sentenceCase(b.note || ''))}</span>` +
-        '<span class="bx-addr">Inside the building, so there is no address ' +
-        'to route to.</span></li>';
+        `<span class="bx-addr">${esc(t('Inside the building, so there is no address to route to.'))}</span></li>`;
     });
   }
   return `${html}</ul>${provenanceHtml(opt)}`;
@@ -333,12 +349,12 @@ function provenanceHtml(opt) {
 
   const credits = ids.map((id) => {
     const s = sources[id];
-    const bits = [`Source: <a href="${esc(s.url)}" target="_blank" ` +
+    const bits = [`${esc(t('Source:'))} <a href="${esc(s.url)}" target="_blank" ` +
       `rel="noopener">${esc(s.publisher)}</a>`];
-    if (s.retrieved) bits.push(`read ${esc(Elections.monthDay(s.retrieved))}`);
+    if (s.retrieved) bits.push(esc(t('read {date}', { date: Elections.monthDay(s.retrieved) })));
     if (s.archived) {
       bits.push(`<a href="${esc(s.archived)}" target="_blank" ` +
-        'rel="noopener">archived copy</a>');
+        `rel="noopener">${esc(t('archived copy'))}</a>`);
     }
     return bits.join(' \u00b7 ') +
       (s.archive_note ? `<br>${esc(s.archive_note)}` : '');
@@ -380,21 +396,19 @@ function absenteePhase() {
 
 function absenteeState() {
   const phase = absenteePhase();
-  if (phase === 'none') return { label: 'Ballot drop box', status: 'No election scheduled' };
+  if (phase === 'none') return { label: t('Ballot drop box'), status: t('No election scheduled') };
   const from = Elections.absenteeFrom(activeEl);
-  const range = `${Elections.dayMonth(from)} to ${Elections.dayMonth(activeEl.date)}`;
+  const range = t('{from} to {to}', { from: Elections.dayMonth(from), to: Elections.dayMonth(activeEl.date) });
   if (phase === 'upcoming') {
-    return { label: 'Absentee voting upcoming', status: range, live: true,
-             note: `Absentee ballots are mailed from ${Elections.monthDay(from)}. ` +
-                   'They can be returned from then until the polls close on election day.' +
+    return { label: t('Absentee voting upcoming'), status: range, live: true,
+             note: t('Absentee ballots are mailed from {date}. They can be returned from then until the polls close on election day.', { date: Elections.monthDay(from) }) +
                    boxAccess() };
   }
   if (phase === 'closed') {
-    return { label: 'Absentee voting closed', status: range };
+    return { label: t('Absentee voting closed'), status: range };
   }
-  return { label: 'Absentee voting open', status: range, live: true,
-           note: 'A returned ballot has to be in the clerk\'s hands by the ' +
-                 `time the polls close on election day.${boxAccess()}` };
+  return { label: t('Absentee voting open'), open: true, status: range, live: true,
+           note: t('A returned ballot has to be in the clerk\'s hands by the time the polls close on election day.') + boxAccess() };
 }
 
 function isElectionDay() {
@@ -418,14 +432,14 @@ function sentenceCase(s) {
 }
 
 function placeLabel(kind, dflt) {
-  return chosen[kind] ? 'Custom location selected' : dflt;
+  return chosen[kind] ? t('Custom location selected') : dflt;
 }
 
 function customClass(kind) { return chosen[kind] ? ' is-custom' : ''; }
 
 function locLine(text) {
   return text
-    ? '<div class="pp-loc"><span class="pp-loc-l">Location:</span> ' +
+    ? `<div class="pp-loc"><span class="pp-loc-l">${esc(t('Location:'))}</span> ` +
       `${esc(sentenceCase(text))}</div>`
     : '';
 }
@@ -433,7 +447,7 @@ function locLine(text) {
 function actionRow(kind, extra) {
   return `<div class="vi-actions">${extra || ''}` +
     `<button type="button" class="box-open dir-btn" data-dir="${kind}">` +
-    'Directions</button></div>';
+    `${esc(t('Directions'))}</button></div>`;
 }
 
 // Wide: two grid cells, place then dates. Phone: one card with the dates as its summary,
@@ -459,10 +473,8 @@ function metaBlock(lines) {
 function boxAccess() {
   const list = boxesFor(current);
   if (officeOnly(list)) {
-    const where = esc(current?.jurisdiction || 'this jurisdiction');
-    return ` No ballot drop box is published for ${where}` +
-      '. An absentee ballot has to be returned to your own clerk, so the ' +
-      'clerk\u2019s office is where it goes, during office hours.';
+    const where = current?.jurisdiction || t('this jurisdiction');
+    return ' ' + t('No ballot drop box is published for {where}. An absentee ballot has to be returned to your own clerk, so the clerk\u2019s office is where it goes, during office hours.', { where });
   }
   return '';
 }
@@ -472,7 +484,7 @@ const ALWAYS_OPEN = /^24\/7$/;
 function boxLabel(box) {
   // Office names are composed already cased; displayCase would turn "Clerk's" into "Clerk'S".
   if (box.office) return box.name;
-  return displayCase(box.name || box.address || 'Drop box');
+  return displayCase(box.name || box.address || t('Drop box'));
 }
 
 // The ZIP is dropped for display only; the data keeps it for geocoding.
@@ -494,7 +506,7 @@ function precinctInfoHtml(pr) {
   return place
     ? placePopup(placeLine(pr), displayCase(place.name), place)
     : `<div class="destpop"><div class="dt">${esc(placeLine(pr))}</div>` +
-      '<div class="da">No polling place on file.</div></div>';
+      `<div class="da">${esc(t('No polling place on file.'))}</div></div>`;
 }
 
 // Hover devices get a Leaflet popup, touch gets the card under the map. Every marker goes
@@ -577,6 +589,8 @@ function scrollToResult(id) {
 }
 
 function init() {
+  translateDom();
+  initLang();
   initMap();
   initInput();
   initTheme();
@@ -656,21 +670,21 @@ function addGearControl() {
   gear.onAdd = () => {
     const d = L.DomUtil.create('div', 'map-gear leaflet-bar');
     d.innerHTML =
-      '<button type="button" class="gear-btn" title="Map layers" aria-expanded="false">' +
+      `<button type="button" class="gear-btn" title="${esc(t('Map layers'))}" aria-expanded="false">` +
       '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" ' +
       'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
       '<circle cx="12" cy="12" r="3"/>' +
       '<path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg></button>' +
       '<div class="gear-panel" hidden>' +
       '<div class="layer-toggles">' +
-      '<div class="lyr"><input type="checkbox" id="lyrPrecincts" checked><label for="lyrPrecincts">Precinct boundaries</label></div>' +
-      '<div class="lyr"><input type="checkbox" id="lyrNumbers" checked><label for="lyrNumbers">Precinct numbers</label></div>' +
+      `<div class="lyr"><input type="checkbox" id="lyrPrecincts" checked><label for="lyrPrecincts">${esc(t('Precinct boundaries'))}</label></div>` +
+      `<div class="lyr"><input type="checkbox" id="lyrNumbers" checked><label for="lyrNumbers">${esc(t('Precinct numbers'))}</label></div>` +
       // The ward fill only; the border (_scopeBorder in map.js) follows lyrPrecincts.
-      '<div class="lyr"><input type="checkbox" id="lyrWards" checked><label for="lyrWards">Ward and precinct colors</label></div>' +
-      '<div class="lyr"><input type="checkbox" id="lyrPolling" checked><label for="lyrPolling">Voting locations</label></div>' +
-      '<div class="lyr"><input type="checkbox" id="lyrCameras" checked><label for="lyrCameras">License plate cameras</label></div>' +
+      `<div class="lyr"><input type="checkbox" id="lyrWards" checked><label for="lyrWards">${esc(t('Ward and precinct colors'))}</label></div>` +
+      `<div class="lyr"><input type="checkbox" id="lyrPolling" checked><label for="lyrPolling">${esc(t('Voting locations'))}</label></div>` +
+      `<div class="lyr"><input type="checkbox" id="lyrCameras" checked><label for="lyrCameras">${esc(t('License plate cameras'))}</label></div>` +
       '</div>' +
-      '<div class="gear-sec">Camera data</div>' +
+      `<div class="gear-sec">${esc(t('Camera data'))}</div>` +
       '<div class="cam-count" id="camCountFold"></div>' +
       '</div>';
     L.DomEvent.disableClickPropagation(d);
@@ -836,8 +850,8 @@ function drawDebugRoutes(origin, place, computed) {
 function loadData() {
   const input = $('addr');
   input.disabled = true;
-  input.placeholder = 'Loading Kent County\u2026';
-  setHint('Loading the county\u2019s roads and addresses. This happens once.');
+  input.placeholder = t('Loading Kent County\u2026');
+  setHint(t('Loading the county\u2019s roads and addresses. This happens once.'));
 
   // The calendar loads on its own so the countdown does not wait for the roads.
   const calendarP = loadJson('elections', true).then((calendar) => {
@@ -851,8 +865,7 @@ function loadData() {
 
   Promise.all([
     loadCountyGraph((done, total) => {
-      setHint(`Loading the county\u2019s roads, ${done} of ${total}` +
-              ' jurisdictions. This happens once.');
+      setHint(t('Loading the county\u2019s roads, {done} of {total} jurisdictions. This happens once.', { done, total }));
     }),
     loadJson('cameras'), loadCountyIndex(),
     calendarP, loadJson('landcover', true),
@@ -892,8 +905,7 @@ function loadData() {
     // Desktop only: on a phone, autofocus pops the keyboard over the map.
     if (!isPhone()) input.focus();
   }).catch(() => {
-    showError('Could not load the map data files. If you are hosting this ' +
-      'yourself, check that the data folder sits next to this page.');
+    showError(esc(t('Could not load the map data files. If you are hosting this yourself, check that the data folder sits next to this page.')));
   });
 }
 
@@ -944,8 +956,9 @@ function precinctLines(ids) {
   return order.map((ward) => {
     const nums = byWard[ward];
     return '<div class="dw">' +
-      (ward ? `Ward ${esc(ward)} \u00b7 ` : '') +
-      `Precinct${nums.length > 1 ? 's ' : ' '}${esc(nums.join(', '))}</div>`;
+      (ward ? `${esc(t('Ward {n}', { n: ward }))} \u00b7 ` : '') +
+      esc(nums.length > 1 ? t('Precincts {list}', { list: nums.join(', ') })
+                          : t('Precinct {n}', { n: nums[0] })) + '</div>';
   }).join('');
 }
 
@@ -969,7 +982,7 @@ function drawPollingPlaces(activePrecinct) {
       icon: siteIcon('polling', isActive),
       zIndexOffset: isActive ? 500 : 300, keyboard: false, riseOnHover: true
     }).addTo(pollLayer);
-    bindDetail(m, () => placePopup('Polling place', displayCase(pl.name), pl,
+    bindDetail(m, () => placePopup(t('Polling place'), displayCase(pl.name), pl,
                                    precinctLines(atThisSpot)), 280);
   });
 }
@@ -991,7 +1004,7 @@ function drawSites(r) {
         zIndexOffset: isPick ? 450 : 250, keyboard: false, riseOnHover: true
       }).addTo(siteLayer);
       bindDetail(m, placePopup(
-        opt.kind === 'early' ? 'Early voting site' : 'Absentee ballot drop box',
+        opt.kind === 'early' ? t('Early voting site') : t('Absentee ballot drop box'),
         boxLabel(place), place,
         place.hours ? `<div class="dw">${esc(place.hours)}</div>` : ''), 280);
     });
@@ -1025,10 +1038,9 @@ function renderCameraCount() {
   const fold = $('camCountFold');
   if (!fold) return;
   const n = cameras ? cameras.length : 0;
-  fold.textContent = `${n} reported camera${n === 1 ? '' : 's'}` +
-    ' in Kent County, from OpenStreetMap as of the last time this page ' +
-    'was published. Volunteer-mapped and certainly incomplete, so treat ' +
-    'it as a floor rather than a full count.';
+  fold.textContent = n === 1
+    ? t('1 reported camera in Kent County, from OpenStreetMap as of the last time this page was published. Volunteer-mapped and certainly incomplete, so treat it as a floor rather than a full count.')
+    : t('{n} reported cameras in Kent County, from OpenStreetMap as of the last time this page was published. Volunteer-mapped and certainly incomplete, so treat it as a floor rather than a full count.', { n });
 }
 
 // Cameras show only once there is a route; the toggle, the draw and the label obstacles
@@ -1116,13 +1128,13 @@ function choose(item) {
   // The row's own jurisdiction: the same number and street can be real in two places.
   const r = P.lookup(input.value, item.mcd);
   if (r.error === 'several_places') {
-    const places = r.places.map((p) => esc(p.jurisdiction)).join(' and in ');
-    showError(`${esc(input.value)} is an address in ${places}` +
-      '. Pick yours from the list as you type.');
+    const places = r.places.map((p) => p.jurisdiction).join(t(' and in '));
+    showError(esc(t('{address} is an address in {places}. Pick yours from the list as you type.',
+                    { address: input.value, places })));
     return;
   }
   if (r.error) {
-    showError(`Could not resolve ${esc(input.value)}.`);
+    showError(esc(t('Could not resolve {address}.', { address: input.value })));
     return;
   }
   // An address inferred from its neighbors is checked against the precinct polygons (voting.js).
@@ -1141,7 +1153,7 @@ function clerkPage(r) {
 
 function clerkLink(r, text) {
   return `<a href="${esc(clerkPage(r))}" target="_blank" rel="noopener">` +
-    `${esc(text || 'Your clerk')}</a>`;
+    `${esc(text || t('Your clerk'))}</a>`;
 }
 
 // Grand Rapids is the only jurisdiction whose clerk file this page carries. Elsewhere drop
@@ -1190,33 +1202,25 @@ function chooseOutside(item) {
 
 function unansweredStreet(jurisdictions) {
   const labels = jurisdictions.map(jurisdictionLabel);
-  const where = !labels.length ? 'another jurisdiction'
-    : labels.length === 1 ? esc(labels[0])
-    : `${esc(labels.slice(0, -1).join(', '))} or ${esc(labels[labels.length - 1])}`;
+  const where = !labels.length ? t('another jurisdiction')
+    : labels.length === 1 ? labels[0]
+    : t('{list} or {last}', { list: labels.slice(0, -1).join(', '), last: labels[labels.length - 1] });
   const covered = jurisdictions.some((j) => P.coversJurisdiction(j));
   if (covered) {
-    return `That street is in ${where}, but the address list this ` +
-      'tool uses has no address on it, so it cannot be looked up by ' +
-      'address. Use the pin button beside the search box and drop the ' +
-      'pin where you live, and it will find your precinct from there.';
+    return esc(t('That street is in {where}, but the address list this tool uses has no address on it, so it cannot be looked up by address. Use the pin button beside the search box and drop the pin where you live, and it will find your precinct from there.', { where }));
   }
-  return `That address is in ${where}, which this tool does not ` +
-    'cover, so it cannot say where you vote. The Michigan Voter ' +
-    'Information Center at mvic.sos.state.mi.us will have your polling place.';
+  return esc(t('That address is in {where}, which this tool does not cover, so it cannot say where you vote. The Michigan Voter Information Center at mvic.sos.state.mi.us will have your polling place.', { where }));
 }
 
 function missExplanation(typed) {
   // parseTyped's rest (uppercased, no house number) is exactly how neighbors.json is keyed.
   const parsed = P.parseTyped(typed), street = parsed.rest;
   if (parsed.number == null) {
-    return 'Start with the house number, like 300 Monroe Ave NW.';
+    return esc(t('Start with the house number, like 300 Monroe Ave NW.'));
   }
   const hit = neighbors && street ? neighbors[street] : null;
   if (hit?.length) return unansweredStreet(hit);
-  return 'No Kent County street matches that. Check the spelling and the ' +
-    'direction, like 300 Monroe Ave NW. This tool covers Kent County, ' +
-    'Michigan; an address in Ottawa, Allegan, Barry, Ionia, Montcalm or ' +
-    'Newaygo County is not in it.';
+  return esc(t('No Kent County street matches that. Check the spelling and the direction, like 300 Monroe Ave NW. This tool covers Kent County, Michigan; an address in Ottawa, Allegan, Barry, Ionia, Montcalm or Newaygo County is not in it.'));
 }
 
 // ---- Dropped pin ----
@@ -1256,8 +1260,8 @@ function armPin() {
   $('pinBtn').classList.add('armed');
   $('pinBtn').setAttribute('aria-pressed', 'true');
   $('map').classList.add('pin-armed');
-  setHint('Tap the map where you want to start from. Esc cancels.');
-  $('pinCue').textContent = 'Tap anywhere in Kent County to start from that spot.';
+  setHint(t('Tap the map where you want to start from. Esc cancels.'));
+  $('pinCue').textContent = t('Tap anywhere in Kent County to start from that spot.');
   $('pinCue').hidden = false;
   scrollToResult('mapBlock');
 }
@@ -1277,15 +1281,13 @@ function pinLookup(lat, lng) {
   const pr = precinctAt(lat, lng);
   if (!pr) {
     $('addr').value = ''; ac.close();
-    showError('That spot is outside Kent County, or not in any precinct ' +
-      'we have. This tool covers Kent County, Michigan. Try dropping the ' +
-      'pin on a street, or type the address instead.');
+    showError(esc(t('That spot is outside Kent County, or not in any precinct we have. This tool covers Kent County, Michigan. Try dropping the pin on a street, or type the address instead.')));
     return;
   }
   const who = P.describe(P.idOf(pr));
   const place = P.pollingPlace(who.code);
   $('addr').value = ''; ac.close();
-  setHint('Routing from your dropped pin. Type an address to switch back.');
+  setHint(t('Routing from your dropped pin. Type an address to switch back.'));
   // Land on the map: scrolling it away would move the thing under the finger that tapped.
   show({ pin: true, lat, lng, code: who.code,
          precinct: who.precinct, ward: who.ward,
@@ -1308,8 +1310,8 @@ function dropBoxCard(r) {
   const box = destinations(r).find((o) => o.kind === 'dropbox');
   if (!box) return '';
   const label = placeLabel('dropbox', box.place.office
-    ? 'Where to return an absentee ballot'
-    : 'Ballot drop box nearest to you');
+    ? t('Where to return an absentee ballot')
+    : t('Ballot drop box nearest to you'));
   const addr = box.place.address ? esc(addressForDisplay(box.place.address)) : '';
   const where =
     `<div class="vi-where vi-dropbox${customClass('dropbox')}" data-kind="dropbox">` +
@@ -1319,12 +1321,12 @@ function dropBoxCard(r) {
     metaBlock([locLine(box.place.note), boxHoursHtml(box.place, 'div', {})]) +
     actionRow('dropbox', box.place.office ? '' :
       '<button type="button" class="box-open" id="boxListBtn">' +
-      'Show all drop box locations</button>') +
+      `${esc(t('Show all drop box locations'))}</button>`) +
     '</div>';
 
   const st = absenteeState();
   return section('dropbox', where, whenCell('dropbox', st, ''),
-                 { collapsed: !/open/i.test(st.label) });
+                 { collapsed: !st.open });
 }
 
 function earlyVotingCard(r) {
@@ -1338,8 +1340,8 @@ function earlyVotingCard(r) {
   // leaves it out too: no picker, no map.
   const routable = !!dest;
   const now = nowKind(r) === 'early';
-  const label = routable ? placeLabel('early', 'Early voting site nearest to you')
-              : ev ? 'Early voting site nearest to you' : 'Early voting sites';
+  const label = routable ? placeLabel('early', t('Early voting site nearest to you'))
+              : ev ? t('Early voting site nearest to you') : t('Early voting sites');
   const where = `<div class="vi-where vi-ev-site${routable ? customClass('early') : ''}` +
     `${evState.off ? ' is-off' : ''}${now ? ' is-now' : ''}"` +
     `${routable ? ' data-kind="early"' : ''}>` +
@@ -1349,39 +1351,37 @@ function earlyVotingCard(r) {
         `<div class="pp-addr">${esc(addressForDisplay(ev.place.address))}</div>` +
         metaBlock([locLine(ev.place.entrance_note)]) +
         (ev.all.length > 1 && !evState.ended
-          ? '<div class="pp-note">Early voting is not tied to your ' +
-            'precinct. Any Grand Rapids voter may use any of these ' +
-            `${ev.all.length} sites.</div>`
+          ? `<div class="pp-note">${esc(t('Early voting is not tied to your precinct. Any Grand Rapids voter may use any of these {n} sites.', { n: ev.all.length }))}</div>`
           : '')
-      : '<div class="pp-addr">No site published yet.</div>') +
+      : `<div class="pp-addr">${esc(t('No site published yet.'))}</div>`) +
     (routable ? actionRow('early', ev.all.length > 1
           ? '<button type="button" class="box-open" id="evListBtn">' +
-            'Show all locations</button>'
+            `${esc(t('Show all locations'))}</button>`
           : '') : '') +
     '</div>';
   return section('early', where,
     whenCell('early', { label: evState.label, status: evState.status, note: evState.note,
                         live: !evState.off, off: evState.off,
-                        now: now ? 'Open now' : null },
+                        now: now ? t('Open now') : null },
              routable ? evHoursHtml(evWindow(r)) : ''),
-    { collapsed: evState.off || (!!ev && !/open/i.test(evState.label)) });
+    { collapsed: evState.off || (!!ev && !evState.open) });
 }
 
 // The polls' badge on election day, by Elections.pollsToday(); /simple says the same.
-const POLLS_BADGE = { open: 'Open now', today: 'Today' };
+const POLLS_BADGE = { open: t('Open now'), today: t('Today') };
 
 // multi: there are other destinations to choose between.
 function pollingCard(r, multi) {
   const badge = POLLS_BADGE[Elections.pollsToday(activeEl, electionDayHours)] || null;
   let html = `<div class="vi-where${activeEl ? '' : ' vi-full'}${badge ? ' is-now' : ''}"` +
     ' data-kind="polling">' +
-    '<div class="vi-lbl">Election day polling place</div>';
+    `<div class="vi-lbl">${esc(t('Election day polling place'))}</div>`;
   const place = r.place;
   if (place) {
     // Alone, the place itself shows the map; with other destinations the whole cell routes.
     const clickable = !!(place.lat && place.lng);
     const showAttrs = clickable && !multi
-      ? ' id="showPlaceBtn" role="button" tabindex="0" title="Show it on the map"'
+      ? ` id="showPlaceBtn" role="button" tabindex="0" title="${esc(t('Show it on the map'))}"`
       : '';
     html += `<div${clickable ? ' class="pp-place"' : ''}${showAttrs}>` +
       `<div class="pp-name">${esc(displayCase(place.name))}</div>` +
@@ -1390,24 +1390,25 @@ function pollingCard(r, multi) {
       '</div>' +
       (clickable ? actionRow('polling') : '');
     if (place.consolidated_with) {
-      html += `<div class="pp-note">Precinct ${esc(r.precinct)} votes with precinct ` +
-        `${esc(precinctNumber(place.consolidated_with, r.ward))} this election` +
-        (place.note ? `, because ${esc(place.note).toLowerCase()}` : '') + '.</div>';
+      const vars = { n: r.precinct, host: precinctNumber(place.consolidated_with, r.ward),
+                     why: String(place.note || '').toLowerCase() };
+      html += `<div class="pp-note">${esc(place.note
+        ? t('Precinct {n} votes with precinct {host} this election, because {why}.', vars)
+        : t('Precinct {n} votes with precinct {host} this election.', vars))}</div>`;
     }
   } else {
-    html += `<div class="err">No polling place on file for precinct ${esc(r.precinct)}.</div>`;
+    html += `<div class="err">${esc(t('No polling place on file for precinct {n}.', { n: r.precinct }))}</div>`;
   }
   html += '</div>';
 
   let when = null;
   if (activeEl) {
     when = whenCell('polling',
-      { label: 'Election day', status: Elections.withWeekday(activeEl.date),
+      { label: t('Election day'), status: Elections.withWeekday(activeEl.date),
         now: badge },
       electionDayHours?.open && electionDayHours.close
-        ? '<div class="vi-hours"><span class="vi-hours-lbl">Hours:</span> ' +
-          `${esc(Elections.shortTime(electionDayHours.open))} to ` +
-          `${esc(Elections.shortTime(electionDayHours.close))}</div>`
+        ? `<div class="vi-hours"><span class="vi-hours-lbl">${esc(t('Hours:'))}</span> ` +
+          `${esc(t('{open} to {close}', { open: Elections.shortTime(electionDayHours.open), close: Elections.shortTime(electionDayHours.close) }))}</div>`
         : '');
   }
   return section('polling', html, when, { collapsed: false });
@@ -1422,7 +1423,7 @@ function registrationCard(r) {
   if (!office) return '';
   const routable = destinations(r).some((o) => o.kind === 'register');
   const where = `<div class="vi-where vi-register"${routable ? ' data-kind="register"' : ''}>` +
-    '<div class="vi-lbl">Where to register in person</div>' +
+    `<div class="vi-lbl">${esc(t('Where to register in person'))}</div>` +
     `<div class="pp-name">${esc(office.name)}</div>` +
     (office.address
       ? `<div class="pp-addr">${esc(addressForDisplay(office.address))}</div>` : '') +
@@ -1430,18 +1431,16 @@ function registrationCard(r) {
     (routable ? actionRow('register') : '') +
     '</div>';
   const hours = office.rows?.length ? hoursTableHtml(office.rows)
-    : office.phone ? '<div class="vi-hours"><span class="vi-hours-lbl">Hours:</span> ' +
-                     `call ${esc(office.phone)}</div>`
+    : office.phone ? `<div class="vi-hours"><span class="vi-hours-lbl">${esc(t('Hours:'))}</span> ` +
+                     `${esc(t('call {phone}', { phone: office.phone }))}</div>`
     : '';
-  const note = '<div class="pp-note">Register here in person, and you can usually vote at ' +
-    'the same visit. The same goes if you have moved since you registered. Bring something ' +
-    'with your name and current address on it, on paper or on your phone ' +
-    `(<a href="${REGISTER_URL}" target="_blank" rel="noopener">what counts</a>).</div>`;
+  const note = `<div class="pp-note">${esc(t('Register here in person, and you can usually vote at the same visit. The same goes if you have moved since you registered. Bring something with your name and current address on it, on paper or on your phone'))} ` +
+    `(<a href="${REGISTER_URL}" target="_blank" rel="noopener">${esc(t('what counts'))}</a>).</div>`;
   const close = electionDayHours?.close;
-  const status = !isElectionDay() ? `Through ${Elections.dayMonth(activeEl.date)}`
-    : close ? `Today, until ${Elections.shortTime(close)}` : 'Today';
+  const status = !isElectionDay() ? t('Through {date}', { date: Elections.dayMonth(activeEl.date) })
+    : close ? t('Today, until {time}', { time: Elections.shortTime(close) }) : t('Today');
   return section('register', where,
-    whenCell('register', { label: 'Not registered yet?', status, live: true, noteHtml: note },
+    whenCell('register', { label: t('Not registered yet?'), status, live: true, noteHtml: note },
              hours),
     { collapsed: true });
 }
@@ -1459,15 +1458,15 @@ function show(r, focusKind, landOn) {
 
   // Rows may omit their where-cell, so style.css places the grid columns explicitly.
   let html = '<div class="vi-rows"><div class="vi-grid"><div class="vi-rail">' +
-    (r.jurisdiction ? '<div><div class="vi-lbl">Where you vote</div>' +
+    (r.jurisdiction ? `<div><div class="vi-lbl">${esc(t('Where you vote'))}</div>` +
                       `<div class="vi-name">${esc(r.jurisdiction)}</div>` +
                       (clerkPage(r) ? `<div class="vi-clerk">${clerkLink(r)}</div>` : '') +
                       '</div>' : '') +
     // .vi-idn marks the Ward and Precinct rows; tests/test_page.mjs finds them by it.
     (r.ward != null && r.ward !== ''
-      ? '<div class="vi-idn"><div class="vi-lbl">Ward</div>' +
+      ? `<div class="vi-idn"><div class="vi-lbl">${esc(t('Ward'))}</div>` +
         `<div class="vi-num">${esc(r.ward)}</div></div>` : '') +
-    '<div class="vi-idn"><div class="vi-lbl">Precinct</div>' +
+    `<div class="vi-idn"><div class="vi-lbl">${esc(t('Precinct'))}</div>` +
     `<div class="vi-num">${esc(r.precinct)}</div></div></div>`;
 
   const multi = destinations(r).length > 1;
@@ -1502,7 +1501,7 @@ function show(r, focusKind, landOn) {
     cell.setAttribute('role', 'button');
     cell.setAttribute('tabindex', '0');
     cell.setAttribute('aria-pressed', 'false');
-    cell.title = phone ? 'Directions here' : 'Get directions here instead';
+    cell.title = phone ? t('Directions here') : t('Get directions here instead');
     cell.onclick = () => {
       if (!current) return;
       routeTo(current, kind);
@@ -1544,28 +1543,23 @@ function show(r, focusKind, landOn) {
   // The page's only disclaimer (tests check it appears once). The ballot follows the voter's
   // registration, not the address typed here; the clerk named is the jurisdiction's own.
   const office = !inGrandRapids(r) && P && r.mcd ? P.clerkOf(r.mcd) : null;
-  const clerkName = inGrandRapids(r) ? 'Grand Rapids City Clerk'
-    : r.jurisdiction ? `${r.jurisdiction} clerk` : null;
+  const clerkName = inGrandRapids(r) ? t('Grand Rapids City Clerk')
+    : r.jurisdiction ? t('{jurisdiction} clerk', { jurisdiction: r.jurisdiction }) : null;
   const whom = clerkName
-    ? `the ${clerkPage(r) ? clerkLink(r, clerkName) : esc(clerkName)}` +
+    ? t('the {clerk}', { clerk: clerkPage(r) ? clerkLink(r, clerkName) : esc(clerkName) }) +
       (office?.phone ? ` (${esc(office.phone)})` : '')
-    : 'your clerk';
-  const adv = ['<strong>Not an official government tool.</strong> Your voting ' +
-    'location is based on the address where you registered to vote, not ' +
-    'what you enter here. If you are not sure the entered address is the ' +
-    `same, double-check with ${whom} or the ` +
-    '<a href="https://mvic.sos.state.mi.us/" target="_blank" ' +
-    'rel="noopener">Michigan Voter Information Center</a>.'];
-  if (r.rivals) adv.push('This address sits on a precinct line and could be in ' +
-    `${esc(r.rivals.join(' or '))}.`);
-  else if (r.inferred) adv.push('This exact number is not in ' +
-    'the address list, so the precinct was taken from its neighbors and ' +
-    'checked against the precinct boundary.');
-  if (r.edgeMetres < 30) adv.push('This address is close ' +
-    'to a precinct boundary, so the answer is less certain.');
-  if (r.ambiguousStreet) adv.push(`Read as ${esc(displayCase(r.street))}` +
-    '. Other streets also match what you typed.');
-  adv.push('Obey all traffic signs and laws.');
+    : esc(t('your clerk'));
+  // The sentence is markup: {whom} and {mvic} are links, filled after the rest is escaped.
+  const mvic = '<a href="https://mvic.sos.state.mi.us/" target="_blank" ' +
+    `rel="noopener">${esc(t('Michigan Voter Information Center'))}</a>`;
+  const adv = [`<strong>${esc(t('Not an official government tool.'))}</strong> ` +
+    esc(t('Your voting location is based on the address where you registered to vote, not what you enter here. If you are not sure the entered address is the same, double-check with {whom} or the {mvic}.'))
+      .replace('{whom}', whom).replace('{mvic}', mvic)];
+  if (r.rivals) adv.push(esc(t('This address sits on a precinct line and could be in {list}.', { list: r.rivals.join(t(' or ')) })));
+  else if (r.inferred) adv.push(esc(t('This exact number is not in the address list, so the precinct was taken from its neighbors and checked against the precinct boundary.')));
+  if (r.edgeMetres < 30) adv.push(esc(t('This address is close to a precinct boundary, so the answer is less certain.')));
+  if (r.ambiguousStreet) adv.push(esc(t('Read as {street}. Other streets also match what you typed.', { street: displayCase(r.street) })));
+  adv.push(esc(t('Obey all traffic signs and laws.')));
   $('advisory').innerHTML = `<div class="advisory">${adv.join(' ')}</div>`;
 
   routeTo(r, focusKind);
@@ -1587,10 +1581,10 @@ function hoursTableHtml(rows) {
   if (!rows.length) return '';
   const lines = rows.map((row) => {
     const mark = row.today ? ' class="is-today"' : '';
-    return `<span${mark}>${esc(row.label)}${row.today ? ' (today)' : ''}</span>` +
+    return `<span${mark}>${esc(row.label)}${row.today ? ` (${esc(t('today'))})` : ''}</span>` +
            `<span${mark}>${esc(row.hours)}</span>`;
   }).join('');
-  return '<div class="vi-hours ev-hours"><span class="vi-hours-lbl">Hours:</span>' +
+  return `<div class="vi-hours ev-hours"><span class="vi-hours-lbl">${esc(t('Hours:'))}</span>` +
          `<span class="ev-rows">${lines}</span></div>`;
 }
 
@@ -1622,23 +1616,20 @@ function earlyVotingForBlock(r) {
     case 'none':
       return null;
     case 'closed':
-      return { label: 'Early voting closed',
-               status: `Ended ${Elections.dayMonth(to)}`, site: inGrandRapids(r), off: true,
+      return { label: t('Early voting closed'),
+               status: t('Ended {date}', { date: Elections.dayMonth(to) }), site: inGrandRapids(r), off: true,
                ended: true,
-               note: 'Early voting has ended. Its sites no longer take ballots, ' +
-                     'so they are not offered for directions.' };
+               note: t('Early voting has ended. Its sites no longer take ballots, so they are not offered for directions.') };
     // Not off: a reader may plan the trip ahead (destinations()), so every mention of a
     // site before its first day says when that day is.
     case 'before':
-      return { label: 'Early voting dates',
-               status: `${Elections.dayMonth(w.early_voting_from)} to ${Elections.dayMonth(to)}`,
+      return { label: t('Early voting dates'),
+               status: t('{from} to {to}', { from: Elections.dayMonth(w.early_voting_from), to: Elections.dayMonth(to) }),
                site: inGrandRapids(r),
-               note: 'Early voting has not opened yet. Its sites take ballots from ' +
-                     `${Elections.dayMonth(w.early_voting_from)}, and you can plan ` +
-                     'directions to any of them now.' };
+               note: t('Early voting has not opened yet. Its sites take ballots from {date}, and you can plan directions to any of them now.', { date: Elections.dayMonth(w.early_voting_from) }) };
     default:
-      return { label: 'Early voting open',
-               status: `Through ${Elections.dayMonth(to)}`,
+      return { label: t('Early voting open'), open: true,
+               status: t('Through {date}', { date: Elections.dayMonth(to) }),
                site: inGrandRapids(r) };
   }
 }
@@ -1655,6 +1646,10 @@ function startCountdown() {
   renderCountdown();
   if (activeEl) cdTimer = setInterval(renderCountdown, 1000);
 }
+
+// The calendar names elections in English; the catalog carries each name it uses
+// (tests/test_i18n.mjs checks elections.json against it).
+function electionName() { return t(activeEl.name); }
 
 // The date alone: the card title already says what it counts to.
 function noteLine() {
@@ -1691,8 +1686,8 @@ function renderCountdown() {
     let s = Math.max(0, Math.floor(ms / 1000));
     const hrs = Math.floor(s / 3600); s -= hrs * 3600;
     const mins = Math.floor(s / 60); s -= mins * 60;
-    return unit(hrs, 'Hours', true) + unit(mins, 'Minutes', true) +
-           unit(s, 'Seconds', true);
+    return unit(hrs, esc(t('Hours')), true) + unit(mins, esc(t('Minutes')), true) +
+           unit(s, esc(t('Seconds')), true);
   };
 
   if (left <= 0) {
@@ -1700,39 +1695,41 @@ function renderCountdown() {
     const now = new Date();
     const phase = Elections.pollsPhase(activeEl, electionDayHours, now);
     if (phase === 'before') {
-      if (label) label.textContent = 'Polls Open In:';
+      if (label) label.textContent = t('Polls Open In:');
       clock.innerHTML = hms(Elections.atTime(activeEl.date, electionDayHours.open) - now);
-      if (said) said.textContent = 'Polls open at ' +
-        `${Elections.shortTime(electionDayHours.open)} today for the ${activeEl.name}.`;
+      if (said) said.textContent = t('Polls open at {time} today for the {election}.',
+        { time: Elections.shortTime(electionDayHours.open), election: electionName() });
     } else if (phase === 'open') {
-      if (label) label.textContent = 'Polls Close In:';
+      if (label) label.textContent = t('Polls Close In:');
       clock.innerHTML = hms(Elections.atTime(activeEl.date, electionDayHours.close) - now);
-      if (said) said.textContent = 'Polls are open until ' +
-        `${Elections.shortTime(electionDayHours.close)} today for the ${activeEl.name}.`;
+      if (said) said.textContent = t('Polls are open until {time} today for the {election}.',
+        { time: Elections.shortTime(electionDayHours.close), election: electionName() });
     } else if (phase === 'closed') {
-      if (label) label.textContent = 'Polls Have Closed:';
+      if (label) label.textContent = t('Polls Have Closed:');
       clock.innerHTML =
         `<span class="cd-today">${esc(Elections.shortTime(electionDayHours.close))}</span>`;
-      if (said) said.textContent = (electionDayHours.in_line_note ||
-        'Everyone in line when the polls closed must be allowed to vote.');
+      // The calendar's own wording in English; elsewhere the translated rule it states.
+      if (said) said.textContent = (lang === 'en' && electionDayHours.in_line_note) ||
+        t('Everyone in line when the polls closed must be allowed to vote.');
     } else {
-      if (label) label.textContent = 'Election Day:';
-      clock.innerHTML = '<span class="cd-today">Today</span>';
-      if (said) said.textContent = `The ${activeEl.name} is today, ` +
-        `${Elections.withWeekday(activeEl.date)}.`;
+      if (label) label.textContent = t('Election Day:');
+      clock.innerHTML = `<span class="cd-today">${esc(t('Today'))}</span>`;
+      if (said) said.textContent = t('The {election} is today, {date}.',
+        { election: electionName(), date: Elections.withWeekday(activeEl.date) });
     }
     if (note) note.innerHTML = noteLine();
     box.hidden = false;
     return;
   }
 
-  if (label) label.textContent = 'Election Day is In:';
+  if (label) label.textContent = t('Election Day is In:');
   const days = Math.floor(left / 86400000);
-  clock.innerHTML = unit(days, 'Days', false) + hms(left - days * 86400000);
+  clock.innerHTML = unit(days, esc(t('Days')), false) + hms(left - days * 86400000);
 
   if (note) note.innerHTML = noteLine();
-  if (said) said.textContent = `${days}${days === 1 ? ' day' : ' days'} until the ` +
-    `${activeEl.name} on ${Elections.withWeekday(activeEl.date)}.`;
+  const vars = { n: days, election: electionName(), date: Elections.withWeekday(activeEl.date) };
+  if (said) said.textContent = days === 1 ? t('1 day until the {election} on {date}.', vars)
+    : t('{n} days until the {election} on {date}.', vars);
   box.hidden = false;
 }
 
@@ -1792,7 +1789,8 @@ function clerkOffice(r) {
   // The county often trails a P.O. Box after the street line, so keep the first part.
   const street = String(office.address || '').split(',')[0].trim();
   return {
-    name: `${r.jurisdiction || 'Your'} Clerk\u2019s Office`,
+    name: r.jurisdiction ? t('{jurisdiction} Clerk\u2019s Office', { jurisdiction: r.jurisdiction })
+                         : t('Your Clerk\u2019s Office'),
     address: street || String(office.address || '').trim() || null,
     phone: (office.phone && String(office.phone).trim()) || null,
     lat: office.lat, lng: office.lng,
@@ -1813,7 +1811,7 @@ function registrationOffice(r) {
   const reg = clerkForThisElection(r) ? clerk.registration : null;
   if (!reg?.office) return null;
   return {
-    name: 'Grand Rapids City Clerk\u2019s Office',
+    name: t('Grand Rapids City Clerk\u2019s Office'),
     address: reg.office.address, note: reg.office.note,
     lat: reg.office.lat, lng: reg.office.lng,
     rows: Elections.registrationRows(reg, activeEl, electionDayHours, Elections.todayISO())
@@ -1828,12 +1826,12 @@ function boxHoursHtml(b, tag, cls) {
     return `<${tag}${attr}>${text}</${tag}>`;
   }
   if (b.office) {
-    return line('bx-hours-odd', 'Open during office hours') +
+    return line('bx-hours-odd', esc(t('Open during office hours'))) +
       (b.phone ? line(cls.phone, esc(b.phone)) : '');
   }
   if (!b.hours) return '';
-  return ALWAYS_OPEN.test(b.hours) ? line(cls.open, 'Open 24/7')
-                                   : line('bx-hours-odd', `Open hours: ${esc(b.hours)}`);
+  return ALWAYS_OPEN.test(b.hours) ? line(cls.open, esc(t('Open 24/7')))
+                                   : line('bx-hours-odd', esc(t('Open hours: {hours}', { hours: b.hours })));
 }
 
 function officeOnly(list) {
@@ -1851,10 +1849,10 @@ function normaliseHours(b) {
 
 function destSub(pick, r) {
   const opens = evOpensOn(pick, r);
-  return pick.kind === 'early' ? `Early voting site${opens ? `, opens ${opens}` : ''}`
-       : pick.kind === 'dropbox' ? 'Absentee ballot drop box'
-       : pick.kind === 'register' ? 'Clerk\u2019s office, to register'
-       : `Precinct ${r.precinct}`;
+  return pick.kind === 'early' ? (opens ? t('Early voting site, opens {date}', { date: opens }) : t('Early voting site'))
+       : pick.kind === 'dropbox' ? t('Absentee ballot drop box')
+       : pick.kind === 'register' ? t('Clerk\u2019s office, to register')
+       : t('Precinct {n}', { n: r.precinct });
 }
 
 // 'Tuesday, October 20' for an early voting pick whose window has not opened, else null.
@@ -1882,24 +1880,24 @@ function destinations(r) {
   // a site that has not opened the default. Never once closed, and never undated
   // ('none'), since nothing says when those take ballots.
   if (ranked && (evState === 'open' || evState === 'before')) {
-    out.push({ kind: 'early', label: 'Early voting',
+    out.push({ kind: 'early', label: t('Early voting'),
                place: ranked[chosen.early] || ranked[0],
                all: ranked, state: evState });
   }
 
   if (r.place?.lat) {
-    out.push({ kind: 'polling', label: 'Election day', place: r.place });
+    out.push({ kind: 'polling', label: t('Election day'), place: r.place });
   }
 
   const boxes = nearest(origin, boxesFor(r));
   if (boxes) {
-    out.push({ kind: 'dropbox', label: 'Drop box',
+    out.push({ kind: 'dropbox', label: t('Drop box'),
                place: boxes[chosen.dropbox] || boxes[0],
                all: boxes });
   }
 
   const office = registrationNow() === 'in-person' ? registrationOffice(r) : null;
-  if (office?.lat != null) out.push({ kind: 'register', label: 'Register', place: office });
+  if (office?.lat != null) out.push({ kind: 'register', label: t('Register'), place: office });
 
   // The first is where the directions point before anything is clicked. On election day
   // the polls; otherwise the drop box while absentee ballots are out, which covers every
@@ -1938,8 +1936,7 @@ function routeTo(r, forcedKind) {
   const origin = addressPoint(r);
   if (!origin) {
     routeError();
-    $('routes').innerHTML = '<div class="err">Found where you vote, but could not ' +
-      'place your address on the street map, so no route is drawn.</div>';
+    $('routes').innerHTML = `<div class="err">${esc(t('Found where you vote, but could not place your address on the street map, so no route is drawn.'))}</div>`;
     return;
   }
   const place = pick.place;
@@ -1955,8 +1952,7 @@ function routeTo(r, forcedKind) {
   const computed = computeRoutes(origin, place);
   if (!computed) {
     routeError();
-    $('routes').innerHTML = '<div class="err">No drivable route between your address ' +
-      `and ${esc(place.name)} on this road network.</div>`;
+    $('routes').innerHTML = `<div class="err">${esc(t('No drivable route between your address and {place} on this road network.', { place: place.name }))}</div>`;
     map.fitBounds(L.latLngBounds([[origin.lat, origin.lng], [place.lat, place.lng]]).pad(.35), fitOpts());
     return;
   }
@@ -2047,14 +2043,12 @@ function renderAll(fit) {
     drawSites(current);
     renderDestPicker();
     $('routes').innerHTML =
-      '<div class="here"><div class="here-h">You\u2019re already here</div>' +
-      `<div class="here-b">${esc(displayCase(routes.place.name || ''))}` +
-      ' is at the address you searched, so there is nothing here to navigate. ' +
-      'Pick another destination above for directions.</div></div>';
+      `<div class="here"><div class="here-h">${esc(t('You\u2019re already here'))}</div>` +
+      `<div class="here-b">${esc(t('{place} is at the address you searched, so there is nothing here to navigate. Pick another destination above for directions.', { place: displayCase(routes.place.name || '') }))}</div></div>`;
     $('steps').innerHTML = ''; $('unavoid').innerHTML = '';
     renderRouteKey();
     bindDetail(marker([routes.place.lat, routes.place.lng], 'dest'),
-      placePopup('You are here', displayCase(routes.place.name), routes.place,
+      placePopup(t('You are here'), displayCase(routes.place.name), routes.place,
                  `<div class="dw">${esc(routes.destSub)}</div>`), 280);
     if (fit) map.setView([routes.place.lat, routes.place.lng], 17, { animate: false });
     return;
@@ -2074,7 +2068,7 @@ function renderAll(fit) {
   const brg = (rp && rp.length > 1) ? bearing(rp[0], rp[1]) : 0;
   originArrow = marker([routes.origin.lat, routes.origin.lng], 'origin', brg);
   bindDetail(marker([routes.place.lat, routes.place.lng], 'dest'),
-    placePopup('Finish', displayCase(routes.place.name), routes.place,
+    placePopup(t('Finish'), displayCase(routes.place.name), routes.place,
                `<div class="dw">${esc(routes.destSub)}</div>`), 280);
 
   // Connectors show only when a split failed and the route starts at a junction. The ends
@@ -2210,7 +2204,7 @@ function renderRouteKey() {
   if (!routes || routes.here || routes.identical) { k.hidden = true; k.innerHTML = ''; return; }
   const row = (kind, label) => `<span class="rk-row${selected === kind ? ' on' : ''}">` +
     `<i class="rk-sw ${kind}"></i>${label}</span>`;
-  k.innerHTML = row('avoid', 'Avoiding') + row('fast', 'Fastest');
+  k.innerHTML = row('avoid', esc(t('Avoiding'))) + row('fast', esc(t('Fastest')));
   k.hidden = false;
 }
 
@@ -2252,7 +2246,7 @@ function marker(latlng, kind, bearingDeg) {
     zIndexOffset: 1000
   }).addTo(pinLayer);
   if (kind === 'origin') {
-    m.bindTooltip('Start', { direction: 'top', offset: [0, -10] });
+    m.bindTooltip(esc(t('Start')), { direction: 'top', offset: [0, -10] });
   }
   return m;
 }
@@ -2303,7 +2297,7 @@ function renderUnavoidable() {
   // From the steps, not the edges: the split edges are gone.
   const names = {};
   (routes.avoid.steps || []).forEach((st) => {
-    if (st.cameras?.length) names[st.street || 'an unnamed road'] = 1;
+    if (st.cameras?.length) names[st.street || t('an unnamed road')] = 1;
   });
   $('unavoid').innerHTML = unavoidableHtml(exp, Object.keys(names));
 }
@@ -2313,7 +2307,8 @@ function renderUnavoidable() {
 
 function fmtMi(m) { return `${(m / METERS_PER_MILE).toFixed(1)} mi`; }
 function fmtMin(s) { return `${Math.max(1, Math.round(s / 60))} min`; }
-function plural(n) { return n > 1 ? 's' : ''; }
+// "1 camera", "3 cameras", in the page's language.
+function cams(n) { return n === 1 ? t('1 camera') : t('{n} cameras', { n }); }
 
 // Under 0.05 mi and half a minute is no saving: the display cannot show it. Decides both
 // whether Fastest is offered and how its cost reads.
@@ -2335,8 +2330,8 @@ function sameRoute(a, b, aExp, bExp) {
 }
 
 function camWord(n) {
-  return n === 0 ? '<span class="cam-zero">no cameras</span>'
-    : `<span class="cam-big">${n} camera${plural(n)}</span>`;
+  return n === 0 ? `<span class="cam-zero">${esc(t('no cameras'))}</span>`
+    : `<span class="cam-big">${esc(cams(n))}</span>`;
 }
 
 function turnGlyph(text) {
@@ -2351,11 +2346,34 @@ function turnGlyph(text) {
   return '↑';
 }
 
-// router.js puts st.street verbatim into st.text, so one replace cases just the name.
+// Each of router.js's turn words, with and without a street to turn onto.
+const TURNS = {
+  'Continue': [t('Continue'), t('Continue onto {street}')],
+  'Bear right': [t('Bear right'), t('Bear right onto {street}')],
+  'Bear left': [t('Bear left'), t('Bear left onto {street}')],
+  'Turn right': [t('Turn right'), t('Turn right onto {street}')],
+  'Turn left': [t('Turn left'), t('Turn left onto {street}')],
+  'Sharp right': [t('Sharp right'), t('Sharp right onto {street}')],
+  'Sharp left': [t('Sharp left'), t('Sharp left onto {street}')],
+  'Make a U-turn': [t('Make a U-turn'), t('Make a U-turn onto {street}')]
+};
+const COMPASS = {
+  north: t('north'), northeast: t('northeast'), east: t('east'), southeast: t('southeast'),
+  south: t('south'), southwest: t('southwest'), west: t('west'), northwest: t('northwest')
+};
+
+// English is router.js's own text, with the street name cased; other languages are built
+// from the step's parts. Street names are never translated.
 function stepText(st) {
-  if (!st.street) return st.text;
-  const c = displayCase(st.street);
-  return c === st.street ? st.text : st.text.replace(st.street, c);
+  const street = st.street ? displayCase(st.street) : '';
+  if (lang === 'en') {
+    return !st.street || street === st.street ? st.text : st.text.replace(st.street, street);
+  }
+  if (st.arrive) return t('Arrive at your destination');
+  const fill = (s) => s.replace('{street}', street).replace('{dir}', COMPASS[st.head] || st.head);
+  if (st.head) return fill(street ? t('Head {dir} on {street}') : t('Head {dir}'));
+  const pair = TURNS[st.turn];
+  return pair ? fill(street ? pair[1] : pair[0]) : st.text;
 }
 
 function option(key, r, exp, saved, selected) {
@@ -2363,13 +2381,14 @@ function option(key, r, exp, saved, selected) {
   // no camera-free route the search settles for fewest, so it says Passing, not Avoiding.
   let label;
   if (key === 'avoid') {
-    label = exp > 0 ? `Passing ${exp} camera${plural(exp)}`
-      : saved > 0 ? `Avoiding ${saved} camera${plural(saved)}`
-      : 'No cameras';
+    label = exp > 0 ? t('Passing {cams}', { cams: cams(exp) })
+      : saved > 0 ? t('Avoiding {cams}', { cams: cams(saved) })
+      : t('No cameras');
   } else {
-    label = exp === 0 ? 'No cameras'
-      : `Traversing ${exp} camera${plural(exp)}`;
+    label = exp === 0 ? t('No cameras')
+      : t('Traversing {cams}', { cams: cams(exp) });
   }
+  label = esc(label);
 
   return `<button type="button" class="${key}${selected === key ? ' on' : ''}"` +
     ` data-key="${key}">` +
@@ -2387,11 +2406,9 @@ function cardsHtml(routes, selected) {
   if (routes.identical) {
     const clean = routes.avoidExp === 0;
     const note = routes.fastDropped
-      ? '<div class="verdict">Going through the cameras would not get you ' +
-        'there any faster, so only this route is offered.</div>'
+      ? `<div class="verdict">${esc(t('Going through the cameras would not get you there any faster, so only this route is offered.'))}</div>`
       : clean ? ''
-      : '<div class="verdict">This is also the way that passes ' +
-        'the fewest cameras.</div>';
+      : `<div class="verdict">${esc(t('This is also the way that passes the fewest cameras.'))}</div>`;
     return `<div class="one-route"><b>${fmtMi(avoid.meters)}</b> · ` +
       `<b>${fmtMin(avoid.seconds)}</b>` +
       (clean ? '' : ` · ${camWord(routes.avoidExp)}`) + `</div>${note}`;
@@ -2403,14 +2420,14 @@ function cardsHtml(routes, selected) {
 
   if (saved > 0 && selected === 'avoid') {
     let cost;
-    if (noRealSaving(fast, avoid)) cost = 'costs you nothing';
+    if (noRealSaving(fast, avoid)) cost = t('Going around them costs you nothing.');
     else {
       const parts = [];
       if (dMi > .05) parts.push(`${dMi.toFixed(1)} mi`);
       if (dMin > .5) parts.push(`${Math.round(dMin)} min`);
-      cost = `costs an extra ${parts.join(' and ')}`;
+      cost = t('Going around them costs an extra {extra}.', { extra: parts.join(t(' and ')) });
     }
-    html += `<div class="verdict">Going around them ${cost}.</div>`;
+    html += `<div class="verdict">${esc(cost)}</div>`;
   }
   return html;
 }
@@ -2421,10 +2438,10 @@ function stepsHtml(steps) {
       (st.meters < 160 ? `${Math.round(st.meters * 3.28084)} ft` : fmtMi(st.meters)) +
       '</span>' : '';
     const cam = st.cameras.length
-      ? `<span class="scam">${st.cameras.length} camera${plural(st.cameras.length)}</span>`
+      ? `<span class="scam">${esc(cams(st.cameras.length))}</span>`
       : '';
     return `<li data-i="${i}"${st.arrive ? ' class="arrive"' : ''}` +
-      ' title="Show this part of the route on the map">' +
+      ` title="${esc(t('Show this part of the route on the map'))}">` +
       (st.arrive ? '' : `<span class="glyph">${turnGlyph(st.text)}</span>`) +
       `<span class="stext">${esc(stepText(st))}</span>${dist}${cam}</li>`;
   });
@@ -2432,9 +2449,10 @@ function stepsHtml(steps) {
 }
 
 function unavoidableHtml(count, streets) {
-  return '<div class="unavoid">There is no way to reach this destination ' +
-    `without passing ${count} known camera${plural(count)}` +
-    `, on ${esc(streets.join(', '))}. This route passes the fewest it can.</div>`;
+  const vars = { n: count, streets: streets.join(', ') };
+  return `<div class="unavoid">${esc(count === 1
+    ? t('There is no way to reach this destination without passing 1 known camera, on {streets}. This route passes the fewest it can.', vars)
+    : t('There is no way to reach this destination without passing {n} known cameras, on {streets}. This route passes the fewest it can.', vars))}</div>`;
 }
 
 function destPickerHtml(opts, chosenKind) {
@@ -2449,8 +2467,8 @@ function destPickerHtml(opts, chosenKind) {
 
 // The grey note on an inexact row, keyed by the kind Precincts.suggest assigns (voting.js).
 const SUGGESTION_WHY = {
-  inferred: 'estimated', quadrant: 'did you mean',
-  near: 'nearest on this street'
+  inferred: t('estimated'), quadrant: t('did you mean'),
+  near: t('nearest on this street')
 };
 
 const LIMIT = 8;
@@ -2491,9 +2509,9 @@ function attachSuggestions(opts) {
       `<span class="ac-pin">${PIN_SVG}</span>` +
       (it.number != null ? `<span class="num">${it.number}</span>` : '') +
       `<span class="st">${esc(displayCase(it.street))}</span>` +
-      (why ? `<span class="why">${why}</span>` : '') +
+      (why ? `<span class="why">${esc(why)}</span>` : '') +
       (it.where?.length
-        ? `<span class="ac-where">${esc(it.where.join(' or '))}</span>`
+        ? `<span class="ac-where">${esc(it.where.join(t(' or ')))}</span>`
         : '') + '</button>';
   }
 

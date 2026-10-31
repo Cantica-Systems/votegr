@@ -1,6 +1,7 @@
 // The self-drawn basemap and the license plate camera marker and popup.
 
 import { displayCase, esc } from './voting.js';
+import { t } from './i18n.js';
 
 // ---- Basemap layer ----
 // No tiles: a tile server would see every pan. Drawing from data the page already holds
@@ -778,14 +779,15 @@ const BasemapLayer = L.Layer.extend({
 // ---- Camera marker and popup ----
 // SVG and HTML strings, no Leaflet: app.js wraps markerSvg() in an L.divIcon.
 
+// The labels are translated; the values are OpenStreetMap's, shown as mapped.
 const FIELD_LABELS = {
-  manufacturer: 'Made by', model: 'Model', brand: 'Brand',
-  'camera:type': 'Camera type', 'camera:mount': 'Mounted on',
-  operator: 'Operated by', 'operator:type': 'Operator type',
-  surveillance: 'Watches', 'surveillance:zone': 'Zone',
-  electricity: 'Power', height: 'Height', level: 'Level', support: 'Support',
-  note: 'Note', description: 'Description', ref: 'Reference',
-  'survey:date': 'Surveyed', check_date: 'Last checked', start_date: 'Installed'
+  manufacturer: t('Made by'), model: t('Model'), brand: t('Brand'),
+  'camera:type': t('Camera type'), 'camera:mount': t('Mounted on'),
+  operator: t('Operated by'), 'operator:type': t('Operator type'),
+  surveillance: t('Watches'), 'surveillance:zone': t('Zone'),
+  electricity: t('Power'), height: t('Height'), level: t('Level'), support: t('Support'),
+  note: t('Note'), description: t('Description'), ref: t('Reference'),
+  'survey:date': t('Surveyed'), check_date: t('Last checked'), start_date: t('Installed')
 };
 const FIELD_ORDER = ['manufacturer', 'model', 'brand', 'operator', 'operator:type',
   'camera:type', 'camera:mount', 'support', 'surveillance', 'surveillance:zone',
@@ -802,12 +804,12 @@ function ago(iso) {
   if (Number.isNaN(then)) return '';
   const days = Math.floor((Date.now() - then) / 86400000);
   if (days < 0) return '';
-  if (days === 0) return ' · today';
-  if (days === 1) return ' · yesterday';
-  if (days < 31) return ` · ${days} days ago`;
+  if (days === 0) return ` · ${t('today')}`;
+  if (days === 1) return ` · ${t('yesterday')}`;
+  if (days < 31) return ` · ${t('{n} days ago', { n: days })}`;
   const months = Math.round(days / 30.44);
-  if (months < 24) return ` · ${months} month${months > 1 ? 's' : ''} ago`;
-  return ` · ${(days / 365.25).toFixed(1)} years ago`;
+  if (months < 24) return ` · ${months > 1 ? t('{n} months ago', { n: months }) : t('1 month ago')}`;
+  return ` · ${t('{n} years ago', { n: (days / 365.25).toFixed(1) })}`;
 }
 
 function compass(deg) {
@@ -829,7 +831,7 @@ function popupHtml(c) {
   let rows = '';
   const d = bearing(c);
   if (d != null) {
-    rows += '<div class="cf"><span class="ck">Faces</span>' +
+    rows += `<div class="cf"><span class="ck">${esc(t('Faces'))}</span>` +
       `<span class="cv">${compass(d)} · ${Math.round(d)}°</span></div>`;
   }
   FIELD_ORDER.forEach((k) => {
@@ -841,14 +843,14 @@ function popupHtml(c) {
   // OSM version 1 is unedited, so only then is the timestamp when it was first mapped.
   const seen = c.t ? String(c.t).slice(0, 10) : null;
   if (seen) {
-    const label = c.v === 1 ? 'First mapped' : 'Last edited';
-    rows += `<div class="cf"><span class="ck">${label}</span>` +
+    const label = c.v === 1 ? t('First mapped') : t('Last edited');
+    rows += `<div class="cf"><span class="ck">${esc(label)}</span>` +
       `<span class="cv">${seen}<span class="cago">${ago(seen)}</span></span></div>`;
   }
-  if (!rows) rows = '<div class="cf"><span class="cv">No details recorded in OpenStreetMap.</span></div>';
+  if (!rows) rows = `<div class="cf"><span class="cv">${esc(t('No details recorded in OpenStreetMap.'))}</span></div>`;
   const foot = `<div class="cfoot">OpenStreetMap ${esc(c.id)}` +
-    (c.v ? ` · version ${c.v}` : '') + '</div>';
-  return `<div class="campop"><div class="ctitle">License plate camera</div>${rows}${foot}</div>`;
+    (c.v ? ` · ${esc(t('version {n}', { n: c.v }))}` : '') + '</div>';
+  return `<div class="campop"><div class="ctitle">${esc(t('License plate camera'))}</div>${rows}${foot}</div>`;
 }
 
 // The robot officer, shared by the marker and the legend key so the two cannot drift.

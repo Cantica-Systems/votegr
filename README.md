@@ -57,6 +57,21 @@ served from another address should put its own address in place of
 - `records/` holds the state's FOIA release, which supplies the drop boxes the
   county's pages do not list.
 
+## Languages
+
+The page is in English and Spanish. It opens in the reader's browser language, a
+`?lang=es` link opens it in Spanish, and a button above the countdown switches and
+remembers the choice. The translations are written ahead of time in
+`site/i18n/<lang>.js` and ship with the page, so nothing is sent to a translation
+service. The Spanish is a draft that has not yet been reviewed by a native speaker,
+and the page says so.
+
+In code, the English text is its own key: `t('Open now')`. Markup in `index.html`
+carries `data-i18n="#key"`. Street, place and clerk names are never translated.
+To add a language, copy `site/i18n/es.js`, translate the values, and add it to
+`LANGS` in `site/i18n.js`; `tests/test_i18n.mjs` fails until every key has a
+translation and every `{slot}` matches.
+
 ## Routing
 
 Streets, one-ways and speed limits come from the Kent County (REGIS) street
@@ -86,6 +101,7 @@ node tests/test_page.mjs                 # the page in a browser, at three width
 node tests/test_simple_page.mjs          # /simple in a browser, at three widths
 node tests/test_early_voting_states.mjs  # early voting states and election day, both pages
 node tests/test_registration.mjs         # registering by mail, then in person, both pages
+node tests/test_i18n.mjs                 # every key translated, the page in Spanish
 node tests/test_check_links.mjs          # what the link checker makes of a response
 node tests/test_check_links_inputs.mjs   # that it can still read every file it names
 node scripts/compare_osrm.mjs 30         # our routes against OSRM
