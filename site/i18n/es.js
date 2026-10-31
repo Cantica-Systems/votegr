@@ -33,23 +33,14 @@ export default {
   '#lg_dropbox': 'Buzón de boletas',
   '#lg_camera': 'Cámara lectora de placas',
   '#help_title': '¿Tiene problemas para votar?',
-  '#help_body': 'Si no le dejan votar, le dicen que no aparece en la lista, alguien lo intimida, ' +
-    'o encuentra su lugar de votación cerrado o sus máquinas sin funcionar, dígaselo primero a ' +
-    'un trabajador electoral. Luego llame a la línea no partidista ' +
-    'de Protección Electoral (Election Protection):',
+  '#help_body': '¿No le dejan votar, no aparece en la lista o alguien lo intimida? Llame a ' +
+    'la línea no partidista de Protección Electoral (Election Protection):',
   // The coalition's Spanish-language line first, then the main one.
   '#help_line': '<a href="tel:+18888398682">888-VE-Y-VOTA <span>(888-839-8682)</span></a>' +
     '<br><span class="help-alt">o <a href="tel:+18666878683">866-OUR-VOTE ' +
     '<span>(866-687-8683), también por mensaje de texto</span></a></span>',
   '#help_mi': '<a href="https://866ourvote.org/state/michigan/" target="_blank" ' +
-    'rel="noopener">Ayuda para votar en Michigan</a>',
-  '#help_ag': 'Denuncie la intimidación ante la ' +
-    '<a href="https://www.michigan.gov/ag/consumer-protection/election-protection-2026" ' +
-    'target="_blank" rel="noopener">Fiscalía General de Michigan</a>, ' +
-    '<a href="tel:+15173357659">517-335-7659</a>. ¿Le dicen que no puede votar en su ' +
-    'precinto? Pida una boleta provisional, o inscríbase y vote el mismo día en la oficina ' +
-    'de su secretario municipal. Tiene derecho a llevar a alguien que le ayude a votar, ' +
-    'siempre que no sea su empleador ni un representante de su sindicato.',
+    'rel="noopener">Más ayuda para votantes de Michigan</a>',
   '#color_scheme': 'Esquema de colores',
   '#light': 'Claro',
   '#match_system': 'Igual que el sistema',
