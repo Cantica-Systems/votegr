@@ -43,15 +43,15 @@ function getVar(name) {
 function setHint(text) { $('hint').textContent = text || ''; }
 
 // ---- Color scheme ----
-// data-theme on <html> (absent: follow the system) is mirrored to localStorage, which the
+// data-theme on <html> (absent: follow the system; dark when nothing is stored) is mirrored to localStorage, which the
 // inline script in index.html reads before first paint.
 
-// Follows the device until the reader picks Light or Dark.
+// Dark until the reader picks Light, or Auto to follow the device.
 function themeChoice() {
   try {
     const t = localStorage.getItem('theme');
-    return (t === 'light' || t === 'dark' || t === 'system') ? t : 'system';
-  } catch (e) { return 'system'; }
+    return (t === 'light' || t === 'dark' || t === 'system') ? t : 'dark';
+  } catch (e) { return 'dark'; }
 }
 
 function prefersDark() {
@@ -61,7 +61,7 @@ function prefersDark() {
   return !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 }
 
-// remember: only a click is stored, so a reader who never chose keeps following the device.
+// remember: only a click is stored, so a reader who never chose stays on the dark default.
 function applyTheme(choice, remember) {
   const root = document.documentElement;
   if (choice === 'system') root.removeAttribute('data-theme');
