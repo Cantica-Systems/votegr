@@ -408,7 +408,9 @@ function showNextElection(next, hours) {
     banner.append(el('span', 'ev',
       state === 'closed' ? `Early voting in Grand Rapids ended ${Elections.withWeekday(to)}.`
       : state === 'open'
-        ? `Early voting in Grand Rapids is open now, through ${Elections.withWeekday(to)}${where}.`
+        ? (Elections.earlyOpenNow(next)
+          ? `Early voting in Grand Rapids is open now, through ${Elections.withWeekday(to)}${where}.`
+          : `Early voting in Grand Rapids runs through ${Elections.withWeekday(to)}${where}.`)
         : `Early voting in Grand Rapids runs from ${Elections.withWeekday(from)} ` +
           `through ${Elections.withWeekday(to)}${where}.`));
   }
@@ -448,7 +450,9 @@ function earlyVoting(found, uncertain) {
       'Vote early and verify there. All early voting locations have your information.'));
   }
 
-  parts.push(heading('lead-2 sec-head', 'Vote early', open && !isElectionDay() ? 'Open now' : null));
+  // Only while a site is taking ballots at this moment, by its hours for today.
+  const openNow = open && !isElectionDay() && Elections.earlyOpenNow(source);
+  parts.push(heading('lead-2 sec-head', 'Vote early', openNow ? 'Open now' : null));
   parts.push(open
     ? el('div', 'sec-sub', 'Through ', el('strong', 'when', Elections.withWeekday(to)))
     : el('div', 'sec-sub', el('strong', 'when', Elections.withWeekday(from)),
