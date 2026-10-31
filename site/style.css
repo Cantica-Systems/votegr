@@ -320,9 +320,10 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   max-width: 31rem;
 }
 
-/* Election Protection hotline: always shown, above the search. */
+/* Election Protection hotline: always shown, under the search, and under the
+   answer once there is one. */
 .help {
-  margin: 0 0 24px; padding: 12px 14px; border-left: 3px solid var(--warn);
+  margin: 24px 0 0; padding: 12px 14px; border-left: 3px solid var(--warn);
   background: var(--panel); border-radius: 0 6px 6px 0; max-width: 31rem;
   font-size: .9rem; line-height: 1.5; color: var(--dim);
 }
