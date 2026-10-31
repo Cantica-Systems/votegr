@@ -178,18 +178,19 @@ for (const w of WIDTHS) {
   ok('the close button closes it', await page.evaluate(() => document.getElementById('aboutModal').hidden));
 
   // --- the theme switch ---
-  // With nothing chosen the page follows the device (Auto), and loading it
-  // stores nothing: only a click is a choice.
-  const fresh = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  // With nothing chosen the page is dark, even on a light device, and loading
+  // it stores nothing: only a click is a choice.
+  const fresh = await browser.newContext({ viewport: { width: 1280, height: 900 },
+                                           colorScheme: 'light' });
   const first = await fresh.newPage();
   await first.goto(URL_, { waitUntil: 'networkidle' });
   const unset = await first.evaluate(() => ({
     attr: document.documentElement.getAttribute('data-theme'),
-    auto: document.querySelector('#themeSwitch button[data-theme-choice="system"]').classList.contains('on'),
+    dark: document.querySelector('#themeSwitch button[data-theme-choice="dark"]').classList.contains('on'),
     stored: localStorage.getItem('theme'),
   }));
-  ok('with no choice saved the page follows the device, Auto marked',
-     unset.attr === null && unset.auto, JSON.stringify(unset));
+  ok('with no choice saved the page is dark, Dark marked',
+     unset.attr === 'dark' && unset.dark, JSON.stringify(unset));
   ok('and loading the page saves no choice', unset.stored === null, JSON.stringify(unset));
   await fresh.close();
 
