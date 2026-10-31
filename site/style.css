@@ -29,7 +29,7 @@
   --case: #12151b;          /* casing under route lines */
   --pin-ring: #12151b;
   --shadow: 0 2px 8px rgba(0,0,0,.45);
-  --header-h: 72px;
+  --header-h: 84px;
   /* Column tint. Not --raise, which sits 1.05:1 from the light page; every
      text colour stays above AA on this. */
   --tint: #35383f;
@@ -252,11 +252,11 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 [hidden] { display: none !important; }
 
 /* Off --label-size: it titles the card. Stays below .cd-num and at or above
-   .cd-for and .cd-when (tests/test_page.mjs). Its longest text, "Polls Have
+   .cd-when (tests/test_page.mjs). Its longest text, "Polls Have
    Closed:", sizes the 400px step-down. */
 .cd-label {
   margin: 0 0 10px;
-  font-weight: 700; font-size: 1.25rem; letter-spacing: .05em;
+  font-weight: 700; font-size: 1.45rem; letter-spacing: .05em;
   text-transform: uppercase; color: var(--accent);
 }
 
@@ -287,10 +287,9 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 
 .cd-note { margin: 12px 0 0; line-height: 1.5; }
-.cd-for, .cd-when {
+.cd-when {
   font-size: .95rem; font-weight: 700; letter-spacing: -.01em;
 }
-.cd-for { color: var(--accent); }
 .cd-when { color: var(--fg); }
 
 /* Visually hidden, not display:none, so screen readers still get it. */
@@ -307,8 +306,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   .cd-unit { padding: 0 clamp(8px, 3.5vw, 14px); }
   .cd-num, .cd-today { font-size: 1.4rem; }
   .cd-lab { font-size: .58rem; letter-spacing: .07em; }
-  .cd-label { font-size: 1.05rem; letter-spacing: .04em; }
-  .cd-for, .cd-when { font-size: .87rem; }
+  .cd-label { font-size: 1.2rem; letter-spacing: .04em; }
+  .cd-when { font-size: .87rem; }
 }
 
 /* ---- Intro ---- */
@@ -320,6 +319,27 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   color: var(--dim);
   max-width: 31rem;
 }
+
+/* Election Protection hotline: always shown, above the search. */
+.help {
+  margin: 0 0 24px; padding: 12px 14px; border-left: 3px solid var(--warn);
+  background: var(--panel); border-radius: 0 6px 6px 0; max-width: 31rem;
+  font-size: .9rem; line-height: 1.5; color: var(--dim);
+}
+.help h2 {
+  margin: 0 0 8px; font-size: 1.15rem; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--warn); font-weight: 800;
+}
+.help p { margin: 0 0 8px; }
+.help p:last-child { margin-bottom: 0; }
+.help a { color: var(--accent); }
+.help a[href^="tel:"] { white-space: nowrap; }
+.help-line a {
+  font-size: 1.25rem; font-weight: 800; color: var(--fg); text-decoration: none;
+}
+.help-line span { font-weight: 600; color: var(--dim); font-size: .95rem; }
+.help-more { font-size: .82rem; }
+#col.has-result .help { margin-top: 24px; }
 
 /* Padding comes from the #resultBlock, #routeBlock rule further down. */
 .block { border-top: 1px solid var(--line); }
@@ -950,23 +970,23 @@ ol.steps .scam {
   text-decoration: none; color: var(--fg);
   min-width: 0;
 }
-.brand-mark { width: 32px; height: 32px; flex: none; color: var(--accent); }
-.brand-mi { width: 38px; height: 38px; flex: none; color: var(--accent); }
+.brand-mark { width: 38px; height: 38px; flex: none; color: var(--accent); }
+.brand-mi { width: 46px; height: 46px; flex: none; color: var(--accent); }
 .brand-text {
-  font-size: 1.8rem; letter-spacing: -.018em; font-weight: 500;
+  font-size: 2.2rem; letter-spacing: -.018em; font-weight: 500;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* Breakpoints here are not in source order, so the wordmark's steps stay
    together, widest first; a rule in a later @media block would win. */
 @media (max-width: 640px) {
-  .brand-mark { width: 28px; height: 28px; }
-  .brand-mi { width: 34px; height: 34px; }
-  .brand-text { font-size: 1.55rem; }
+  .brand-mark { width: 32px; height: 32px; }
+  .brand-mi { width: 38px; height: 38px; }
+  .brand-text { font-size: 1.8rem; }
 }
 @media (max-width: 380px) {
   .brand-mark { width: 24px; height: 24px; }
-  .brand-mi { width: 28px; height: 28px; }
-  .brand-text { font-size: 1.32rem; }
+  .brand-mi { width: 30px; height: 30px; }
+  .brand-text { font-size: 1.45rem; }
 }
 .brand-text b { font-weight: 800; }
 .brand:hover .brand-text { color: var(--accent); }

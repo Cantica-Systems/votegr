@@ -178,18 +178,19 @@ for (const w of WIDTHS) {
   ok('the close button closes it', await page.evaluate(() => document.getElementById('aboutModal').hidden));
 
   // --- the theme switch ---
-  // With nothing chosen the page follows the device (Auto), and loading it
-  // stores nothing: only a click is a choice.
-  const fresh = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  // With nothing chosen the page is dark, even on a light device, and loading
+  // it stores nothing: only a click is a choice.
+  const fresh = await browser.newContext({ viewport: { width: 1280, height: 900 },
+                                           colorScheme: 'light' });
   const first = await fresh.newPage();
   await first.goto(URL_, { waitUntil: 'networkidle' });
   const unset = await first.evaluate(() => ({
     attr: document.documentElement.getAttribute('data-theme'),
-    auto: document.querySelector('#themeSwitch button[data-theme-choice="system"]').classList.contains('on'),
+    dark: document.querySelector('#themeSwitch button[data-theme-choice="dark"]').classList.contains('on'),
     stored: localStorage.getItem('theme'),
   }));
-  ok('with no choice saved the page follows the device, Auto marked',
-     unset.attr === null && unset.auto, JSON.stringify(unset));
+  ok('with no choice saved the page is dark, Dark marked',
+     unset.attr === 'dark' && unset.dark, JSON.stringify(unset));
   ok('and loading the page saves no choice', unset.stored === null, JSON.stringify(unset));
   await fresh.close();
 
@@ -257,11 +258,8 @@ for (const w of WIDTHS) {
       saidInvisible: said.getBoundingClientRect().width <= 2,
       note: document.getElementById('cdNote').textContent,
       labelSize: px(document.getElementById('cdLabel')),
-      forSize: px(document.querySelector('.cd-for')),
       whenSize: px(document.querySelector('.cd-when')),
       numSize: px(document.querySelector('.cd-num')),
-      forColor: getComputedStyle(document.querySelector('.cd-for')).color,
-      whenColor: getComputedStyle(document.querySelector('.cd-when')).color,
       footBand: !!document.getElementById('electionFoot'),
       overflow: box.scrollWidth - box.clientWidth,
     };
@@ -269,19 +267,17 @@ for (const w of WIDTHS) {
   ok('the countdown is on the page', cd1.shown);
   ok('it counts in days, hours, minutes and seconds',
      cd1.labels.join(',') === 'Days,Hours,Minutes,Seconds');
-  // A colon, not a comma: the election is the label and the day is the value.
-  ok('it names the election it is counting to', /^[^:]+: .+\d{4}$/.test(cd1.note));
+  // The date alone: the card title already says what the clock counts to.
+  ok('it gives the date it is counting to', /^\w+day, .+\d{4}$/.test(cd1.note));
   // The countdown says the date once, in full. A second copy of one date in
   // the chrome at the bottom of every screen is not worth the row, and two
   // copies are two chances to disagree.
   ok('and the footer no longer prints a second copy of it', cd1.footBand === false);
-  ok('the election and its date are told apart by colour',
-     cd1.whenColor !== cd1.forColor);
   // The card title heads the whole card, so it outranks the line two rows
   // below it. It was sized off the footer's --label-size chrome once, which
   // put it under the election name.
   ok('the card title outranks the line beneath it',
-     cd1.labelSize >= cd1.forSize && cd1.labelSize >= cd1.whenSize);
+     cd1.labelSize >= cd1.whenSize);
   ok('the clock still outranks them all', cd1.numSize > cd1.labelSize);
   ok('the countdown does not scroll sideways', cd1.overflow <= 0);
   // A screen reader would be read a new figure every second otherwise.
