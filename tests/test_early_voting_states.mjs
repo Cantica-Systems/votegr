@@ -378,8 +378,9 @@ for (const theme of ['dark', 'light']) {
 // ballots go out the polls lead the picker, though the drop box still heads
 // the card.
 //
-// The HIGHLIGHT marks the way of voting in person that is happening today:
-// early voting while its window is open, the polling place on election day
+// The HIGHLIGHT marks the way of voting in person that is happening now:
+// early voting while a site is taking ballots (inside the window and today's
+// published hours, so not in the evening), the polling place on election day
 // and on no other day. Read at desktop width (.vi-when and its .vi-where), at phone width
 // (.vi-card, which folds) and on /simple (its badge), so the three cannot
 // disagree.
@@ -393,6 +394,12 @@ const onTheDay = {
                early_voting_sites: SITES, early_voting_hours: HOURS }),
   order: ['polling', 'dropbox'], routed: /^election day$/i,
 };
+const earlyOpen = {
+  data: base({ date: iso(10), early_voting_from: iso(-2), early_voting_to: iso(2),
+               early_voting_sites: SITES,
+               early_voting_days: [-2, -1, 0, 1, 2].map((d) => ({ date: iso(d), hours: '9 am - 5 pm' })) }),
+  order: ['dropbox', 'early', 'polling'], routed: /^drop box$/i,
+};
 const ORDER_CASES = [
   { ...onTheDay, name: 'election day, before the polls open',
     clock: pollsAt(POLL_HOURS.open, -60), now: ['polling'], badges: ['Today'] },
@@ -400,11 +407,11 @@ const ORDER_CASES = [
     clock: pollsAt(POLL_HOURS.open, 60), now: ['polling'], badges: ['Open now'] },
   { ...onTheDay, name: 'election day, polls closed',
     clock: pollsAt(POLL_HOURS.close, 30), now: [], badges: [] },
-  { name: 'early voting open',
-    data: base({ date: iso(10), early_voting_from: iso(-2), early_voting_to: iso(2),
-                 early_voting_sites: SITES, early_voting_hours: HOURS }),
-    order: ['dropbox', 'early', 'polling'], routed: /^drop box$/i, now: ['early'],
-    badges: ['Open now'] },
+  // Held at a time of day either side of today's published hours, 9 to 5.
+  { ...earlyOpen, name: 'early voting open, during its hours',
+    clock: Elections.atTime(iso(0), '12:00 PM'), now: ['early'], badges: ['Open now'] },
+  { ...earlyOpen, name: 'early voting open, after its hours',
+    clock: Elections.atTime(iso(0), '8:00 PM'), now: [], badges: [] },
   { name: 'a month out',
     data: base({ date: iso(30), early_voting_from: iso(5), early_voting_to: iso(10),
                  early_voting_sites: SITES, early_voting_hours: HOURS }),

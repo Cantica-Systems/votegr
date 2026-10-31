@@ -1339,7 +1339,8 @@ function earlyVotingCard(r) {
   // Over: shown disabled with no data-kind, so nothing routes to it. destinations()
   // leaves it out too: no picker, no map.
   const routable = !!dest;
-  const now = nowKind(r) === 'early';
+  // Badged and lit only while a site is taking ballots right now, not all day.
+  const now = nowKind(r) === 'early' && Elections.earlyOpenNow(evWindow(r));
   const label = routable ? placeLabel('early', t('Early voting site nearest to you'))
               : ev ? t('Early voting site nearest to you') : t('Early voting sites');
   const where = `<div class="vi-where vi-ev-site${routable ? customClass('early') : ''}` +

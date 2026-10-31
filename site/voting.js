@@ -219,6 +219,26 @@ function registrationPhase(e, hours, now) {
 // The instant the last early voting day's sites close, or null when nothing
 // published says. Read from the clerk's per-date hours ("9 am - 5 pm") when
 // the window carries them, else from the weekday rules in elections.json.
+// True only while an early voting site is actually taking ballots: inside the window, on
+// a day with published hours, between that day's opening and closing. A day with no
+// published hours is not called open.
+function earlyOpenNow(e, now) {
+  const t = now || new Date();
+  const today = isoOf(t);
+  if (windowState(e, today, t) !== 'open') return false;
+  const day = (e.early_voting_days || []).find((d) => d && d.date === today);
+  let open, close;
+  if (day) {
+    [open, close] = String(day.hours || '').split(/\s*[-–]\s*/);
+  } else {
+    const rule = (e.early_voting_hours || [])
+      .find((h) => (h.days || []).includes(DAY_ABBR[t.getDay()]));
+    if (rule) { open = rule.open; close = rule.close; }
+  }
+  const from = atTime(today, open), to = atTime(today, close);
+  return !!(from && to && t >= from && t < to);
+}
+
 function earlyVotingEnds(e) {
   const last = e?.early_voting_to;
   if (!last) return null;
@@ -368,6 +388,7 @@ const Elections = {
   setLocale,
   todayISO, dayStart, monthDay, withWeekday, dayMonth, shortTime,
   next, sites, absenteeFrom, atTime, pollsPhase, pollsToday, earlyVotingEnds, windowState,
+  earlyOpenNow,
   hoursRows, registerByMailUntil, registrationPhase, registrationRows
 };
 
