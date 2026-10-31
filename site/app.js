@@ -1656,9 +1656,9 @@ function startCountdown() {
   if (activeEl) cdTimer = setInterval(renderCountdown, 1000);
 }
 
+// The date alone: the card title already says what it counts to.
 function noteLine() {
-  return `<span class="cd-for">${esc(activeEl.name)}:</span> ` +
-    `<span class="cd-when">${esc(Elections.withWeekday(activeEl.date))}</span>`;
+  return `<span class="cd-when">${esc(Elections.withWeekday(activeEl.date))}</span>`;
 }
 
 function renderCountdown() {

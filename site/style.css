@@ -252,7 +252,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 [hidden] { display: none !important; }
 
 /* Off --label-size: it titles the card. Stays below .cd-num and at or above
-   .cd-for and .cd-when (tests/test_page.mjs). Its longest text, "Polls Have
+   .cd-when (tests/test_page.mjs). Its longest text, "Polls Have
    Closed:", sizes the 400px step-down. */
 .cd-label {
   margin: 0 0 10px;
@@ -287,10 +287,9 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 
 .cd-note { margin: 12px 0 0; line-height: 1.5; }
-.cd-for, .cd-when {
+.cd-when {
   font-size: .95rem; font-weight: 700; letter-spacing: -.01em;
 }
-.cd-for { color: var(--accent); }
 .cd-when { color: var(--fg); }
 
 /* Visually hidden, not display:none, so screen readers still get it. */
@@ -308,7 +307,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   .cd-num, .cd-today { font-size: 1.4rem; }
   .cd-lab { font-size: .58rem; letter-spacing: .07em; }
   .cd-label { font-size: 1.2rem; letter-spacing: .04em; }
-  .cd-for, .cd-when { font-size: .87rem; }
+  .cd-when { font-size: .87rem; }
 }
 
 /* ---- Intro ---- */
