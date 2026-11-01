@@ -3,7 +3,7 @@
 #
 # Not part of checks.yml, and deliberately not triggered by pull requests.
 # Everything in checks.yml is deterministic and runs against files in this
-# repository; this depends on a dozen other organisations' web servers, which
+# repository; this depends on a dozen other organizations' web servers, which
 # go down and move pages on their own schedule. A dead link is worth knowing
 # about within the week. It is not worth blocking an unrelated merge over, and
 # a clerk's site being down for an hour should not turn a routing change red.

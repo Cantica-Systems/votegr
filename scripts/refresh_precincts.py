@@ -19,7 +19,7 @@ and PrecinctShortName already reads the way the page wants to print it --
 not. Ward is '00' for the 25 jurisdictions that have none, and becomes null
 here rather than a zero nobody should print.
 
-Geometry is thinned to roughly a metre, which changes no answer for any
+Geometry is thinned to roughly a meter, which changes no answer for any
 address more than 5 m from a precinct line.
 
 Usage: python3 refresh_precincts.py
@@ -56,7 +56,7 @@ FIELDS = ("PrecinctCode,MCDFIPS,JurisdictionName,Ward,Precinct,"
 SIMPLIFY_DEG = 0.00001   # roughly 1 m at this latitude
 COORD_DP = 6             # roughly 11 cm, far finer than a precinct line needs
 
-# Square metres per square degree at 43N, for reporting overlap areas in units
+# Square meters per square degree at 43N, for reporting overlap areas in units
 # a person can judge.
 M2_PER_DEG2 = 111320 * (111320 * 0.7314)
 SLIVER_M2 = 100          # under this is two polygons drawn to the same border
@@ -247,12 +247,12 @@ def main():
                 "address inside one has no single answer and the page should "
                 "say so rather than pick."
             ),
-            "simplified_metres": 1,
+            "simplified_meters": 1,
             "simplification_note": (
                 "Thinned for browser delivery. Verified to change no answer for "
                 "addresses more than 5 m from a precinct line."
             ),
-            "licence": "Public record of the State of Michigan, redistributed as published.",
+            "license": "Public record of the State of Michigan, redistributed as published.",
             "regenerate_with": "python3 refresh_precincts.py",
         },
         "features": out_features,

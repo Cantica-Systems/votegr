@@ -34,7 +34,7 @@
 #
 # scripts/check_links.mjs is absent for the same reason and runs weekly from
 # link-check.yml instead. Two parts of it need nobody else's server, though,
-# and both belong here. Its judgement about what a response means is a pure
+# and both belong here. Its judgment about what a response means is a pure
 # function: it is what decides whether a link-check run is red, and it is
 # where a host-by-host exemption list would grow back. And the files it reads
 # are in this repository, so whether it can still read them is answerable on
@@ -54,7 +54,7 @@ on:
 permissions:
   contents: read
 
-# One run per branch. Cancelling is right here, unlike the deploy and refresh
+# One run per branch. Canceling is right here, unlike the deploy and refresh
 # jobs: a superseded commit's results are noise, and nothing is left half
 # written if a run is killed.
 concurrency:
@@ -72,7 +72,7 @@ jobs:
           cache: npm
 
       # package.json exists only for this: the site itself has no build step
-      # and no dependencies. npm ci to honour the lockfile exactly.
+      # and no dependencies. npm ci to honor the lockfile exactly.
       - run: npm ci
 
       - name: Display case

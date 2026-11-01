@@ -38,7 +38,7 @@ DELAY = 2.0
 # division code. Grand Rapids city itself (34000) is deliberately absent.
 # Codes verified against the MGF minor-civil-division layer, not recalled.
 # Two that were guessed first time round were wrong in ways that would have
-# mislabelled real streets: 240 is Ada, not Algoma, and 33340 is Grand Haven,
+# mislabeled real streets: 240 is Ada, not Algoma, and 33340 is Grand Haven,
 # a city in Ottawa County with no connection to Grand Rapids at all.
 NEIGHBORS = {
     88940: "Wyoming",                 # city
@@ -119,7 +119,7 @@ def main():
             source="State of Michigan, Michigan Geographic Framework "
                    "(All Roads layer).",
             source_url=LAYER,
-            licence="Public record of the State of Michigan, redistributed as published.",
+            license="Public record of the State of Michigan, redistributed as published.",
             made_by="refresh_neighbors.py",
             how_to_update="Run refresh_neighbors.py.",
             why="Street names in the jurisdictions AROUND Grand Rapids, so a "

@@ -16,8 +16,8 @@ centerline data, so we take exactly the one thing that is missing.
 OSM is the ONLY source, in every jurisdiction. The Grand Rapids sign
 inventory is not used: it covers one city of thirty and has been frozen
 upstream since March 2024, so it would give Grand Rapids alone restrictions
-its neighbours could never have, from a source nobody refreshes. One source
-with one licence everywhere is worth more than a few dozen extra bans in one
+its neighbors could never have, from a source nobody refreshes. One source
+with one license everywhere is worth more than a few dozen extra bans in one
 place.
 
 Matching is geometric, not by id: the two datasets share no keys. For each OSM
@@ -182,7 +182,7 @@ def main():
         prov.update(provenance(
             source=prov.get("source", ""),
             source_url=prov.get("source_url", ""),
-            licence=prov.get("licence", ""),
+            license=prov.get("license", ""),
             made_by="build_graph.py, then build_restrictions.py",
             how_to_update=prov.get("how_to_update", ""),
             restrictions_from=[
@@ -190,8 +190,8 @@ def main():
             ],
             restrictions_note="OpenStreetMap only, across all 30 "
                               "jurisdictions. The Grand Rapids sign inventory "
-                              "was dropped in favour of one source with one "
-                              "licence everywhere."))
+                              "was dropped in favor of one source with one "
+                              "license everywhere."))
 
     print(f"attached {len(uniq)} turn restrictions "
           f"({sum(1 for r in uniq if r['no'])} no_*, "

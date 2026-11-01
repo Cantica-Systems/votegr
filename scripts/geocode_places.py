@@ -5,7 +5,7 @@
 The county publishes every polling place, drop box and early voting site as a
 name and an address string, with no coordinate anywhere, and no coordinate
 means no marker, no distance and no route. Interpolating along the street
-centreline gives one, but it puts the marker on the road outside the building
+centerline gives one, but it puts the marker on the road outside the building
 rather than on the building.
 
 The county's own parcel layer already has the answer, and this project already
@@ -16,11 +16,11 @@ the published address files, which are served to browsers and must not become
 an address-to-owner index. It is wrong for 263 buildings that are public
 polling places. So this reads the same layer and keeps the centroid for those.
 
-A parcel centroid beats an interpolated centreline point: it is the building's
+A parcel centroid beats an interpolated centerline point: it is the building's
 own parcel rather than a guess at where along the block it sits.
 
 WHAT THIS DOES NOT DO: invent a coordinate. An address that matches neither
-a parcel nor, failing that, a street centreline (see centreline()) is left
+a parcel nor, failing that, a street centerline (see centerline()) is left
 without one and reported, because a marker in the wrong place is worse than
 no marker: somebody drives to it. The misses are listed at the end so they
 can be looked at rather than averaged away.
@@ -88,7 +88,7 @@ TYPE_WORDS = {"AVE", "ST", "DR", "RD", "BLVD", "CT", "PL", "LN", "TER",
 # "East Main Street" is "E MAIN ST" in the parcel layer.
 LEADING = {"EAST": "E", "WEST": "W", "NORTH": "N", "SOUTH": "S"}
 # Names the county's own polling place list gets wrong, against the parcel
-# layer and the road centrelines, which agree with each other. Keyed on the
+# layer and the road centerlines, which agree with each other. Keyed on the
 # core so the suffix and quadrant still do their work. Kept explicit and
 # short: a fuzzy match would quietly "fix" streets that are merely similar,
 # and the whole point of this file is that it does not guess.
@@ -147,7 +147,7 @@ def street_core(street):
 
 
 def split_address(text):
-    """A clerk's location string -> (house number, normalised street), or None.
+    """A clerk's location string -> (house number, normalized street), or None.
 
     Handles the three shapes that actually occur in the sources:
 
@@ -273,7 +273,7 @@ def one_place(points):
     """The mean of these parcels, or None if they are not one building.
 
     A condo building files a parcel per unit at the same address; their
-    centroids are metres apart and averaging them gives the building. Two
+    centroids are meters apart and averaging them gives the building. Two
     genuinely different places that share a number must NOT be averaged into
     a point between them, which is a coordinate in neither of them.
     """
@@ -318,16 +318,16 @@ def geocode(index, text):
     return None
 
 
-CENTRELINE = pathlib.Path(__file__).resolve().parent / "centreline_geocode.mjs"
+CENTERLINE = pathlib.Path(__file__).resolve().parent / "centerline_geocode.mjs"
 
 
-def centreline(pending):
-    """Place what the parcel layer could not, from the street centrelines.
+def centerline(pending):
+    """Place what the parcel layer could not, from the street centerlines.
 
     Second choice, deliberately. A parcel centroid is the building; a
-    centreline point is a spot on the road outside it, interpolated between
+    centerline point is a spot on the road outside it, interpolated between
     the nearest house numbers the road file carries. For a polling place that
-    difference is a few dozen metres and the marker still lands on the right
+    difference is a few dozen meters and the marker still lands on the right
     block, which is worth having -- most of what is missing here is a church,
     a township hall or a fire station, and a tax-parcel file does not carry
     those at all.
@@ -338,20 +338,20 @@ def centreline(pending):
     """
     if not pending:
         return {}
-    if not CENTRELINE.exists():
-        print(f"  (no {CENTRELINE.name}; skipping the centreline pass)")
+    if not CENTERLINE.exists():
+        print(f"  (no {CENTERLINE.name}; skipping the centerline pass)")
         return {}
     try:
         # The helper finds site/router.js and the chunks from its own
         # location, so the working directory does not matter.
-        done = subprocess.run(["node", str(CENTRELINE)],
+        done = subprocess.run(["node", str(CENTERLINE)],
                               input=json.dumps(pending), capture_output=True,
                               text=True, timeout=300, check=True)
     except FileNotFoundError:
-        print("  (node not on PATH; skipping the centreline pass)")
+        print("  (node not on PATH; skipping the centerline pass)")
         return {}
     except subprocess.CalledProcessError as error:
-        print(f"  (centreline pass failed: {error.stderr.strip()[:200]})")
+        print(f"  (centerline pass failed: {error.stderr.strip()[:200]})")
         return {}
     return json.loads(done.stdout or "{}")
 
@@ -362,13 +362,13 @@ def load_bboxes():
     return {j["mcd"]: j["bbox"] for j in index["jurisdictions"] if j.get("bbox")}
 
 
-def neighbours_of(bboxes):
+def neighbors_of(bboxes):
     """MCD -> the MCDs whose bounding boxes touch it.
 
     A polling place sometimes sits on a street that is not in its own
     jurisdiction's chunk at all: Whitneyville Avenue is not in Caledonia
     Township's file, because the 150m ring does not reach it. Merging the
-    neighbouring chunks fixes that, and merging chunks is precisely what the
+    neighboring chunks fixes that, and merging chunks is precisely what the
     format was built for. Bounding boxes rather than real adjacency because
     this only decides which files to open, and opening one too many costs a
     second at build time.
@@ -396,7 +396,7 @@ def inside(bbox, lat, lng):
 
 class Run:
     """One geocoding run: the parcel index, the tallies, the misses, and the
-    records the parcels could not place, held for the centreline pass."""
+    records the parcels could not place, held for the centerline pass."""
 
     def __init__(self, index):
         self.index = index
@@ -408,7 +408,7 @@ class Run:
         """Add lat/lng to one record. Returns True when it landed.
 
         A record the parcels cannot place, but which parses as an address,
-        is queued for the centreline pass by the key its caller gave it, so
+        is queued for the centerline pass by the key its caller gave it, so
         the second pass can fill it in place. It is not counted as a miss
         here as well -- that would count it twice, once in each pass.
         """
@@ -445,7 +445,7 @@ def main():
 
     run = Run(build_index(load_parcels(args.parcels)))
     bboxes = load_bboxes()
-    neighbours = neighbours_of(bboxes)
+    neighbors = neighbors_of(bboxes)
     # Grand Rapids keeps its own polling places, hand-transcribed WITH
     # coordinates in polling.json, and that file is better than anything
     # derivable here. The county's scrape of the same 59 precincts is the
@@ -502,10 +502,10 @@ def main():
 
     # Second pass, over everything the parcels could not place.
     pending, stats, misses = run.pending, run.stats, run.misses
-    print(f"\ntrying {len(pending)} more from the street centrelines")
-    found = centreline([
+    print(f"\ntrying {len(pending)} more from the street centerlines")
+    found = centerline([
         dict({k: v for k, v in item.items() if not k.startswith("_")},
-             neighbours=neighbours.get(item["mcd"], []))
+             neighbors=neighbors.get(item["mcd"], []))
         for item in pending])
     for item in pending:
         hit = found.get(item["key"])
@@ -517,12 +517,12 @@ def main():
             stats["outside"] += 1
             misses.append((item["_label"],
                            f"{item['number']} {item['street']} "
-                           "[centreline match outside the jurisdiction]"))
+                           "[centerline match outside the jurisdiction]"))
             continue
         record = item["_record"]
         record["lat"], record["lng"] = hit["lat"], hit["lng"]
-        record["geocode"] = ("centreline" if hit.get("exact")
-                             else "centreline interpolated")
+        record["geocode"] = ("centerline" if hit.get("exact")
+                             else "centerline interpolated")
         stats["hit"] += 1
         stats[record["geocode"]] += 1
 
@@ -530,7 +530,7 @@ def main():
     print(f"\n{stats['hit']}/{total} located "
           f"({100 * stats['hit'] / total:.1f}%)")
     for how in ("exact", "street type ignored", "quadrant inferred",
-                "centreline", "centreline interpolated"):
+                "centerline", "centerline interpolated"):
         if stats[how]:
             print(f"  {how:<24}{stats[how]}")
     if stats["outside"]:

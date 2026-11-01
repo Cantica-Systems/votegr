@@ -13,7 +13,7 @@ function param(name) {
 }
 
 // mile is the route panel's metersPerMile, so the dump and the panel agree on miles.
-function summarise(r, mile) {
+function summarize(r, mile) {
   if (!r) return null;
   return {
     meters: Math.round(r.meters), miles: +(r.meters / mile).toFixed(2),
@@ -111,8 +111,8 @@ function mount(api) {
             identical: computed.identical, fastDropped: computed.fastDropped,
             originNode: computed.originNode, destNode: computed.destNode,
             originSplit: computed.originSplit, destSplit: computed.destSplit,
-            fastest: summarise(computed.fast, api.metersPerMile),
-            avoiding: summarise(computed.avoid, api.metersPerMile)
+            fastest: summarize(computed.fast, api.metersPerMile),
+            avoiding: summarize(computed.avoid, api.metersPerMile)
           };
           status.textContent = `${computed.ms} ms`;
           api.draw(origin, place, computed);

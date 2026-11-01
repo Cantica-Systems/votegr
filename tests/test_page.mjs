@@ -140,7 +140,7 @@ for (const w of WIDTHS) {
   ok('wordmark is never truncated (' + m.markSize + 'px)', !m.markTruncated);
   ok('theme switch lives in the footer, not the header', m.switchInFooter && !m.switchInHeader);
   // Not a fixed offset -- just that it is still in the corner rather than
-  // centred with everything else, which is what the phone layout regressed to.
+  // centered with everything else, which is what the phone layout regressed to.
   ok('theme switch sits in the bottom-left corner', m.switchLeftGap > 4 && m.switchLeftGap < 40);
   ok('page does not scroll sideways', m.pageOverflow <= 0);
   ok('footer does not scroll sideways', m.footOverflow <= 0);
@@ -387,7 +387,7 @@ for (const w of WIDTHS) {
   // Ada Township was one of the 24 with no box on the county's page, and this
   // block used to assert the clerk's-office fallback that produced. The
   // state's report supplies one, so the assertion is now the other way round:
-  // a real box, at an address in the township -- never a neighbouring
+  // a real box, at an address in the township -- never a neighboring
   // jurisdiction's, which by law cannot take the ballot -- with the hours the
   // state publishes for it, and no fallback language left over.
   //
@@ -497,7 +497,7 @@ for (const w of WIDTHS) {
   ok('no 13-digit precinct code is ever shown', !/\b08\d{11}\b/.test(cons.body));
 
   // Three ways to vote, three marks on the map, and a legend that draws the
-  // same three. Told apart by shape as well as colour.
+  // same three. Told apart by shape as well as color.
   //
   // Counted inside #map: the legend's swatches carry the same site-* classes,
   // so a page-wide count finds one of each with no marker drawn at all.
@@ -526,7 +526,7 @@ for (const w of WIDTHS) {
   // a state any link on this page has.
   await page.evaluate(() => document.querySelector('.about-btn').click());
   await page.waitForTimeout(200);
-  const linkColours = await page.evaluate(() => {
+  const linkColors = await page.evaluate(() => {
     const DEFAULTS = ['rgb(0, 0, 238)', 'rgb(85, 26, 139)', 'rgb(0, 0, 255)'];
     const bad = [];
     document.querySelectorAll('a').forEach(a => {
@@ -536,14 +536,14 @@ for (const w of WIDTHS) {
     });
     return { bad, about: [...document.querySelectorAll('#aboutModal a')].length };
   });
-  // A floor, not a count: it exists so the colour sweep below cannot pass
+  // A floor, not a count: it exists so the color sweep below cannot pass
   // by finding nothing. The panel held seven links until the Learning more
   // list was removed and now holds four, so the floor sits clear of the
   // real number rather than tracking it, and still fails if the selector
   // ever stops matching.
-  ok('the About panel is full of links', linkColours.about > 2);
-  ok('and no link is left the browser default blue or purple', linkColours.bad.length === 0);
-  if (linkColours.bad.length) linkColours.bad.forEach(b => console.log('       ' + b));
+  ok('the About panel is full of links', linkColors.about > 2);
+  ok('and no link is left the browser default blue or purple', linkColors.bad.length === 0);
+  if (linkColors.bad.length) linkColors.bad.forEach(b => console.log('       ' + b));
   ok('the About panel says what the tool is and what it is for',
      await page.evaluate(() => {
        const t = document.getElementById('aboutModal').innerText;
@@ -586,7 +586,7 @@ for (const w of WIDTHS) {
      performance.getEntriesByType('resource').some(e => /\/debug\.js$/.test(e.name))));
   ok('both ends resolve to a precinct', !!(report && report.from.precinct && report.to.precinct
      && report.from.precinct.jurisdiction === 'Grand Rapids' && report.to.precinct.jurisdiction === 'Kentwood'));
-  ok('the report carries routed metres for both routes', !!(report && report.route
+  ok('the report carries routed meters for both routes', !!(report && report.route
      && report.route.fastest.meters > 1000 && report.route.avoiding.meters > 1000));
   ok('the report lists the turn steps', !!(report && report.route.avoiding.steps.length > 3));
   ok('the pair is drawn through the page renderer', await page.evaluate(() =>
@@ -648,7 +648,7 @@ for (const w of WIDTHS) {
   ok('and the old pair of links is gone', await page.evaluate(() =>
      !document.querySelector('.vi-more, .vi-place')));
   // Before the window opens the early voting sites are offered for planning
-  // ahead: on the map, and in a card that is shut but not greyed out, since
+  // ahead: on the map, and in a card that is shut but not grayed out, since
   // it can be opened and routed to (test_early_voting_states.mjs checks the
   // list and the opening day it names). Checked here rather than with the
   // other marks in the width loop: this calendar has the window ahead on any
@@ -659,7 +659,7 @@ for (const w of WIDTHS) {
                              null, { timeout: 15000 }).catch(() => {});
   ok('the early voting sites are on the map before the window opens',
      await page.evaluate(() => document.querySelectorAll('#map .site-early').length > 0));
-  ok('and the early voting card is not greyed out',
+  ok('and the early voting card is not grayed out',
      await page.evaluate(() => !!document.querySelector('.vi-card-early') &&
                                !document.querySelector('.vi-card-early.is-off')));
   // Tapping the head opens that card and nothing else.
@@ -819,7 +819,7 @@ for (const w of WIDTHS) {
      gapAfterPick >= 0 && gapAfterPick <= 48);
   ok('and it really was a named place that was picked', picked.length > 3);
 
-  // The heading itself: centred, and in the accent.
+  // The heading itself: centered, and in the accent.
   const head = await page.evaluate(() => {
     const h = document.getElementById('dirHead');
     if (!h) return {};
@@ -832,10 +832,10 @@ for (const w of WIDTHS) {
                               & Node.DOCUMENT_POSITION_FOLLOWING) };
   });
   ok('the route section is headed Directions', head.text === 'Directions' && head.caps === 'uppercase');
-  ok('centred and in the accent', head.align === 'center' && head.accent);
+  ok('centered and in the accent', head.align === 'center' && head.accent);
   ok('and above the destination buttons', head.aboveButtons);
 
-  // Every place card offers Directions as a labelled button, under its
+  // Every place card offers Directions as a labeled button, under its
   // address and beside the button that opens the other options where there
   // are any. It replaced a chevron in the card's corner, which was the only
   // sign the card could be tapped at all. Same shape as the list button it
@@ -847,7 +847,7 @@ for (const w of WIDTHS) {
     return {
       cards: cards.length,
       everyCardHasOne: cards.every(c => c.querySelector('.vi-actions .dir-btn')),
-      labelled: cards.every(c => c.querySelector('.dir-btn').textContent.trim() === 'Directions'),
+      labeled: cards.every(c => c.querySelector('.dir-btn').textContent.trim() === 'Directions'),
       chevronGone: !document.querySelector('.dir-cue'),
       // Below the address, never beside it.
       belowAddress: cards.every(c => {
@@ -876,7 +876,7 @@ for (const w of WIDTHS) {
                            - r.children[1].getBoundingClientRect().top) < 1),
     };
   });
-  ok('every place card offers Directions', acts.cards >= 2 && acts.everyCardHasOne && acts.labelled);
+  ok('every place card offers Directions', acts.cards >= 2 && acts.everyCardHasOne && acts.labeled);
   ok('and the old chevron cue is gone', acts.chevronGone);
   ok('the button sits below the address', acts.belowAddress);
   ok('and in the same row as the list button, in the same shape',
@@ -900,8 +900,8 @@ for (const w of WIDTHS) {
   ok('and it drops the monitoring sentence', !/monitor/i.test(note));
   ok('and the drop box hours', !/24\/7|hours are on the list/i.test(note));
   ok('and does not trail a space where those sentences were', note === note.trim());
-  // Ward and precinct read as a row of labelled numbers, each centred.
-  ok('the rail centres each value under its label', await page.evaluate(() =>
+  // Ward and precinct read as a row of labeled numbers, each centered.
+  ok('the rail centers each value under its label', await page.evaluate(() =>
      [...document.querySelectorAll('.vi-rail > div')]
        .every(d => getComputedStyle(d).textAlign === 'center')));
 
@@ -918,7 +918,7 @@ for (const w of WIDTHS) {
   // Open is a lift, not a wash of the accent. The accent is spoken for on
   // this screen -- the labels, the cue chevron, the ring on the chosen place
   // -- and a fourth use of it read as four selections at once. Checked by
-  // colour rather than by rule, so any route back to a blue card fails here.
+  // color rather than by rule, so any route back to a blue card fails here.
   const noBlue = await page.evaluate(() => {
     const hex = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
     const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(', ');
@@ -1155,7 +1155,7 @@ served = pinned(60);
 // Ward and Precinct are a label with a number under it, and the number belongs
 // under the label rather than at the left edge of a column the jurisdiction
 // name sets the width of. The trap is that centring alone does not do it: the
-// block is as wide as the rail, so "3" would centre under the middle of
+// block is as wide as the rail, so "3" would center under the middle of
 // "Grand Rapids". Each block has to shrink to its own label first, which is
 // what these two assertions are really checking -- the second is the one that
 // fails if the align-self goes.
@@ -1185,18 +1185,18 @@ served = pinned(60);
   // selected by would turn both green rather than red.
   const idn = rail.rows.filter(r => r.idn);
   ok('the rail has both numbers', idn.length === 2);
-  ok('each number is centred on its own label',
+  ok('each number is centered on its own label',
      idn.length === 2 && idn.every(r => Math.abs(r.lbl - r.val) < 0.6));
   ok('and its block is narrower than the rail, so that centring means something',
      idn.length === 2 && idn.every(r => r.width < rail.railWidth - 1));
-  // And the column as a whole reads as centred: three rows of different
+  // And the column as a whole reads as centered: three rows of different
   // widths sharing one axis, rather than three blocks flush to a left edge.
   // Jurisdiction included: it is the widest, so it is the row that sets
   // where that axis falls.
   // The width clause is load bearing, not belt and braces: with align-items
-  // gone the rows stretch to the full rail and TRIVIALLY share a centre, so
+  // gone the rows stretch to the full rail and TRIVIALLY share a center, so
   // an axis check on its own goes green on the layout it is meant to catch.
-  ok('the rail is three rows on one centre axis',
+  ok('the rail is three rows on one center axis',
      rail.rows.length === 3 &&
      rail.rows.every(r => Math.abs(r.block - rail.rows[0].block) < 0.6) &&
      rail.rows.filter(r => r.width < rail.railWidth - 1).length === 2);
@@ -1245,7 +1245,7 @@ served = pinned(60);
   // out because Grand Rapids Township is next door.
   const label = await page.evaluate(() => document.querySelector('.ac-item .ac-where').textContent.trim());
   ok('a suggestion names its jurisdiction as "Grand Rapids City"', label === 'Grand Rapids City');
-  ok('no row is coloured for being outside the city', await page.evaluate(() =>
+  ok('no row is colored for being outside the city', await page.evaluate(() =>
      !document.querySelector('.ac-item.is-outside')));
   const r = await page.evaluate(() => {
     const item = document.querySelector('.ac-item');
@@ -1289,7 +1289,7 @@ served = pinned(60);
 // zoom. Layers that position themselves from the pixel origin -- the markers,
 // the route -- follow the fingers; nothing transforms the pane. The basemap is
 // a canvas we draw ourselves, so it did neither, and a pinch slid every pin
-// off the streets it belonged to. Measured before the fix: a marker travelled
+// off the streets it belonged to. Measured before the fix: a marker traveled
 // 8,500px while the canvas transform never changed once.
 //
 // The check needs no map object and no zoom reading. Two markers a fixed
@@ -1371,7 +1371,7 @@ for (const w of [390, 1280]) {
       cueOnScreen: cr.top >= 0 && cr.bottom <= 844,
       mapMarked: map.classList.contains('pin-armed'),
       // The edge, which is the half of the cue that survives being scrolled
-      // past. Any ring at all, rather than a colour this test would pin.
+      // past. Any ring at all, rather than a color this test would pin.
       mapRing: getComputedStyle(map).boxShadow !== 'none',
       pressed: document.getElementById('pinBtn').getAttribute('aria-pressed'),
     };
@@ -1434,7 +1434,7 @@ for (const w of [390, 1280]) {
 
   // Tag the marker to tap while the pin is IDLE, which is the only state in
   // which the check can be made: it has to be the topmost thing at its own
-  // centre, and once the fix is in nothing in the map takes a hit test. The
+  // center, and once the fix is in nothing in the map takes a hit test. The
   // element is tagged rather than its coordinates kept, so a later pan moves
   // the target with the map instead of stranding the test on empty ground.
   const tapped = await page.evaluate(() => {
@@ -1560,7 +1560,7 @@ for (const w of [390, 1280]) {
 
 // --- the ward tint means WARD ---------------------------------------
 // The legend calls this layer "Wards, or your township" and map.js says a
-// precinct "steps in lightness by number within it so neighbours differ while
+// precinct "steps in lightness by number within it so neighbors differ while
 // the area still reads as one". Both halves are checkable, and the first one
 // silently stopped being true: a lightness step of 10-11 points over a modulus
 // of 5 spanned 40 points inside one ward, which is further than the three ward
@@ -1621,7 +1621,7 @@ for (const theme of ['dark', 'light']) {
   // map.js publishes the land tone so this can compose against the real
   // one. Required rather than defaulted: a fallback here would be the second
   // copy of the backdrop that publishing it exists to avoid, and would be
-  // the wrong colour for one of the two themes.
+  // the wrong color for one of the two themes.
   ok(`${theme}: the map publishes its land tone`, /^#[0-9a-f]{6}$/i.test(tints.land),
      JSON.stringify(tints.land));
 
@@ -1658,7 +1658,7 @@ for (const theme of ['dark', 'light']) {
     else if (d < minCross) minCross = d;
   }
   // The invariant. Two precincts in one ward must look more alike than two
-  // precincts in different wards, or the colour is not reporting ward at all.
+  // precincts in different wards, or the color is not reporting ward at all.
   // Held to half, which is the margin the lightness step was chosen against,
   // and both themes have to clear it.
   const spread = `worst same-ward dE ${maxSame.toFixed(1)}, closest cross-ward dE ${minCross.toFixed(1)}`;
@@ -1667,9 +1667,9 @@ for (const theme of ['dark', 'light']) {
   ok(`${theme}: and with the margin the step was set against (same < cross / 2)`,
      maxSame < minCross / 2, spread);
   // The other half of the intent: a smaller step must not become no step, or
-  // neighbouring precincts stop being tellable apart inside their ward.
-  ok(`${theme}: neighbouring precincts still differ inside a ward`, maxAdj > 2.3,
-     `largest step between neighbours dE ${maxAdj.toFixed(1)}`);
+  // neighboring precincts stop being tellable apart inside their ward.
+  ok(`${theme}: neighboring precincts still differ inside a ward`, maxAdj > 2.3,
+     `largest step between neighbors dE ${maxAdj.toFixed(1)}`);
 
   await ctx.close();
 }
@@ -1677,7 +1677,7 @@ for (const theme of ['dark', 'light']) {
 // --- street names stay put when the map is dragged -------------------
 // A name belongs to a piece of road, so panning must not move it to a
 // different piece. Selection used to be ranked by distance to the SCREEN
-// centre; it is now one winner per fixed geographic cell, decided on the
+// center; it is now one winner per fixed geographic cell, decided on the
 // geography alone, so a pan cannot re-pick it.
 //
 // This test is deliberately paranoid, because the first version of it passed
@@ -1763,7 +1763,7 @@ for (const theme of ['dark', 'light']) {
     await page.waitForTimeout(2000);
     const B = await read();
     // A margin, so a label that merely left the view is not counted against
-    // the fix. Names entering and leaving at the edges is correct behaviour.
+    // the fix. Names entering and leaving at the edges is correct behavior.
     const M = 60;
     const out = { zoomSame: A.zoom === B.zoom, checked: 0, moved: [], cal: { n: 0, bad: [] } };
     for (const n of Object.keys(A.labels)) {
@@ -1809,7 +1809,7 @@ for (const theme of ['dark', 'light']) {
   // the layout is the same with the numbers hidden as with them shown.
   //
   // The toggle is driven on the input rather than through the gear panel:
-  // this asserts the renderer's behaviour, and going via the panel would
+  // this asserts the renderer's behavior, and going via the panel would
   // fail for reasons that have nothing to do with it.
   const setNumbers = async (on) => {
     await clear();
@@ -1924,7 +1924,7 @@ served = null;
      /no address on it/i.test(campusText) && /pin button/i.test(campusText));
 
   const away = await rows('99999 Barbreht Dr NW');
-  ok('a street in a township the tool does not cover is labelled with it',
+  ok('a street in a township the tool does not cover is labeled with it',
      away.length === 1 && away[0].where === 'Tallmadge Township');
   const awayText = await answer();
   ok('and picking it says the tool does not cover it, and where to look instead',
@@ -2018,13 +2018,13 @@ served = null;
 // pass for a short one.
 {
   const index = JSON.parse(await readFile(join(ROOT, 'data/precincts.json'), 'utf8'));
-  const centre = {};
+  const center = {};
   for (const p of index.precincts) {
-    const c = centre[p.mcd] || (centre[p.mcd] = { lat: 0, lng: 0, n: 0, name: p.jurisdiction });
+    const c = center[p.mcd] || (center[p.mcd] = { lat: 0, lng: 0, n: 0, name: p.jurisdiction });
     c.lat += p.label[0]; c.lng += p.label[1]; c.n++;
   }
-  const km = (a, b) => Math.hypot((centre[a].lat / centre[a].n - centre[b].lat / centre[b].n) * 111,
-                                  (centre[a].lng / centre[a].n - centre[b].lng / centre[b].n) * 81.5);
+  const km = (a, b) => Math.hypot((center[a].lat / center[a].n - center[b].lat / center[b].n) * 111,
+                                  (center[a].lng / center[a].n - center[b].lng / center[b].n) * 81.5);
   const seen = new Map();
   for (const j of index.jurisdictions) {
     const doc = JSON.parse(await readFile(join(ROOT, `data/addresses/${j.mcd}.json`), 'utf8'));
@@ -2042,7 +2042,7 @@ served = null;
     const [a, b] = [...set];
     if (!pick || km(a, b) > pick.km) pick = { text, mcds: [a, b], km: km(a, b) };
   }
-  const label = (m) => /Township$/.test(centre[m].name) ? centre[m].name : centre[m].name + ' City';
+  const label = (m) => /Township$/.test(center[m].name) ? center[m].name : center[m].name + ' City';
   ok(`an address the parcel file has in two towns ${Math.round(pick.km)} km apart is found`,
      pick && pick.km > 5);
 
@@ -2086,11 +2086,11 @@ served = null;
     }));
     const mi = /([\d.]+)\s*mi\b/.exec(got.routes), ft = /\bft\b/.test(got.routes);
     const miles = mi ? Number(mi[1]) : ft ? 0 : Infinity;
-    ok(`picking ${centre[m].name} answers ${centre[m].name}`,
-       got.info.includes(centre[m].name));
+    ok(`picking ${center[m].name} answers ${center[m].name}`,
+       got.info.includes(center[m].name));
     // A route from the right town stays in it; one from the wrong town has to
     // cross the distance between them first.
-    ok(`and routes from ${centre[m].name}, not from the other town (${miles} mi)`,
+    ok(`and routes from ${center[m].name}, not from the other town (${miles} mi)`,
        miles < pick.km / 1.609 / 2);
   }
   ok('no page errors while doing it', errors.length === 0, errors.join(' | '));

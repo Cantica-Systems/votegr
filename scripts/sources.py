@@ -18,7 +18,7 @@ mechanism. It means a reader -- or the page, or a script -- can ask "where did
 this line come from" and get an answer, rather than "which file am I in".
 
 What lives in the registry is what belongs to the SOURCE: who publishes it,
-the URL actually read, the licence, when it was last read, and the archive
+the URL actually read, the license, when it was last read, and the archive
 copy if one exists. What stays in a data file is what belongs to that FILE:
 how to regenerate it, what it counts, and any caveat about its own contents.
 
@@ -27,7 +27,7 @@ Usage from a refresh script:
     from sources import register
     register("gr-clerk-current-election",
              publisher="City of Grand Rapids, City Clerk's Office",
-             url=URL, licence="Public record of the City of Grand Rapids.",
+             url=URL, license="Public record of the City of Grand Rapids.",
              archived=snapshot)
 """
 import json
@@ -39,7 +39,7 @@ OUT = ROOT / "site" / "data" / "sources.json"
 
 NOTE = ("Every source this site reads, by id. Data files and individual "
         "records point at these with a `src` key rather than repeating the "
-        "publisher, the URL and the licence. Written by the refresh scripts; "
+        "publisher, the URL and the license. Written by the refresh scripts; "
         "do not edit by hand.")
 
 
@@ -52,7 +52,7 @@ def load():
     return doc
 
 
-def register(source_id, publisher, url, licence, retrieved=None,
+def register(source_id, publisher, url, license, retrieved=None,
              archived=None, covers=None, note=None, carried=True):
     """Record one source and return its id, so a caller can write it straight
     into the data it just built.
@@ -65,7 +65,7 @@ def register(source_id, publisher, url, licence, retrieved=None,
     entry.update({
         "publisher": publisher,
         "url": url,
-        "licence": licence,
+        "license": license,
         "retrieved": retrieved or date.today().isoformat(),
     })
     # `carried: false` means we read this once, by hand, and do not track it:

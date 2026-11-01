@@ -16,7 +16,7 @@ box to test against before any point-in-polygon runs.
 Precincts tile their jurisdiction exactly, so their union IS its outline, and
 this computes that union once here rather than leaving the browser to infer it.
 The page used to derive the outline by counting each precinct edge and keeping
-the ones seen only once, which assumes neighbouring precincts share their
+the ones seen only once, which assumes neighboring precincts share their
 vertices exactly. They do not: refresh_precincts.py thins each polygon on its
 own, so the two sides of a shared border keep different vertices off the same
 line, neither edge matches, and both get drawn. That put 259 km of stray line
@@ -46,7 +46,7 @@ OUT = ROOT / "site" / "data" / "precincts.json"
 EXPECTED_PRECINCTS = 202
 EXPECTED_JURISDICTIONS = 30
 
-# Square metres per square degree at 43N, so the thresholds below can be
+# Square meters per square degree at 43N, so the thresholds below can be
 # reasoned about as ground rather than as coordinates.
 M2_PER_DEG2 = 111320 * (111320 * 0.7314)
 
@@ -115,7 +115,7 @@ def label_anchor(rings):
     """A point INSIDE the polygon to hang the precinct number on.
 
     The centroid is the obvious choice and it is wrong: several Grand Rapids
-    precincts are concave enough that their centroid lands in a neighbouring
+    precincts are concave enough that their centroid lands in a neighboring
     precinct, which would put the wrong number on the wrong ground. This walks
     a grid over the polygon and keeps the interior point furthest from any
     boundary, so the number sits where there is room for it.
@@ -139,16 +139,16 @@ def label_anchor(rings):
     return best
 
 
-def _close(geom, metres):
-    """Fill slots narrower than 2 * metres, leaving the rest of the border be.
+def _close(geom, meters):
+    """Fill slots narrower than 2 * meters, leaving the rest of the border be.
 
     Buffering happens in a space where a degree is the same distance in both
-    directions, so the tolerance means metres on the ground rather than metres
+    directions, so the tolerance means meters on the ground rather than meters
     north and 0.73 of one east.
     """
     k = math.cos(math.radians(43.0))          # the county's latitude
     flat = transform(lambda x, y: (x * k, y), geom)
-    eps = metres / 111320.0
+    eps = meters / 111320.0
     closed = flat.buffer(eps, join_style=2, mitre_limit=8.0) \
                  .buffer(-eps, join_style=2, mitre_limit=8.0)
     return transform(lambda x, y: (x / k, y), closed)
@@ -158,8 +158,8 @@ def _ring(coords):
     """One union ring in the shape the precinct rings already use.
 
     Rounded to the same 5 dp they carry, so the outline lands on the dashed
-    precinct lines it bounds instead of a few centimetres off them, and
-    closed the same way. Rounding can collapse neighbouring vertices onto
+    precinct lines it bounds instead of a few centimeters off them, and
+    closed the same way. Rounding can collapse neighboring vertices onto
     each other, and a repeated point draws a dot under a round line cap, so
     consecutive duplicates go.
     """
@@ -314,7 +314,7 @@ def main():
                    "layer. Slimmed from site/data/precincts.geojson, which "
                    "carries the full provenance for the fetch itself.",
             source_url="site/data/precincts.geojson",
-            licence="Public record of the State of Michigan, redistributed as published.",
+            license="Public record of the State of Michigan, redistributed as published.",
             made_by="build_precincts.py",
             how_to_update="Run refresh_precincts.py first, then "
                           "build_precincts.py. This script only reshapes; it "

@@ -71,7 +71,7 @@ MIN_CAMERAS = 20   # the county has hundreds; a handful back = truncated/broken
 # What has to hold is that the ANSWER was complete, which is a different
 # question from whether the count went down, and it is checked where it
 # belongs, in fetch_result(): an answer whose 'remark' reports a runtime
-# error, a timeout or truncation is skipped in favour of the next mirror.
+# error, a timeout or truncation is skipped in favor of the next mirror.
 # MIN_CAMERAS stays as the absolute floor, since a result in the single
 # digits is a broken query rather than a county that removed its readers
 # overnight.
@@ -225,7 +225,7 @@ def main():
             source="OpenStreetMap, queried through Overpass for "
                    "surveillance:type=ALPR. All operators and zones.",
             source_url=ENDPOINTS[0],
-            licence="OpenStreetMap contributors, ODbL. Derived data must credit OSM.",
+            license="OpenStreetMap contributors, ODbL. Derived data must credit OSM.",
             made_by="refresh_cameras.py",
             how_to_update="Runs itself daily at 06:17 UTC via "
                           ".github/workflows/refresh-cameras.yml, which commits "

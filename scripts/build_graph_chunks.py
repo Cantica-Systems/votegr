@@ -12,7 +12,7 @@ so the peak stays near the 13 MiB the packed county costs anyway.
 Why an overlap ring: a chunk cut exactly at the jurisdiction line cannot route
 across it, so a trip from a Wyoming address to a polling place two blocks
 inside Kentwood would dead-end at the border. Every chunk therefore carries
-the segments within RING_M metres of its boundary as well. Two adjacent
+the segments within RING_M meters of its boundary as well. Two adjacent
 jurisdictions overlap in that ring, so their chunks share real nodes and a
 merged pair is one connected graph.
 
@@ -52,8 +52,8 @@ MIN_EDGES = 50            # even Bowne Township has more road than this
 SEAM_BORDER_M = 500       # a shared border longer than this must have a crossing
 
 
-def metre_frame(polygon):
-    """A local flat projection for one jurisdiction, in metres from its centre,
+def meter_frame(polygon):
+    """A local flat projection for one jurisdiction, in meters from its center,
     so the ring can be a real distance rather than a number of degrees.
 
     Buffering in degrees would be elliptical on the ground -- a degree of
@@ -64,19 +64,19 @@ def metre_frame(polygon):
     xs = 111_320 * math.cos(math.radians(lat0))
     ys = 110_540
 
-    def to_metres(lng, lat, _z=None):
+    def to_meters(lng, lat, _z=None):
         return (lng - lng0) * xs, (lat - lat0) * ys
 
     def to_degrees(x, y, _z=None):
         return x / xs + lng0, y / ys + lat0
 
-    return to_metres, to_degrees
+    return to_meters, to_degrees
 
 
 def ringed(polygon):
-    """The jurisdiction, grown by RING_M metres."""
-    to_metres, to_degrees = metre_frame(polygon)
-    return transform(to_degrees, transform(to_metres, polygon).buffer(RING_M))
+    """The jurisdiction, grown by RING_M meters."""
+    to_meters, to_degrees = meter_frame(polygon)
+    return transform(to_degrees, transform(to_meters, polygon).buffer(RING_M))
 
 
 def main():
@@ -159,7 +159,7 @@ def main():
                 source=f"{names[mcd]} share of the REGIS/Kent County street "
                        "centerlines, with OpenStreetMap turn restrictions.",
                 source_url="build/graph.json",
-                licence="Centerlines published as open data; turn restrictions "
+                license="Centerlines published as open data; turn restrictions "
                         "from OpenStreetMap are ODbL, so this file carries "
                         "that obligation.",
                 made_by="build_graph_chunks.py",
@@ -172,7 +172,7 @@ def main():
                               "different roads.",
                 derived_from="build/graph.json",
                 build=build_id,
-                ring_metres=RING_M,
+                ring_meters=RING_M,
                 ring_note="Edges within this distance of the jurisdiction "
                           "boundary are included so a route can cross it. "
                           "Adjacent chunks therefore share nodes and can be "
@@ -205,7 +205,7 @@ def main():
             source="Index of the per-jurisdiction chunks beside it, written "
                    "by the same run that writes them.",
             source_url="build/graph.json",
-            licence="Follows the chunks it indexes: REGIS/Kent County "
+            license="Follows the chunks it indexes: REGIS/Kent County "
                     "centerlines published as open data, with OpenStreetMap "
                     "turn restrictions under the ODbL. This file itself "
                     "carries only counts, bounding boxes and the build "
@@ -261,14 +261,14 @@ def verify_seams(outlines, chunk_nodes, names):
             if not outlines[a].intersects(outlines[b]):
                 continue
             border = outlines[a].boundary.intersection(outlines[b].boundary)
-            metres = border.length * 111_000     # rough, and only a threshold
+            meters = border.length * 111_000     # rough, and only a threshold
             shared = chunk_nodes[a] & chunk_nodes[b]
             checked += 1
             crossings.append(len(shared))
-            if not shared and metres > SEAM_BORDER_M:
+            if not shared and meters > SEAM_BORDER_M:
                 broken += 1
                 print(f"  BROKEN SEAM: {names[a]} and {names[b]} share "
-                      f"{metres:,.0f} m of border and no nodes at all")
+                      f"{meters:,.0f} m of border and no nodes at all")
     if broken:
         sys.exit(f"REFUSE: {broken} of {checked} shared borders would not route across")
     print(f"\nseams: {checked} touching jurisdiction pairs, all with a crossing "

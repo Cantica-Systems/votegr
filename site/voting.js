@@ -403,7 +403,7 @@ const QUADRANT = { NE: 1, NW: 1, SE: 1, SW: 1 };
 // Two modes: the constructor takes the Grand Rapids files, where a precinct id
 // is its bare number ("52"); Precincts.county() takes all thirty jurisdictions,
 // where it is the state's 13-digit code (county 081, MCD 42820, ward 01,
-// precinct 001). Rows are [house number, id, metres to precinct edge, rivals].
+// precinct 001). Rows are [house number, id, meters to precinct edge, rivals].
 class Precincts {
   constructor(addresses, polling) {
     this.wards = addresses.wards || {};
@@ -681,7 +681,7 @@ class Precincts {
     let exact = null;
     for (const row of rows) if (row[0] === number) { exact = row; break; }
     if (exact) {
-      return { precinct: exact[1], edgeMetres: exact[2],
+      return { precinct: exact[1], edgeMeters: exact[2],
                rivals: exact[3] || null, inferred: false };
     }
     const sameSide = rows.filter((r) => r[0] % 2 === number % 2);
@@ -693,9 +693,9 @@ class Precincts {
     if (!below || !above) return null;      // outside known range: do not extrapolate
     if (below[1] !== above[1]) {
       return { precinct: below[1], rivals: [below[1], above[1]], inferred: true,
-               edgeMetres: Infinity };
+               edgeMeters: Infinity };
     }
-    return { precinct: below[1], edgeMetres: Math.min(below[2], above[2]),
+    return { precinct: below[1], edgeMeters: Math.min(below[2], above[2]),
              rivals: null, inferred: true };
   }
 
@@ -825,7 +825,7 @@ class Precincts {
       code: who.code, precinct: who.precinct, ward: who.ward,
       jurisdiction: who.jurisdiction, mcd: who.mcd, place,
       rivals: res.rivals ? res.rivals.map((id) => this.describe(id).precinct) : null,
-      inferred: res.inferred, edgeMetres: res.edgeMetres,
+      inferred: res.inferred, edgeMeters: res.edgeMeters,
       ambiguousStreet: candidates.length > 1 && !candidates.includes(t.rest)
         ? candidates.slice(0, 6) : null
     };

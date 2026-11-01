@@ -5,7 +5,7 @@ routing graph that the per-jurisdiction browser chunks are cut from.
 
 This is a build artifact, not a browser asset. The whole region is one graph
 here ON PURPOSE, because node and edge identity has to be assigned exactly
-once: chunks reference their neighbours across a shared border, so the same
+once: chunks reference their neighbors across a shared border, so the same
 intersection must carry the same id in every file that contains it. Splitting
 first and numbering per chunk would give the same junction two ids and leave
 the seam unroutable.
@@ -185,7 +185,7 @@ def main():
             source_url="https://services2.arcgis.com/L81TiOwAPO1ZvU9b/arcgis/"
                        "rest/services/Transport_Street_Centerlines/"
                        "FeatureServer/6",
-            licence="Published by the City of Grand Rapids as open data.",
+            license="Published by the City of Grand Rapids as open data.",
             made_by="build_graph.py, then build_restrictions.py, then "
                     "build_graph_chunks.py",
             how_to_update="Run refresh_centerlines.py, then build_graph.py, "

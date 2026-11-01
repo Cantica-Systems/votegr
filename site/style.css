@@ -31,7 +31,7 @@
   --shadow: 0 2px 8px rgba(0,0,0,.45);
   --header-h: 84px;
   /* Column tint. Not --raise, which sits 1.05:1 from the light page; every
-     text colour stays above AA on this. */
+     text color stays above AA on this. */
   --tint: #35383f;
   /* Bevel edges, and the hover on --tint (--raise would be darker than it). */
   --bevel-hi: rgba(255,255,255,.08);
@@ -235,7 +235,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 
 /* ---- Election day countdown ---- */
-/* Left on the lede's 31rem measure, not centred: in the #col flex column,
+/* Left on the lede's 31rem measure, not centered: in the #col flex column,
    margin: 0 auto would shrink-wrap the card to its digits. */
 .countdown {
   margin: 0 0 20px;
@@ -263,7 +263,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .cd-clock { display: flex; align-items: flex-start; justify-content: center; }
 .cd-unit {
   display: flex; flex-direction: column; gap: 3px;
-  /* The first unit too, or the centred row sits half a gutter off axis. */
+  /* The first unit too, or the centered row sits half a gutter off axis. */
   padding: 0 clamp(11px, 4vw, 20px);
 }
 .cd-unit + .cd-unit { border-left: 1px solid var(--line); }
@@ -423,7 +423,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   gap: 18px 24px; align-items: stretch;
 }
 /* The rail spans every row. align-items and text-align are both needed: the
-   first centres the rows, the second each value under its own label. */
+   first centers the rows, the second each value under its own label. */
 .vi-rail { grid-column: 1; grid-row: 1 / -1; display: flex;
            flex-direction: column; gap: 18px; align-items: center; }
 .vi-rail > div { text-align: center; }
@@ -510,7 +510,7 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 }
 
 /* A way of voting not open yet or over (early voting outside its window):
-   still said, since silence would read as no early voting at all, but greyed
+   still said, since silence would read as no early voting at all, but grayed
    out, and app.js gives it nothing to click. */
 .vi-grid .is-off { opacity: .55; }
 .vi-grid .is-off .vi-lbl { color: var(--dim); }
@@ -1232,7 +1232,7 @@ ol.steps .scam {
 .map-legend .sitek { width: 17px; height: 17px; margin-right: 6px; }
 
 /* ---- Voting place marks ---- */
-/* One shape per kind, so they separate without relying on colour. */
+/* One shape per kind, so they separate without relying on color. */
 @keyframes poll-pulse {
   0% { box-shadow: 0 0 0 0 rgba(35, 190, 105, .85); }
   100% { box-shadow: 0 0 0 26px rgba(35, 190, 105, 0); }

@@ -312,7 +312,7 @@ function placeListHtml(kind, opt) {
   html += '<ul class="box-list">';
   opt.all.forEach((b, i) => {
     const picked = i === chosen[kind] ? ' class="is-chosen"' : '';
-    const dist = b.metres != null ? `<span class="bx-dist">${fmtMi(b.metres)}</span>` : '';
+    const dist = b.meters != null ? `<span class="bx-dist">${fmtMi(b.meters)}</span>` : '';
     const loc = b.entrance_note || b.note
       ? `<span class="bx-where"><span class="pp-loc-l">${esc(t('Location:'))}</span> ` +
         `${esc(sentenceCase(b.entrance_note || b.note))}</span>`
@@ -824,13 +824,13 @@ function resolveEnd(text) {
     if (!hit) { out.error = 'could not geocode'; return out; }
     out.lat = hit.lat; out.lng = hit.lng;
     out.geocode = { street: hit.street, exact: hit.exact, edge: hit.edge };
-    out.how = hit.exact ? 'centreline, exact range' : 'centreline, interpolated';
+    out.how = hit.exact ? 'centerline, exact range' : 'centerline, interpolated';
   }
   const pr = precinctAt(out.lat, out.lng);
   out.precinct = pr ? { code: pr.code, jurisdiction: pr.jurisdiction, ward: pr.ward,
                         precinct: pr.precinct } : null;
   const snap = graph.snapToRoad(out.lat, out.lng);
-  out.snap = { node: snap.node, edge: snap.edge, metres: Math.round(snap.meters),
+  out.snap = { node: snap.node, edge: snap.edge, meters: Math.round(snap.meters),
                street: snap.edge != null ? graph.edgeName(snap.edge) : null };
   out.ms = Math.round(performance.now() - t0);
   return out;
@@ -909,7 +909,7 @@ function loadData() {
   });
 }
 
-// Told apart by shape, not only colour. Drawn at 22 units and scaled for map and legend.
+// Told apart by shape, not only color. Drawn at 22 units and scaled for map and legend.
 const SITE_ART = {
   polling:
     '<svg viewBox="0 0 22 22" aria-hidden="true">' +
@@ -1018,7 +1018,7 @@ function cameraIcon(c, flagged) {
   const art = Cameras.markerSvg(c, flagged, getVar('--pin-ring'));
   return L.divIcon({ className: 'cam-icon', html: art.html,
                      iconSize: [art.size, art.size],
-                     iconAnchor: [art.centre, art.centre] });
+                     iconAnchor: [art.center, art.center] });
 }
 
 function paintLegendCamera() {
@@ -1558,7 +1558,7 @@ function show(r, focusKind, landOn) {
       .replace('{whom}', whom).replace('{mvic}', mvic)];
   if (r.rivals) adv.push(esc(t('This address sits on a precinct line and could be in {list}.', { list: r.rivals.join(t(' or ')) })));
   else if (r.inferred) adv.push(esc(t('This exact number is not in the address list, so the precinct was taken from its neighbors and checked against the precinct boundary.')));
-  if (r.edgeMetres < 30) adv.push(esc(t('This address is close to a precinct boundary, so the answer is less certain.')));
+  if (r.edgeMeters < 30) adv.push(esc(t('This address is close to a precinct boundary, so the answer is less certain.')));
   if (r.ambiguousStreet) adv.push(esc(t('Read as {street}. Other streets also match what you typed.', { street: displayCase(r.street) })));
   adv.push(esc(t('Obey all traffic signs and laws.')));
   $('advisory').innerHTML = `<div class="advisory">${adv.join(' ')}</div>`;
@@ -1763,8 +1763,8 @@ function placeCoords(data) {
 function nearest(origin, places) {
   if (!origin || !places || !places.length) return null;
   return places.map((p) => Object.assign({}, p, {
-    metres: haversine(origin.lat, origin.lng, p.lat, p.lng)
-  })).sort((a, b) => a.metres - b.metres);
+    meters: haversine(origin.lat, origin.lng, p.lat, p.lng)
+  })).sort((a, b) => a.meters - b.meters);
 }
 
 function resetChoices() { chosen = { dropbox: 0, early: 0 }; }
@@ -1775,7 +1775,7 @@ function boxesFor(r) {
   if (inGrandRapids(r)) return clerk?.boxes || [];
   const boxes = (P ? P.dropBoxes(r.mcd) : [])
     .filter((b) => b.lat && b.lng)
-    .map(normaliseHours);
+    .map(normalizeHours);
   if (boxes.length) return boxes;
   // No box published: by law the ballot goes back to the voter's own clerk.
   const office = clerkOffice(r);
@@ -1819,7 +1819,7 @@ function registrationOffice(r) {
   };
 }
 
-// Other hours are labelled, in amber, so they do not read as the building's hours. The
+// Other hours are labeled, in amber, so they do not read as the building's hours. The
 // county publishes no clerk office hours, so an office can only say it keeps some.
 function boxHoursHtml(b, tag, cls) {
   function line(c, text) {
@@ -1841,7 +1841,7 @@ function officeOnly(list) {
 
 // The county writes "24 hours a day, 7 days a week" where the city writes "24/7".
 const ROUND_THE_CLOCK = /24\s*hours?\s*(a|per)\s*day.*7\s*days/i;
-function normaliseHours(b) {
+function normalizeHours(b) {
   if (b.hours && ROUND_THE_CLOCK.test(b.hours)) {
     return Object.assign({}, b, { hours: '24/7' });
   }
@@ -1916,7 +1916,7 @@ function destinations(r) {
 
 // ---- Routing and drawing ----
 
-// Metres. About a block: covers an address geocoded to the middle of a long parcel.
+// Meters. About a block: covers an address geocoded to the middle of a long parcel.
 const ARRIVED_M = 150;
 
 function routeTo(r, forcedKind) {
@@ -2088,7 +2088,7 @@ function renderAll(fit) {
     }
     fitB.extend([routes.origin.lat, routes.origin.lng]);
     fitB.extend([routes.place.lat, routes.place.lng]);
-    // Reflect the bounds through the start-finish midpoint so fitBounds centres on it.
+    // Reflect the bounds through the start-finish midpoint so fitBounds centers on it.
     const midLat = (routes.origin.lat + routes.place.lat) / 2;
     const midLng = (routes.origin.lng + routes.place.lng) / 2;
     const sw = fitB.getSouthWest(), ne = fitB.getNorthEast();
@@ -2169,7 +2169,7 @@ function drawRoute(r, kind, which) {
   const pts = r.pts;
   const casing = getVar('--case');
   if (kind === 'muted') {
-    // Solid, since dashes mean boundaries on this map, and in its own colour so the
+    // Solid, since dashes mean boundaries on this map, and in its own color so the
     // unselected alternative never fades into the basemap.
     const tone = which === 'avoid' ? getVar('--route-avoid') : getVar('--route-fastsel');
     L.polyline(pts, { color: casing, weight: 9.5, opacity: .55,
@@ -2466,7 +2466,7 @@ function destPickerHtml(opts, chosenKind) {
 // ---- Suggestion list ----
 // The address box's suggestion widget; the page supplies suggest, onChoose and onMiss.
 
-// The grey note on an inexact row, keyed by the kind Precincts.suggest assigns (voting.js).
+// The gray note on an inexact row, keyed by the kind Precincts.suggest assigns (voting.js).
 const SUGGESTION_WHY = {
   inferred: t('estimated'), quadrant: t('did you mean'),
   near: t('nearest on this street')

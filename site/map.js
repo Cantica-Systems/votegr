@@ -120,7 +120,7 @@ function drawShield(ctx, sh, x, y, dark) {
   ctx.restore();
 }
 
-// Labels keep this far (CSS px) from a camera's centre: half the marker SIZE below, plus 10.
+// Labels keep this far (CSS px) from a camera's center: half the marker SIZE below, plus 10.
 const MARKER_R = 29;
 
 // The edge index tie-break makes the order total, so the same block wins every redraw.
@@ -229,7 +229,7 @@ const BasemapLayer = L.Layer.extend({
     // Ground goes under the route; labels get their own pane over it so the route cannot hide them.
     this._canvas = L.DomUtil.create('canvas', 'basemap-canvas');
     this._canvas.style.position = 'absolute';
-    // Origin top left: _onZoom scales this canvas, and about its centre it would slide away.
+    // Origin top left: _onZoom scales this canvas, and about its center it would slide away.
     this._canvas.style.transformOrigin = '0 0';
     map.getPane('tilePane').appendChild(this._canvas);
 
@@ -340,7 +340,7 @@ const BasemapLayer = L.Layer.extend({
 
     const P = palette(this._dark), z = map.getZoom();
 
-    // For _onZoom. The padding is symmetric, so the canvas middle is the map centre.
+    // For _onZoom. The padding is symmetric, so the canvas middle is the map center.
     this._drawnCenter = map.getCenter();
     this._drawnZoom = z;
     this._drawnW = cw; this._drawnH = ch;
@@ -420,7 +420,7 @@ const BasemapLayer = L.Layer.extend({
       const act = this._activePrecinct;
 
       // Hue per ward, one for a township (the legend's "Wards, or your township"). Lightness
-      // steps by (precinct * 2) % 5 around wardL, so consecutive numbers, usually neighbours,
+      // steps by (precinct * 2) % 5 around wardL, so consecutive numbers, usually neighbors,
       // differ by 2+ steps. tests/test_page.mjs checks the contrasts; keep wardLStep small.
       const scope = this._scopeMcd;
       const inScope = (p) => String(p.mcd) === scope;
@@ -602,7 +602,7 @@ const BasemapLayer = L.Layer.extend({
     const taken = {};
 
     const obstacles = this._obstacles || [];
-    const obsPx = [];                    // on-screen obstacle centres, in pixels
+    const obsPx = [];                    // on-screen obstacle centers, in pixels
     const OB = MARKER_R;
     for (let oi = 0; oi < obstacles.length; oi++) {
       const op = pt(obstacles[oi]);
@@ -651,7 +651,7 @@ const BasemapLayer = L.Layer.extend({
         if (sh) {
           if (it.len < 22) continue;
           const shx = Math.round((mx + wx) / CELL), shy = Math.round((my + wy) / CELL);
-          // A shield claims its cell and the four neighbours, roughly the badge's footprint.
+          // A shield claims its cell and the four neighbors, roughly the badge's footprint.
           if (taken[`${shx}:${shy}`]) continue;
           // Exact marker test too: one cell is far coarser than the marker's radius.
           let shClash = false;
@@ -828,7 +828,7 @@ const FIELD_ORDER = ['manufacturer', 'model', 'brand', 'operator', 'operator:typ
 
 // BOX is the drawing's own units, SIZE the rendered px (keep the tap target over 24 px).
 // MARKER_R above is half of SIZE plus a margin; change them together.
-const BOX = 58, CENTRE = BOX / 2;
+const BOX = 58, CENTER = BOX / 2;
 const SIZE = 38;
 
 function ago(iso) {
@@ -886,16 +886,16 @@ function popupHtml(c) {
 }
 
 // The robot officer, shared by the marker and the legend key so the two cannot drift.
-// Only the eyes take the state colour (fill). C is the centre, in BOX units.
-function bodySvg(fill, C, ringColour) {
+// Only the eyes take the state color (fill). C is the center, in BOX units.
+function bodySvg(fill, C, ringColor) {
   const dark = '#0e1116', cap = '#2a52c8', skin = '#f0c8a2';
   return `<g stroke-linejoin="round" transform="translate(${C},${C}) ` +
       `scale(1.15) translate(-${C},-${C})">` +
     // ear bolts first, so the head overlaps their inner edge
     `<rect x="${C - 10.6}" y="${C - 1}" width="3" height="4.6" rx="1" ` +
-      `fill="${ringColour}" stroke="${dark}" stroke-width="1.2"/>` +
+      `fill="${ringColor}" stroke="${dark}" stroke-width="1.2"/>` +
     `<rect x="${C + 7.6}" y="${C - 1}" width="3" height="4.6" rx="1" ` +
-      `fill="${ringColour}" stroke="${dark}" stroke-width="1.2"/>` +
+      `fill="${ringColor}" stroke="${dark}" stroke-width="1.2"/>` +
     // head
     `<rect x="${C - 8.5}" y="${C - 4}" width="17" height="13.5" rx="2.2" ` +
       `fill="${skin}" stroke="${dark}" stroke-width="1.6"/>` +
@@ -927,36 +927,36 @@ function bodySvg(fill, C, ringColour) {
     '</g>';
 }
 
-function markerSvg(c, flagged, ringColour) {
+function markerSvg(c, flagged, ringColor) {
   const deg = bearing(c);
   const fill = flagged ? '#ff2d2d' : '#ff4d4d';
   let cone = '';
   if (deg != null) {
-    // Cone drawn pointing north from centre, then rotated to the bearing.
-    cone = `<g transform="rotate(${deg.toFixed(1)} ${CENTRE} ${CENTRE})">` +
-      `<path d="M${CENTRE},${CENTRE} L${CENTRE - 11},${CENTRE - 24}` +
-      ` A26,26 0 0,1 ${CENTRE + 11},${CENTRE - 24} Z" ` +
+    // Cone drawn pointing north from center, then rotated to the bearing.
+    cone = `<g transform="rotate(${deg.toFixed(1)} ${CENTER} ${CENTER})">` +
+      `<path d="M${CENTER},${CENTER} L${CENTER - 11},${CENTER - 24}` +
+      ` A26,26 0 0,1 ${CENTER + 11},${CENTER - 24} Z" ` +
       `fill="${fill}" fill-opacity="${flagged ? '.42' : '.26'}" ` +
       `stroke="${fill}" stroke-opacity="${flagged ? '.85' : '.5'}" stroke-width="1.5"/></g>`;
   }
   const ring = flagged
-    ? `<circle cx="${CENTRE}" cy="${CENTRE}" r="15" fill="none" stroke="${fill}"` +
+    ? `<circle cx="${CENTER}" cy="${CENTER}" r="15" fill="none" stroke="${fill}"` +
       ' stroke-width="2.5" opacity=".9" class="cam-pulse"/>'
     : '';
   return {
     html: '<span title="RoboCop" style="display:block;width:100%;height:100%">' +
       `<svg width="${SIZE}" height="${SIZE}" viewBox="0 0 ${BOX} ${BOX}">` +
-      `${cone}${ring}${bodySvg(fill, CENTRE, ringColour)}</svg></span>`,
+      `${cone}${ring}${bodySvg(fill, CENTER, ringColor)}</svg></span>`,
     size: SIZE,
-    // In px, for the caller's anchor; CENTRE is in BOX units.
-    centre: SIZE / 2
+    // In px, for the caller's anchor; CENTER is in BOX units.
+    center: SIZE / 2
   };
 }
 
 // The legend key: the robot alone, cropped out of BOX, at its own size rather than SIZE.
-function legendSvg(ringColour) {
+function legendSvg(ringColor) {
   return '<svg viewBox="16 15 26 26" width="18" height="18" style="display:block">' +
-    `${bodySvg('#ff4d4d', 29, ringColour)}</svg>`;
+    `${bodySvg('#ff4d4d', 29, ringColor)}</svg>`;
 }
 
 const Cameras = {

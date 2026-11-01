@@ -522,10 +522,10 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
      dead.length === 0, dead.slice(0, 5).join(', '));
   ok('canon: including a quadrant the county does not write',
      m('E FULTON ST SE')[0] === 'FULTON ST E');
-  const mislabelled = Object.keys(U).filter((k) =>
+  const mislabeled = Object.keys(U).filter((k) =>
     C.covers(k) && U[k].some((j) => C.coversJurisdiction(j)));
-  ok(`outside: no street the list answers is offered in a jurisdiction it covers (${mislabelled.length})`,
-     mislabelled.length === 0, mislabelled.slice(0, 5).join(', '));
+  ok(`outside: no street the list answers is offered in a jurisdiction it covers (${mislabeled.length})`,
+     mislabeled.length === 0, mislabeled.slice(0, 5).join(', '));
 }
 
 // --- one street name, several places --------------------------------------
@@ -608,7 +608,7 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
   // Wherever the street map has a stretch of that street there, that is.
   // A few shared names have none in one of their places (the map has
   // Vergennes St SE in Ada and Vergennes townships and not in Lowell
-  // Township), and the neighbour's stretch is the best it has; a few more
+  // Township), and the neighbor's stretch is the best it has; a few more
   // are not on the map under that name at all and get no point anywhere.
   const idx = county._streetIndex();
   const hasStretch = (s, m) => (idx[R.canonStreet(s)] || []).some((e) => {
@@ -632,7 +632,7 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
     }
   }
   // What is left is almost all streets with no stretch in their own
-  // jurisdiction under that name, where the neighbour's is the best there is.
+  // jurisdiction under that name, where the neighbor's is the best there is.
   ok(`geocode: addresses on a shared name placed outside their own jurisdiction, ${before} without the preference and ${after} with it`,
      after * 3 < before);
 }
@@ -757,7 +757,7 @@ ok('suggest: falls back to nearest on the street', sg.length > 0 && sg[0].kind =
 
   // The point of the whole thing. A Grand Rapids origin and a Kentwood
   // destination: on the GR chunk alone the router still answers, but it stops
-  // at the edge of the chunk, most of a kilometre short of where the voter is
+  // at the edge of the chunk, most of a kilometer short of where the voter is
   // going. That is worse than an error, because it looks like a route.
   const origin = { lat: 42.9276, lng: -85.6353 };     // 602 Alexander St SE
   const kentwood = Object.values(

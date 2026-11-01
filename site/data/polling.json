@@ -8,7 +8,7 @@
     "cross_checked_against": "https://www.kentcountymi.gov/418/Grand-Rapids",
     "transcribed": "2026-07-27",
     "rechecked": "2026-08-30: re-read against the November 3 2026 directory. All 59 precincts and every street address match. Precinct 51 is still consolidated with 45 while Ken-O-Sha is closed. One transcription error found and fixed here (precinct 11, Harrion -> Harrison).",
-    "licence": "Public record of the City of Grand Rapids, redistributed as published.",
+    "license": "Public record of the City of Grand Rapids, redistributed as published.",
     "how_to_update": "Each election the clerk publishes a new precinct directory PDF at source_page, under a new file name. Read it and update the rows below. Check the count is still 59 and that numbering runs 1-59.",
     "notes": [
       "Addresses are stored as street and ZIP, without the city: every address here is in Grand Rapids, and nothing parses the string, since map links are built from lat and lng.",
