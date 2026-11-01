@@ -1,6 +1,6 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
 // Geocode addresses the parcel layer does not carry, by interpolating along
-// the street centreline, exactly as the browser does.
+// the street centerline, exactly as the browser does.
 //
 // Called by geocode_places.py for its leftovers. It shells out to node rather
 // than reimplementing the interpolation in Python on purpose: this loads
@@ -10,7 +10,7 @@
 // disagree with the first, and the failure would be a marker in the wrong
 // place, which is the one outcome this whole exercise is trying to avoid.
 //
-// Reads [{mcd, key, number, street, neighbours}, ...] on stdin.
+// Reads [{mcd, key, number, street, neighbors}, ...] on stdin.
 // Writes {key: {lat, lng, street}} on stdout, omitting anything it cannot place.
 import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -119,10 +119,10 @@ for (const [mcd, items] of byJurisdiction) {
   // A polling place can sit on a street that runs just outside the
   // jurisdiction's own chunk -- Whitneyville Avenue is not in Caledonia
   // Township's file at all, because the 150m ring does not reach it. Merging
-  // the named neighbours is exactly what the chunk format is for, and it
+  // the named neighbors is exactly what the chunk format is for, and it
   // costs nothing here: this runs once, at build time.
   const docs = [JSON.parse(readFileSync(path, 'utf8'))];
-  for (const other of (items[0].neighbours || [])) {
+  for (const other of (items[0].neighbors || [])) {
     const p = `${CHUNKS}/${other}.json`;
     if (existsSync(p)) docs.push(JSON.parse(readFileSync(p, 'utf8')));
   }
@@ -134,7 +134,7 @@ for (const [mcd, items] of byJurisdiction) {
       lat: Number(hit.lat.toFixed(6)),
       lng: Number(hit.lng.toFixed(6)),
       street: hit.street,
-      // An exact hit sits on a house number the centreline file carries; the
+      // An exact hit sits on a house number the centerline file carries; the
       // rest is interpolated between the two nearest numbers on that side of
       // the block. Both are honest, and they are not equally good.
       exact: !!hit.exact,

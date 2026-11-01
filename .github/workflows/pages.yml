@@ -20,7 +20,7 @@ permissions:
   pages: write
   id-token: write
 
-# Never let two deploys race; queue instead, so a run is not cancelled halfway
+# Never let two deploys race; queue instead, so a run is not canceled halfway
 # through replacing the live files.
 concurrency:
   group: pages

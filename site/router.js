@@ -195,7 +195,7 @@ class Graph {
     this._pendingRestrictions = null;
   }
 
-  // Edge wire format, from build_graph.py: a, b node ids; l metres; t seconds;
+  // Edge wire format, from build_graph.py: a, b node ids; l meters; t seconds;
   // d 0 two-way, 1 a->b only, 2 b->a only; c road class (1 is freeway); n name;
   // r house-number ranges; p polyline as [[lat, lng], ...]. Nodes are [lat, lng].
   _putEdge(ei, a, b, e) {
@@ -482,7 +482,7 @@ class Graph {
         if (near.d <= STANDOFF_M) {
           (this._edgeCams[eid] ||= []).push(cam.id);
         }
-        // Misalignment of 0 to 90 degrees, priced in metres: a road at right
+        // Misalignment of 0 to 90 degrees, priced in meters: a road at right
         // angles to the facing costs ~30 m.
         let score = near.d;
         if (face != null) {
@@ -519,7 +519,7 @@ class Graph {
     return this._edgeCams;
   }
 
-  // Metres from a point to an edge, read through two scratch pairs: calling
+  // Meters from a point to an edge, read through two scratch pairs: calling
   // edgePoly() here was the page's largest allocation.
   _distToEdge(lat, lng, ei) {
     const n = this.edgePointCount(ei);
@@ -773,7 +773,7 @@ class Graph {
       if (seen[ei] || self._isHidden(ei)) return;
       seen[ei] = 1;
       let d = self._distToEdge(lat, lng, ei);
-      if (ALLEY.test(self.edgeName(ei))) d += 120;   // metres of penalty
+      if (ALLEY.test(self.edgeName(ei))) d += 120;   // meters of penalty
       if (d < bestD) { bestD = d; bestEdge = ei; }
     };
     // Do not stop at the first hit: ring r is only complete out to r - 0.5
@@ -841,7 +841,7 @@ class Graph {
   }
 
   // House number + street text -> {lat, lng, edge, street, exact} or null.
-  // prefer(lat, lng), when given, favours the address's own jurisdiction:
+  // prefer(lat, lng), when given, favors the address's own jurisdiction:
   // street names repeat across the county (Rockford and Cedar Springs each have
   // a N Main St NE numbered from 1).
   geocode(number, streetText, prefer) {
@@ -1032,7 +1032,7 @@ function polyLength(pts) {
   return t;
 }
 
-// Closest point on segment A-B: {t, d in metres, lat, lng}, on a local flat
+// Closest point on segment A-B: {t, d in meters, lat, lng}, on a local flat
 // projection.
 function projectOnSeg(lat, lng, A, B) {
   const toR = Math.PI / 180, R = 6371000, latR = lat * toR;

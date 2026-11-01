@@ -136,7 +136,7 @@ def main():
             source="OpenStreetMap, queried through Overpass for water, "
                    "waterways, green space and railways.",
             source_url=ENDPOINTS[0],
-            licence="OpenStreetMap contributors, ODbL. Derived data must credit OSM.",
+            license="OpenStreetMap contributors, ODbL. Derived data must credit OSM.",
             made_by="refresh_landcover.py",
             how_to_update="Run refresh_boundary.py first: the bounding box is "
                           "read from boundary.json. Then refresh_landcover.py.",

@@ -28,13 +28,13 @@ grow fields that only a maintainer cares about.
 from datetime import date, timezone, datetime
 
 
-def provenance(source, source_url, licence, made_by, how_to_update, **extra):
+def provenance(source, source_url, license, made_by, how_to_update, **extra):
     """Build the block. Every argument is required because every one of them
     is a question someone has actually had to answer by reading a script.
 
     source        human-readable name of the publishing body
     source_url    the endpoint or page actually fetched, not the org's homepage
-    licence       what we are allowed to do with it, in a sentence
+    license       what we are allowed to do with it, in a sentence
     made_by       the script that writes this file, so the reader knows what
                   to re-run rather than hand-editing a generated file
     how_to_update what to do, including anything that must run first or after
@@ -42,7 +42,7 @@ def provenance(source, source_url, licence, made_by, how_to_update, **extra):
     return {
         "source": source,
         "source_url": source_url,
-        "licence": licence,
+        "license": license,
         "made_by": made_by,
         "generated": date.today().isoformat(),
         "generated_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),

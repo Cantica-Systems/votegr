@@ -104,7 +104,7 @@ const TIMEOUT_MS = 20000;
 const RETRY_WAIT_MS = 4000;
 const SPACING_MS = 300;
 
-// What a response means. This is the whole judgement of the checker, and
+// What a response means. This is the whole judgment of the checker, and
 // test_check_links.mjs covers nothing but this function, because it is the
 // part that decides whether a run is red.
 //
@@ -266,7 +266,7 @@ async function main() {
   // a couple of dozen links do not need to arrive all at once. A redirect is
   // not a failure, but the destination is printed, because a page that now
   // bounces to a generic front door has rotted just as surely as a 404, and
-  // that is a judgement for a person reading the run.
+  // that is a judgment for a person reading the run.
   // Sources first, and each group's results printed as they arrive rather
   // than collected and sorted at the end: a run that dies halfway should
   // still have said what it learned.

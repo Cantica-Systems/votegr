@@ -139,7 +139,7 @@ let ran = 0, unroutable = 0, camAvoidWorked = 0, exposedFast = 0;
 // TRIP_KM of it.
 //
 // Not two independent county-wide points. A trip to a polling place is a
-// neighbourhood trip -- it is why freeways are excluded from the graph at
+// neighborhood trip -- it is why freeways are excluded from the graph at
 // all -- so Sparta to Lowell on surface streets is not a route this site
 // will ever produce, and asking A* for four hundred of them took minutes
 // instead of seconds while testing nothing the app does. Sampling the origin
@@ -194,7 +194,7 @@ for (const [k, p] of Object.entries(poll)) {
   // Nearest origin first. Every origin proves the same thing about
   // reachability, and the nearest one proves it over the shortest route,
   // which on a county graph with no freeways is the difference between a
-  // couple of kilometres and a fifty kilometre crawl across four townships.
+  // couple of kilometers and a fifty kilometer crawl across four townships.
   let reached = null;
   const byNear = origins.slice().sort((x, y) =>
     Math.hypot(graph.nodeLat(x.node) - lat, graph.nodeLng(x.node) - lng) -

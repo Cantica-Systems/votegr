@@ -1,11 +1,11 @@
 // Released into the public domain under the Unlicense, see UNLICENSE.
-// Plain-assert tests for the link checker's one judgement call: what a
+// Plain-assert tests for the link checker's one judgment call: what a
 // response means. Run: node tests/test_check_links.mjs
 //
 // This runs in checks.yml with the rest of the suite, unlike check_links.mjs
 // itself, because classify() is a pure function over a status code and makes
 // no request. That split is the point of the file. The live check depends on
-// a dozen other organisations' servers and cannot be deterministic; the rule
+// a dozen other organizations' servers and cannot be deterministic; the rule
 // it applies to what those servers say can be, and is the part that decides
 // whether a run is red.
 //
@@ -30,7 +30,7 @@ is('200 is ok', classify(res(200)), 'ok');
 is('204 is ok', classify(res(204)), 'ok');
 // A 3xx never reaches classify: fetch follows redirects, so what arrives is
 // the destination's status. Where a redirect landed is printed by the run,
-// for a person to read, and is not a pass or fail judgement.
+// for a person to read, and is not a pass or fail judgment.
 
 // --- rotted: the page is gone, and only these mean that -------------
 is('404 is rotted', classify(res(404)), 'rotted');

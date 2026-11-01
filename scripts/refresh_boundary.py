@@ -76,7 +76,7 @@ def main():
             source="State of Michigan, Michigan Geographic Framework "
                    "(cities layer). The same civic boundaries NG-911 uses.",
             source_url=MGF_CITIES,
-            licence="Public record of the State of Michigan, redistributed as published.",
+            license="Public record of the State of Michigan, redistributed as published.",
             made_by="refresh_boundary.py",
             how_to_update="Run refresh_boundary.py. refresh_landcover.py reads "
                           "this file for its bounding box, so re-run that after.",

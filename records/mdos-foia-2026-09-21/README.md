@@ -78,6 +78,6 @@ python3 scripts/merge_foia_dropboxes.py          # defaults to the drop box repo
 python3 scripts/merge_foia_dropboxes.py --dry-run
 ```
 
-## Licence
+## License
 
 Public record of the State of Michigan, redistributed as released.

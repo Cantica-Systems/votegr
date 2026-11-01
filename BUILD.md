@@ -79,7 +79,7 @@ Every file under `site/data/` except `sources.json` carries a `provenance`
 block saying where it came from. The eight scripts that use
 `scripts/provenance.py` (the graph, precinct, boundary, street-name, landcover
 and camera builders) write the same fields: source, the URL actually fetched,
-licence, the script that writes it, and `generated`, the date the source was
+license, the script that writes it, and `generated`, the date the source was
 last read. The election scrapers, `refresh_addresses.py` and
 `refresh_precincts.py` write their own blocks, and the two hand-edited files
 name their sources by hand.
@@ -115,7 +115,7 @@ python3 scripts/build_graph_chunks.py    # cut per jurisdiction    -> site/data/
 
 # Addresses and street names
 python3 scripts/refresh_addresses.py     # parcels -> precincts    -> site/data/addresses/<mcd>.json
-python3 scripts/refresh_neighbors.py     # neighbouring street names -> site/data/neighbors.json
+python3 scripts/refresh_neighbors.py     # neighboring street names -> site/data/neighbors.json
 
 # Places to vote, county-wide
 python3 scripts/refresh_polling.py       # county polling places + drop boxes -> site/data/polling/
@@ -269,7 +269,7 @@ If an endpoint returns 429, back off rather than retrying immediately.
 | Street centerlines, one-ways, speeds | `services2.arcgis.com/L81TiOwAPO1ZvU9b/…/Transport_Street_Centerlines/FeatureServer/6`, the REGIS/Kent dataset, hosted by the City |
 | Voting precincts | `services3.arcgis.com/dxRQUfTDNtfqZ301/…/VotingPrecinct/FeatureServer/0` |
 | Parcel addresses, and coordinates for places to vote | `gis.kentcountymi.gov/agisprod/…/ParcelsWithCondos/FeatureServer/0` |
-| City limits, neighbouring streets | `gisagocss.state.mi.us/…/michigan_geographic_framework/MapServer` |
+| City limits, neighboring streets | `gisagocss.state.mi.us/…/michigan_geographic_framework/MapServer` |
 | Cameras, turn restrictions, water, parks, rail | Overpass API, OpenStreetMap |
 | Polling places, drop boxes, clerks | `www.kentcountymi.gov`, one page per jurisdiction; Algoma Township's own elections page for one address |
 | Grand Rapids polling places | City Clerk precinct directory (PDF), by hand |
@@ -401,7 +401,7 @@ than guessed, because a wrong restriction silently forbids a legal turn.
 The City of Grand Rapids sign inventory is no longer a source. It covered one
 jurisdiction of thirty, had been frozen upstream since 2024-03-29, and
 inferring a ban from a sign's DIRECTION column was inference on top of
-inference. One source with one licence, applied the same way in every
+inference. One source with one license, applied the same way in every
 jurisdiction, is worth more than the 45 extra restrictions it gave Grand
 Rapids. No script reads it now; only the frozen `site/data/graph.json` still
 holds what it once contributed.

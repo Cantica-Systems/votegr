@@ -20,7 +20,7 @@ So the value here is as a CROSS-CHECK, not as a source of record. It is a
 second opinion on what the clerks publish, and disagreement between the two is
 the signal worth having.
 
-Staleness is not this script's judgement to make. The window it scraped is
+Staleness is not this script's judgment to make. The window it scraped is
 written down as ISO dates and the page decides, with the same windowState()
 that governs every other early voting date in this project -- so a window that
 has already closed reads as closed rather than as an invitation. What this
@@ -330,7 +330,7 @@ def main():
             "source": "Kent County Clerk / Register of Deeds",
             "source_url": URL,
             "generated": datetime.date.today().isoformat(),
-            "licence": "Public record of Kent County, redistributed as published.",
+            "license": "Public record of Kent County, redistributed as published.",
             **snapshot_or_note(URL),
             "how_to_update": "Run refresh_early_voting.py after each election "
                              "is settled. MCL 168.662 fixes early voting sites "

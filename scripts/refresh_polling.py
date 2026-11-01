@@ -159,7 +159,7 @@ GR_MCD = "34000"          # polling.json is the source of record for the city
 NOTE_MAX_CHARS = 60
 # A bare "Ward 2" is the page's heading for the NEXT block of precincts, not
 # a room in the building above it. The cities with wards print one, so the
-# last precinct of every ward but the final one had its neighbour's heading
+# last precinct of every ward but the final one had its neighbor's heading
 # read as a note: five of them, in Kentwood, Walker and Wyoming.
 NOTE_REJECT = re.compile(
     r"^(Election Day|Absentee|Drop Box|Note|If your polling|Ward\s+\d+$)", re.I)
@@ -186,7 +186,7 @@ def read_note(line, not_notes):
 # sends a voter to the wrong building and nothing downstream would notice.
 #
 # Keyed by the state's 13-digit precinct code, which is unique and does not
-# move when a page is reorganised.
+# move when a page is reorganized.
 ADDRESS_OVERRIDES = {
     # Kent County Road Commission North Complex, Algoma precinct 3.
     # The county page says 11723. Algoma Township, which runs the election
@@ -220,7 +220,7 @@ ADDRESS_OVERRIDES = {
         "county_published": "2300 Genzon Parkway SW",
         "name": "Gezon Fire Station",
         "name_published": "Genzon Fire Station",
-        "source": "Kent County parcel layer and road centrelines, which both "
+        "source": "Kent County parcel layer and road centerlines, which both "
                   "spell it GEZON, as does the Bureau of Elections' own "
                   "November 2026 export",
         "source_url": "https://gis.kentcountymi.gov/agisprod/rest/services/"
@@ -472,7 +472,7 @@ def main():
                 "matched_against": "site/data/precincts.json",
                 **cite(f"{BASE}/{slug}"),
                 "generated": time.strftime("%Y-%m-%d"),
-                "licence": "Public record of Kent County, redistributed as published.",
+                "license": "Public record of Kent County, redistributed as published.",
                 "how_to_update": "Run refresh_polling.py. Polling places change "
                                  "every election, and MCL 168.662 settles them "
                                  "60 days out, so re-run after that date for "

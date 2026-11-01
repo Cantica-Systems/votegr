@@ -4,7 +4,7 @@
   "source":"Kent County Clerk / Register of Deeds",
   "source_url":"https://www.kentcountymi.gov/250/Drop-Box-Polling-Locations",
   "generated":"2026-09-29",
-  "licence":"Public record of Kent County, redistributed as published.",
+  "license":"Public record of Kent County, redistributed as published.",
   "archived":"https://web.archive.org/web/20260908173139/https://www.kentcountymi.gov/250/Drop-Box-Polling-Locations",
   "archived_timestamp":"20260908173139",
   "archive_note":"This capture is 21 days old and predates the read that made this file. The Wayback Machine declined a new one, so the snapshot may show an earlier version of the page.",
@@ -295,7 +295,7 @@
      "text":"KDL-Kentwood Library, 4950 Breton Rd. SE",
      "lat":42.873335,
      "lng":-85.596405,
-     "geocode":"centreline"
+     "geocode":"centerline"
     }
    ]
   },
@@ -346,7 +346,7 @@
      "text":"Nelson Township Office, 2 W. Maple St.",
      "lat":43.29315,
      "lng":-85.51708,
-     "geocode":"centreline"
+     "geocode":"centerline"
     }
    ]
   },
@@ -449,7 +449,7 @@
      "text":"Spencer Township Office, 14960 Meddler Ave. NE",
      "lat":43.238292,
      "lng":-85.369247,
-     "geocode":"centreline"
+     "geocode":"centerline"
     }
    ]
   },

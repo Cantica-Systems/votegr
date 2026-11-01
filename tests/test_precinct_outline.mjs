@@ -5,7 +5,7 @@
 // build_precincts.py precomputes it as the union of the jurisdiction's
 // precincts. The page used to work it out for itself instead, by counting
 // every precinct edge and keeping the ones seen exactly once, which assumes
-// two neighbouring precincts describe their shared border with the same
+// two neighboring precincts describe their shared border with the same
 // vertices. They do not, because each polygon is thinned on its own upstream,
 // so both sides of an interior border were counted once and both were drawn.
 // That put 263 km of line through the insides of jurisdictions, 71 km of it
@@ -24,8 +24,8 @@ const ok = (n, c, d = '') => { console.log((c ? '  ok   ' : '  FAIL ') + n + (c 
 
 const D = JSON.parse(await readFile(new URL('../site/data/precincts.json', import.meta.url), 'utf8'));
 
-// Metres per degree at 43N, the county's latitude. Every threshold below is
-// in metres so it can be argued about as ground rather than as coordinates.
+// Meters per degree at 43N, the county's latitude. Every threshold below is
+// in meters so it can be argued about as ground rather than as coordinates.
 const MLAT = 111320, MLNG = 111320 * Math.cos(43 * Math.PI / 180);
 const m = (a, b) => Math.hypot((a[0] - b[0]) * MLAT, (a[1] - b[1]) * MLNG);
 

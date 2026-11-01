@@ -59,12 +59,12 @@ function osrm(a, b) {
   } catch { return null; }
 }
 
-// metres between points, equirectangular (fine at city scale)
+// meters between points, equirectangular (fine at city scale)
 function dm(a, b) {
   const kx = 111320 * Math.cos(a[0] * Math.PI / 180), ky = 110574;
   return Math.hypot((a[1] - b[1]) * kx, (a[0] - b[0]) * ky);
 }
-// fraction of pts within tol metres of the other polyline (point sampling)
+// fraction of pts within tol meters of the other polyline (point sampling)
 function overlap(pts, other, tol) {
   if (!pts.length || !other.length) return 0;
   let hit = 0;

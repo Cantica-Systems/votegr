@@ -72,7 +72,7 @@ const URL_ = ORIGIN + '/simple/index.html';
 const read = async (p) => JSON.parse(await readFile(join(ROOT, 'data', p), 'utf8'));
 // Each town's clerk page, by MCD, as the page should link it.
 const CLERKS = (await read('clerks.json')).clerks;
-const neighbours = await read('neighbors.json');
+const neighbors = await read('neighbors.json');
 const polling = await read('polling.json');
 
 // The county index, built the way the page builds it, so the checks below can
@@ -85,9 +85,9 @@ const county = Precincts.county({ index, addresses: addressFiles, polling: polli
                                   cityPolling: polling, cityMcd: '34000' });
 
 // A street the address list cannot answer, in a jurisdiction it does not
-// cover, taken from the shipped neighbour index so this cannot name one that
+// cover, taken from the shipped neighbor index so this cannot name one that
 // has since been annexed or renamed.
-const unindexed = county.unindexed(neighbours.streets);
+const unindexed = county.unindexed(neighbors.streets);
 const outsideStreet = Object.keys(unindexed)
   .filter(s => unindexed[s].every(j => !county.coversJurisdiction(j)))
   .sort()[0];
@@ -222,10 +222,10 @@ for (const width of [1280, 390, 320]) {
   ok('and the option says which jurisdiction it is in',
      options.some(o => unindexed[outsideStreet].some(j => o.includes(j))));
   // A name, not a phrase: "Kentwood City" or "Ada Township", never "in …",
-  // and the same grey whether or not the street is in the city.
+  // and the same gray whether or not the street is in the city.
   ok('every row names its place as a City or a Township, with no "in"',
      lastWhere.length > 0 && lastWhere.every(w => /(City|Township)$/.test(w) && !/^in /.test(w)));
-  ok('no row is coloured for being outside the county', lastOutsideRows === 0);
+  ok('no row is colored for being outside the county', lastOutsideRows === 0);
 
   const outside = await page.evaluate(() => ({
     text: document.body.innerText.replace(/\s+/g, ' '),

@@ -38,7 +38,7 @@ repo has already placed -- the township hall that is also the polling place,
 or the clerk's office -- so the coordinate on that record is reused, along
 with the note of how it was found, because reusing a point means inheriting
 its provenance rather than upgrading it. What is left goes to the street
-centrelines through the same helper and the same site/router.js the browser
+centerlines through the same helper and the same site/router.js the browser
 runs, so a coordinate here cannot drift from one the page would compute.
 Nothing is geocoded over the network: the county parcel layer that
 geocode_places.py prefers is not reachable from every environment.
@@ -58,7 +58,7 @@ import pathlib
 import re
 import sys
 
-from geocode_places import (centreline, inside, load_bboxes, neighbours_of,
+from geocode_places import (centerline, inside, load_bboxes, neighbors_of,
                             split_address, street_core)
 from sources import register
 
@@ -214,16 +214,16 @@ def main():
     src = SOURCE_ID
 
     bboxes = load_bboxes()
-    neighbours = neighbours_of(bboxes)
+    neighbors = neighbors_of(bboxes)
 
     # Coordinates this repo already holds, keyed by the address they belong to.
     # Most came from the parcel layer, which is the building itself and beats
     # anything interpolated, so a state row at an address already placed -- a
     # township hall that is also the polling place -- reuses that point rather
-    # than being sent down the centreline path for a worse one.
+    # than being sent down the centerline path for a worse one.
     #
     # Two indexes, because the two sources write a street differently. `exact`
-    # is the whole street as split_address normalises it, and is county-wide: a
+    # is the whole street as split_address normalizes it, and is county-wide: a
     # jurisdiction sometimes votes at a building the county addresses to the
     # next town over. `loose` drops the type word and keys the quadrant
     # separately, so "421 68TH ST" can still find "421 68th Street SE" -- but
@@ -236,8 +236,8 @@ def main():
     # Rows this script wrote on an earlier run are deliberately NOT indexed.
     # They are the only records here whose coordinate did not come from the
     # parcel layer, and indexing them made a re-run find its own output:
-    # Cedar Springs was placed from the centrelines the first time, then found
-    # itself the second time and was relabelled "exact". The coordinate did
+    # Cedar Springs was placed from the centerlines the first time, then found
+    # itself the second time and was relabeled "exact". The coordinate did
     # not move, but the provenance on it became a lie, and a re-run stopped
     # being a no-op. Only the county's and city's own records seed this.
     exact, loose = {}, {}
@@ -255,7 +255,7 @@ def main():
             # The point AND how it was found. Reusing a coordinate means
             # inheriting its provenance, not upgrading it: Nelson Township's
             # box is at the clerk's office, and that office was placed from the
-            # centrelines, so calling the box "exact" would claim a parcel hit
+            # centerlines, so calling the box "exact" would claim a parcel hit
             # that never happened.
             point = (record["lat"], record["lng"], record.get("geocode"))
             exact.setdefault(key, point)
@@ -308,7 +308,7 @@ def main():
             else:
                 pending.append({"mcd": mcd, "key": f"{mcd}:{len(boxes)}",
                                 "number": parsed[0], "street": parsed[1],
-                                "neighbours": neighbours.get(mcd, []),
+                                "neighbors": neighbors.get(mcd, []),
                                 "_record": box, "_bbox": bboxes.get(mcd),
                                 "_label": f"{where} drop box"})
             boxes.append(box)
@@ -316,8 +316,8 @@ def main():
             document["drop_boxes"] = boxes
             added[key] = (path, document, where, boxes)
 
-    print(f"\n{len(pending)} row(s) need a centreline coordinate")
-    found = centreline([{k: v for k, v in item.items()
+    print(f"\n{len(pending)} row(s) need a centerline coordinate")
+    found = centerline([{k: v for k, v in item.items()
                          if not k.startswith("_")} for item in pending])
     misses = []
     for item in pending:
@@ -330,8 +330,8 @@ def main():
                                            "[matched outside the jurisdiction]"))
             continue
         item["_record"]["lat"], item["_record"]["lng"] = hit["lat"], hit["lng"]
-        item["_record"]["geocode"] = ("centreline" if hit.get("exact")
-                                      else "centreline interpolated")
+        item["_record"]["geocode"] = ("centerline" if hit.get("exact")
+                                      else "centerline interpolated")
 
     total = sum(len(b) for _, _, _, b in added.values())
     located = sum(1 for _, _, _, boxes in added.values()
@@ -361,7 +361,7 @@ def main():
         return
 
     # The source goes in the registry; each row points at it with `src`, and
-    # the page resolves that to a publisher, a licence and a date. Registered
+    # the page resolves that to a publisher, a license and a date. Registered
     # as NOT carried, the same as the MVIC reading in refresh_gr_clerk.py: this
     # arrived as a file in a FOIA response, no script refreshes it, and nothing
     # here will notice when the Bureau's own data changes. That is a fact about
@@ -370,7 +370,7 @@ def main():
         SOURCE_ID,
         publisher="Michigan Department of State, Bureau of Elections",
         url=PUBLISHER_URL,
-        licence="Public record of the State of Michigan.",
+        license="Public record of the State of Michigan.",
         retrieved=RELEASED,
         covers="Absentee ballot drop box locations, hours and clerk, statewide, "
                "for the November 3 2026 general election",

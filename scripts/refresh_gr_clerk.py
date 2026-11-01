@@ -34,7 +34,7 @@ import urllib.request
 
 from archive import snapshot_or_note
 from page_text import lines_of
-from geocode_places import centreline, norm_street
+from geocode_places import centerline, norm_street
 from sources import register
 from useragent import USER_AGENT
 
@@ -99,7 +99,7 @@ def full_streets(places):
     The clerk writes "130 Delaware SW", and the polling place in the same
     building is 130 DELAWARE ST SW, so the page showed one building two ways.
     The road file names the street, through the page's own geocoder
-    (centreline_geocode.mjs, which geocode_places.centreline runs), and only an
+    (centerline_geocode.mjs, which geocode_places.centerline runs), and only an
     EXACT house-number match is taken, so a guessed street type never replaces
     what the clerk wrote. The clerk's text is kept as address_as_published.
     Without node, every address stays as published. Returns how many changed.
@@ -110,7 +110,7 @@ def full_streets(places):
         if match:
             pending.append({"mcd": GR_MCD, "key": str(i), "number": int(match.group(1)),
                             "street": norm_street(match.group(2))})
-    found = centreline(pending)
+    found = centerline(pending)
     changed = 0
     for item in pending:
         hit, place = found.get(item["key"]), places[int(item["key"])]
@@ -319,7 +319,7 @@ def main():
         register(MVIC_ID,
                  publisher="Michigan Voter Information Center, Bureau of Elections",
                  url=MVIC_URL,
-                 licence="Public record of the State of Michigan.",
+                 license="Public record of the State of Michigan.",
                  retrieved=MVIC_READ,
                  covers="Drop box addresses and hours the city clerk publishes "
                         "only as prose",
@@ -336,7 +336,7 @@ def main():
         SOURCE_ID,
         publisher="City of Grand Rapids, City Clerk's Office",
         url=URL,
-        licence="Public record of the City of Grand Rapids.",
+        license="Public record of the City of Grand Rapids.",
         archived=snapshot,
         covers="Grand Rapids early voting dates, sites and absentee drop boxes, "
                "and the clerk's office hours for registering in person",

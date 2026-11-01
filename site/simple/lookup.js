@@ -2,7 +2,7 @@
 
 import { displayCase, Elections, Precincts } from '../voting.js';
 
-const NEAR_M = 10;              // metres: this close to a precinct line is too close to be certain
+const NEAR_M = 10;              // meters: this close to a precinct line is too close to be certain
 const MAX_SUGGESTIONS = 6;
 const GR_MCD = '34000';         // the state's code for the City of Grand Rapids
 // What counts as proof of residency, and registering online: the state's page, as app.js.
@@ -165,9 +165,9 @@ const heading = (cls, text, badge) =>
 
 function render(found, text) {
   typed = { text, where: found.jurisdiction };
-  const { precinct, ward, edgeMetres, rivals, inferred } = found;
+  const { precinct, ward, edgeMeters, rivals, inferred } = found;
   // True exactly when one of the three uncertainty advisories below fires.
-  const uncertain = Boolean(rivals || inferred || edgeMetres <= NEAR_M);
+  const uncertain = Boolean(rivals || inferred || edgeMeters <= NEAR_M);
   const body = el('div', 'card-body',
     el('div', 'lead', 'Address: ', el('span', 'addr-quote', cased(text))),
     // app.js's labels. A township has no wards, so it gets no Ward row rather than a blank one.
@@ -195,8 +195,8 @@ function render(found, text) {
       'We do not have this exact address, so this is taken from the addresses ' +
       'either side of it on the same side of the street. They agree, but it is ' +
       'worth confirming.') : null,
-    !rivals && edgeMetres <= NEAR_M ? advisory('boundary',
-      `This address sits about ${Math.round(edgeMetres)} m from the edge of the ` +
+    !rivals && edgeMeters <= NEAR_M ? advisory('boundary',
+      `This address sits about ${Math.round(edgeMeters)} m from the edge of the ` +
       'precinct, which is too close to be certain. Please check with your ' +
       'clerk or the Michigan Voter Information Center.') : null);
 
@@ -256,7 +256,7 @@ function suggest(text) {
 }
 
 // Streets the address list cannot answer (in Ottawa County with a Grand Rapids mailing
-// address, or in Kent County with no parcel) come last, labelled with where they are.
+// address, or in Kent County with no parcel) come last, labeled with where they are.
 const outsideMatches = (rest, number, already) => {
   if (!outside || !rest || rest.length < 2) return [];
   const have = new Set(already.map((s) => s.street));
@@ -460,7 +460,7 @@ function earlyVoting(found, uncertain) {
   parts.push(el('div', 'ev-note',
     'Any Grand Rapids voter may use any of these, whatever precinct they are in.'));
 
-  // Before the window opens the sites are listed so a voter can plan, but greyed and
+  // Before the window opens the sites are listed so a voter can plan, but grayed and
   // with no Directions link, as app.js keeps them off its picker and map.
   if (!open) {
     parts.push(el('div', 'ev-note',
@@ -666,7 +666,7 @@ async function boot() {
     // The index comes first: it names the jurisdictions whose files load next.
     const index = await getJSON('../data/precincts.json');
     const mcds = (index.jurisdictions || []).map((j) => j.mcd);
-    const [addresses, pollingFiles, cityPolling, calendar, neighbourData, clerkData,
+    const [addresses, pollingFiles, cityPolling, calendar, neighborData, clerkData,
            clerkPageData] =
       await Promise.all([
         Promise.all(mcds.map((m) => getJSON(`../data/addresses/${m}.json`))),
@@ -682,7 +682,7 @@ async function boot() {
       index, addresses, polling: pollingFiles.filter(Boolean), cityPolling, cityMcd: GR_MCD,
     });
     // neighbors.json: street names around the city, in the state's spelling.
-    outside = neighbourData?.streets ? P.unindexed(neighbourData.streets) : null;
+    outside = neighborData?.streets ? P.unindexed(neighborData.streets) : null;
     clerk = clerkData || null;
     clerkPages = clerkPageData?.clerks || {};
 

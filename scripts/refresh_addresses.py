@@ -15,7 +15,7 @@ Grand Rapids and every other jurisdiction is a fraction of it. Which chunk to
 load comes from the jurisdictions index in precincts.json.
 
 Only three things per address are published: the house number, the precinct,
-and how many metres the parcel sits from the precinct edge. Owner names,
+and how many meters the parcel sits from the precinct edge. Owner names,
 parcel ids and valuations are read and thrown away. Do not add them: these
 files are served to browsers, and an address-to-owner index is not something a
 voting page should hand out.
@@ -119,15 +119,15 @@ def split_address(text):
         return None
 
 
-def metre_frame(polygon):
-    """A local flat projection for one precinct, in metres from its centre.
+def meter_frame(polygon):
+    """A local flat projection for one precinct, in meters from its center.
 
     Returns the projection and the precinct's own boundary already projected,
     so the per-address work is one point transform and one distance.
 
-    Precincts are about a kilometre across in the cities and a few across in
+    Precincts are about a kilometer across in the cities and a few across in
     the townships, so a per-precinct equirectangular frame is accurate to well
-    under a metre. This avoids a pyproj dependency for what is, at this scale,
+    under a meter. This avoids a pyproj dependency for what is, at this scale,
     arithmetic. `boundary` rather than `exterior` so a precinct with a hole
     measures against the hole too.
     """
@@ -135,10 +135,10 @@ def metre_frame(polygon):
     xs = 111_320 * math.cos(math.radians(lat0))
     ys = 110_540
 
-    def to_metres(lng, lat, _z=None):
+    def to_meters(lng, lat, _z=None):
         return (lng - lng0) * xs, (lat - lat0) * ys
 
-    return to_metres, transform(to_metres, polygon.boundary)
+    return to_meters, transform(to_meters, polygon.boundary)
 
 
 def collapse(rows, code_index):
@@ -181,8 +181,8 @@ def main():
     props = [f["properties"] for f in features]
     tree = STRtree(polygons)
 
-    # Each precinct's boundary in its own local metre frame, built once.
-    frames = [metre_frame(p) for p in polygons]
+    # Each precinct's boundary in its own local meter frame, built once.
+    frames = [meter_frame(p) for p in polygons]
 
     print("fetching parcels from Kent County...")
     parcels = fetch_parcels()
@@ -202,8 +202,8 @@ def main():
         if index is None:
             outside += 1          # a parcel outside every precinct polygon
             continue
-        to_metres, edge = frames[index]
-        edge_m = min(int(round(edge.distance(Point(*to_metres(lng, lat))))), NEAR_CAP_M)
+        to_meters, edge = frames[index]
+        edge_m = min(int(round(edge.distance(Point(*to_meters(lng, lat))))), NEAR_CAP_M)
         chunks[props[index]["mcd"]][street].append(
             [number, props[index]["code"], edge_m])
 
@@ -245,12 +245,12 @@ def main():
                 "ambiguous_count": ambiguous,
                 "street_count": len(placed),
                 "format": "street -> [[house number, index into `precincts`, "
-                          f"metres from the precinct edge (capped at "
+                          f"meters from the precinct edge (capped at "
                           f"{NEAR_CAP_M})], ...]. A fourth element, when "
                           "present, lists every precinct the address touches: "
                           "it straddles a line and the answer is genuinely "
                           "ambiguous.",
-                "licence": "Public record of Kent County, redistributed as published.",
+                "license": "Public record of Kent County, redistributed as published.",
                 "how_to_update": "Run refresh_addresses.py. Re-run it after "
                                  "refresh_precincts.py, since the precinct a "
                                  "parcel falls in is baked in here.",

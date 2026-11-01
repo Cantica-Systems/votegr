@@ -208,8 +208,8 @@ for (const [name, data, want] of CASES) {
   // Statewide and statutory, so it shows in every state including the ones
   // where no early voting group renders at all.
   // Pins the "Hours:" label as well as the value: the label is the point of
-  // the field, and an unlabelled time is what this replaced.
-  ok(`${name}: election day hours shown, labelled`,
+  // the field, and an unlabeled time is what this replaced.
+  ok(`${name}: election day hours shown, labeled`,
      hours === `Hours: ${short(POLL_HOURS.open)} to ${short(POLL_HOURS.close)}`);
   ok(`${name}: label`, want.label === null ? got.label === null
                                            : !!(got.label && want.label.test(got.label)));
@@ -264,7 +264,7 @@ for (const [name, data, want] of CASES) {
   await page.close();
 
   // /simple has no picker or map; its early block lists the sites. Before the
-  // window opens it lists them greyed and with no Directions link.
+  // window opens it lists them grayed and with no Directions link.
   if (name === 'upcoming' || name === 'open') {
     const simple = await browser.newPage();
     await simple.goto(URL_.replace('/index.html', '/simple/index.html'), { waitUntil: 'networkidle' });
@@ -278,9 +278,9 @@ for (const [name, data, want] of CASES) {
                     links: b.querySelectorAll('.ev-site a').length };
     });
     await simple.close();
-    const greyed = name === 'upcoming';
-    ok(`${name}: /simple lists the sites${greyed ? ', greyed, with no Directions' : ' with Directions'}`,
-       !!ev && ev.sites > 0 && ev.off === greyed && (greyed ? ev.links === 0 : ev.links > 0));
+    const grayed = name === 'upcoming';
+    ok(`${name}: /simple lists the sites${grayed ? ', grayed, with no Directions' : ' with Directions'}`,
+       !!ev && ev.sites > 0 && ev.off === grayed && (grayed ? ev.links === 0 : ev.links > 0));
   }
 }
 current = CASES.find(([n]) => n === 'open')[1];
@@ -451,7 +451,7 @@ for (const { name, data, clock, order: wantOrder, routed: routedWant, now, badge
   }, null, { timeout: 15000 }).then(h => h.jsonValue()).catch(() => null);
   const lit = await page.evaluate(`(${nowKinds})('#precinctInfo .vi-when.is-now', 'vi-when-')`);
   // The badge's words, and which headings are green: --good, read from the page, so a
-  // theme change cannot leave this comparing against a stale colour.
+  // theme change cannot leave this comparing against a stale color.
   const mainBadges = await page.evaluate(() =>
     [...document.querySelectorAll('#precinctInfo .vi-when .vi-now')].map(e => e.textContent));
   const greenHeads = await page.evaluate(() => {

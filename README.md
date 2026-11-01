@@ -149,10 +149,10 @@ The camera list ships with the site, refreshed daily by
 mapped those cameras, and this project leaves their usernames out, because
 that mapping carries real risk.
 
-## Licence
+## License
 
 Code is public domain under the [Unlicense](UNLICENSE). Two bundled pieces keep
-their own licences: [Leaflet](https://leafletjs.com) 1.9.4 (BSD 2-Clause, in
+their own licenses: [Leaflet](https://leafletjs.com) 1.9.4 (BSD 2-Clause, in
 `site/vendor/leaflet/`) and the Hanken Grotesk typeface (SIL Open Font License
 1.1, in `site/fonts/`). The address matching in `site/voting.js` is carried
 over from the earlier vote-gr project.

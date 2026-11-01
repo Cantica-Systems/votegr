@@ -10,7 +10,7 @@
 // in the repository does not update it, and a path that goes missing costs
 // the weekly run every link it would have read there. The classifier tests
 // cannot see that, and the live check runs weekly by design, because it
-// depends on a dozen other organisations' servers. So a move goes green on
+// depends on a dozen other organizations' servers. So a move goes green on
 // its pull request and the first sign of it is a red Monday.
 //
 // This is the part of the live check that depends on nobody else's server,
