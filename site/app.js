@@ -15,6 +15,14 @@ let current = null;
 let activeEl = null, destChoice = null, electionDayHours = null;
 // Kept so the countdown can re-ask the calendar when the day rolls over.
 let electionList = null;
+// activeEl is the next election only while it is in season (Elections.season): from the
+// day absentee ballots go out through election day. Off-season it is null, so every card
+// keyed on it stands down, and the page speaks of lastEl in the past tense. upcomingEl is
+// the next election entered at all, in season or not; seasonDay is the day all three were
+// worked out on, so a page left open past midnight can work them out again.
+let lastEl = null, upcomingEl = null, seasonDay = null;
+// The answer the off-season map is showing, or null. Cameras show while it is set.
+let pastView = null;
 let ownBase = null;
 let neighbors = null, precincts = null;
 let pinArmed = false;
@@ -92,6 +100,7 @@ function onSchemeChanged() {
   if (!map) return;
   ownBase.setDark(prefersDark());
   if (routes) renderAll(false);
+  else if (pastView) showPastMap(pastView);
   else if (cameras) drawCameras();
   // The legend key reads --pin-ring too; without this it kept the first theme's ink.
   paintLegendCamera();
@@ -104,7 +113,10 @@ function initLang() {
   const btn = $('langBtn');
   if (!btn) return;
   const other = Object.keys(LANGS).find((l) => l !== lang);
-  btn.textContent = LANGS[other];
+  // Full name, and the two-letter code a narrow phone shows instead (style.css).
+  btn.innerHTML = `<span class="lang-full">${esc(LANGS[other])}</span>` +
+    `<span class="lang-short" aria-hidden="true">${esc(other.toUpperCase())}</span>`;
+  btn.setAttribute('aria-label', LANGS[other]);
   btn.lang = other;
   btn.hidden = false;
   btn.onclick = () => setLang(other);
@@ -386,6 +398,8 @@ function whenCell(kind, state, extra) {
 // 'none', 'upcoming', 'open' or 'closed'. Both ends are statute, not per box: ballots go
 // out on Elections.absenteeFrom and must be back by poll close, so an open box accepts
 // nothing before then.
+// activeEl is set only in season, which starts the day ballots go out, so 'none' and
+// 'upcoming' no longer reach the page; kept so the phases stay a complete description.
 function absenteePhase() {
   if (!activeEl) return 'none';
   const today = Elections.todayISO();
@@ -858,7 +872,7 @@ function loadData() {
     // Election day hours are statewide statute, so the file gives them once.
     electionDayHours = calendar?.election_day_hours || null;
     electionList = calendar?.elections || [];
-    activeEl = Elections.next(electionList);
+    refreshSeason();
     startCountdown();
     return calendar;
   });
@@ -1045,7 +1059,7 @@ function renderCameraCount() {
 
 // Cameras show only once there is a route; the toggle, the draw and the label obstacles
 // all ask here.
-function camerasInScope() { return !!routes; }
+function camerasInScope() { return !!routes || !!pastView; }
 
 // map.js keeps street labels off camera dots; hidden cameras are not obstacles. The
 // signature skips setObstacles, which forces a canvas redraw, when nothing moved.
@@ -1096,6 +1110,7 @@ function reset() {
   $('resultBlock').hidden = true; $('routeBlock').hidden = true;
   $('routeBlock').classList.remove('map-only');
   routes = null;   // out of scope: reset also takes the cameras off the map
+  pastView = null;
   $('col').classList.remove('has-result');
   document.body.classList.remove('has-result');
   if ($('sectionNav')) $('sectionNav').hidden = true;
@@ -1307,6 +1322,7 @@ function showError(msg) {
 }
 
 function dropBoxCard(r) {
+  if (!activeEl) return '';
   const box = destinations(r).find((o) => o.kind === 'dropbox');
   if (!box) return '';
   const label = placeLabel('dropbox', box.place.office
@@ -1373,6 +1389,7 @@ const POLLS_BADGE = { open: t('Open now'), today: t('Today') };
 
 // multi: there are other destinations to choose between.
 function pollingCard(r, multi) {
+  if (!activeEl) return pastPollingCard(r);
   const badge = POLLS_BADGE[Elections.pollsToday(activeEl, electionDayHours)] || null;
   let html = `<div class="vi-where${activeEl ? '' : ' vi-full'}${badge ? ' is-now' : ''}"` +
     ' data-kind="polling">' +
@@ -1560,7 +1577,7 @@ function show(r, focusKind, landOn) {
   else if (r.inferred) adv.push(esc(t('This exact number is not in the address list, so the precinct was taken from its neighbors and checked against the precinct boundary.')));
   if (r.edgeMeters < 30) adv.push(esc(t('This address is close to a precinct boundary, so the answer is less certain.')));
   if (r.ambiguousStreet) adv.push(esc(t('Read as {street}. Other streets also match what you typed.', { street: displayCase(r.street) })));
-  adv.push(esc(t('Obey all traffic signs and laws.')));
+  if (activeEl) adv.push(esc(t('Obey all traffic signs and laws.')));
   $('advisory').innerHTML = `<div class="advisory">${adv.join(' ')}</div>`;
 
   routeTo(r, focusKind);
@@ -1635,6 +1652,126 @@ function earlyVotingForBlock(r) {
   }
 }
 
+// ---- Election season ----
+// Works the season out again from the calendar and today, then sets what depends on it
+// and on nothing else: the hotline, the line naming the next election, the map legend.
+function refreshSeason() {
+  const s = Elections.season(electionList);
+  activeEl = s.inSeason ? s.election : null;
+  upcomingEl = s.election;
+  lastEl = Elections.last(electionList);
+  seasonDay = Elections.todayISO();
+  applySeason();
+}
+
+function applySeason() {
+  const off = !activeEl;
+  document.body.classList.toggle('off-season', off);
+  // The hotline is for trouble at the polls; off-season there are no polls to have it at.
+  const help = $('help');
+  if (help) help.hidden = off;
+  const line = $('nextLine');
+  if (line) {
+    // An election entered in the calendar is scheduled. Otherwise only the date the law
+    // allows is known, and the line says that is all it is.
+    const possible = Elections.nextPossible();
+    line.textContent = !off ? ''
+      : upcomingEl ? t('Next election: {date}.', { date: Elections.withWeekday(upcomingEl.date) })
+      : possible ? t('No election is scheduled. Next possible election date: {date}.',
+                     { date: Elections.withWeekday(possible) })
+      : t('No election is scheduled.');
+    line.hidden = !off;
+  }
+  // Drop boxes and early voting sites are not on the map off-season, so not in its key.
+  document.querySelectorAll('.map-legend .sitek[data-kind="dropbox"], .map-legend .sitek[data-kind="early"]')
+    .forEach((el) => { el.parentElement.hidden = off; });
+  const pollKey = document.querySelector('.map-legend .sitek[data-kind="polling"] + span');
+  if (pollKey) {
+    pollKey.textContent = !off ? t('Polling place')
+      : upcomingEl ? t('Polling place on file') : t('Polling place in the last election');
+  }
+  const dirNav = document.querySelector('#sectionNav [data-goto="routeBlock"]');
+  if (dirNav) dirNav.textContent = off ? t('Map') : t('Directions');
+}
+
+// "In the General Election on Tuesday, November 3, 2026" or '' with no past election.
+function lastElectionPhrase() {
+  return lastEl
+    ? t('In the {election} on {date}', { election: t(lastEl.name), date: Elections.withWeekday(lastEl.date) })
+    : '';
+}
+
+// Off-season, the polling place card speaks of the last election: where the polls were
+// is still worth knowing, but it is not where anyone votes until the next directory.
+// Once the next election is entered, the polling files may already be its directory
+// (BUILD.md refreshes them 60 days out, before the 40-day season), so the card then
+// says only that this is the place on file, and claims nothing about either election.
+function pastPollingCard(r) {
+  const past = !upcomingEl;
+  let html = '<div class="vi-where vi-full vi-past">' +
+    `<div class="vi-lbl">${esc(past ? t('Polling place in the last election') : t('Polling place on file'))}</div>`;
+  const place = r.place;
+  if (place) {
+    const clickable = !!(place.lat && place.lng);
+    const showAttrs = clickable
+      ? ` id="showPlaceBtn" role="button" tabindex="0" title="${esc(t('Show it on the map'))}"`
+      : '';
+    html += `<div${clickable ? ' class="pp-place"' : ''}${showAttrs}>` +
+      `<div class="pp-name">${esc(displayCase(place.name))}</div>` +
+      `<div class="pp-addr">${esc(addressForDisplay(place.address))}</div>` +
+      '</div>';
+    const when = past ? lastElectionPhrase() : '';
+    if (when) {
+      html += `<div class="pp-note">${esc(t('{when}, precinct {n} voted here.', { when, n: r.precinct }))}</div>`;
+    }
+    if (place.consolidated_with && past) {
+      const vars = { n: r.precinct, host: precinctNumber(place.consolidated_with, r.ward) };
+      html += `<div class="pp-note">${esc(t('Precinct {n} voted with precinct {host} in that election.', vars))}</div>`;
+    }
+  } else {
+    html += `<div class="err">${esc(t('No polling place on file for precinct {n}.', { n: r.precinct }))}</div>`;
+  }
+  html += `<div class="pp-note vi-past-note">${esc(upcomingEl
+    ? t('Polling places can change before the next election, on {date}.', { date: Elections.dayMonth(upcomingEl.date) })
+    : t('No election is scheduled. Polling places can change before the next one.'))}</div>`;
+  html += '</div>';
+  return section('polling', html, null, { collapsed: false });
+}
+
+// Off-season the map stays, without a route: the precinct, its wards, the cameras, the
+// address and where its precinct voted last time.
+function showPastMap(r) {
+  pastView = r;
+  destChoice = null;
+  const rb = $('routeBlock');
+  rb.hidden = false;
+  rb.classList.add('map-only');
+  $('mapBlock').hidden = false;
+  map.invalidateSize(false);
+  ['destPick', 'routes', 'steps', 'unavoid'].forEach((id) => { $(id).innerHTML = ''; });
+  renderRouteKey();
+  ownBase.setRouteStreets([], null);
+  ownBase.setActivePrecinct(r.code || r.precinct);
+  ownBase.setScope(r.mcd);
+  drawPollingPlaces(r.code || r.precinct);
+  drawSites(null);
+  drawCameras();
+  const origin = addressPoint(r);
+  const fit = L.latLngBounds([]);
+  if (origin) {
+    const m = marker([origin.lat, origin.lng], 'origin', 0);
+    m.unbindTooltip();
+    m.bindTooltip(esc(t('Your address')), { direction: 'top', offset: [0, -10] });
+    fit.extend([origin.lat, origin.lng]);
+  }
+  if (r.place?.lat) fit.extend([r.place.lat, r.place.lng]);
+  if (fit.isValid()) {
+    if (fit.getNorthEast().equals(fit.getSouthWest())) map.setView(fit.getCenter(), 16, { animate: false });
+    else map.fitBounds(fit.pad(.25), fitOpts());
+  }
+  updateMapScope();
+}
+
 // ---- Election day countdown ----
 // Counts to local midnight starting election day. Each tick recomputes from the current
 // instant rather than decrementing, so sleep, throttling and clock changes cannot drift it.
@@ -1645,7 +1782,9 @@ let cdTimer = null;
 function startCountdown() {
   if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
   renderCountdown();
-  if (activeEl) cdTimer = setInterval(renderCountdown, 1000);
+  // Kept running off-season while an election is entered, so a page left open moves into
+  // election mode on the day absentee ballots go out.
+  if (upcomingEl) cdTimer = setInterval(renderCountdown, 1000);
 }
 
 // The calendar names elections in English; the catalog carries each name it uses
@@ -1662,14 +1801,16 @@ function renderCountdown() {
       said = $('cdSaid'), label = $('cdLabel');
   if (!box || !clock) return;
 
-  // A page left open past midnight moves on to the next election.
-  if (activeEl && activeEl.date < Elections.todayISO()) {
-    activeEl = Elections.next(electionList);
+  // A page left open past midnight works the season out again: past election day it goes
+  // off-season, and on the day absentee ballots go out it comes into election mode.
+  if (electionList && seasonDay !== Elections.todayISO()) {
+    refreshSeason();
+    if (current) show(current);
   }
 
   if (!activeEl) {
     box.hidden = true;
-    if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
+    if (!upcomingEl && cdTimer) { clearInterval(cdTimer); cdTimer = null; }
     return;
   }
 
@@ -1872,6 +2013,8 @@ function evRanked(r) {
 }
 
 function destinations(r) {
+  // Off-season nothing is a destination: no box takes ballots and no polls are open.
+  if (!activeEl) return [];
   const out = [];
   const origin = addressPoint(r);
 
@@ -1925,9 +2068,11 @@ function routeTo(r, forcedKind) {
 
   if (!opts.length) {
     routes = null;
+    if (!activeEl) { showPastMap(r); return; }
     $('routeBlock').hidden = true;
     return;
   }
+  pastView = null;
   let pick = null;
   if (forcedKind) pick = opts.find((o) => o.kind === forcedKind);
   if (!pick) pick = opts[0];

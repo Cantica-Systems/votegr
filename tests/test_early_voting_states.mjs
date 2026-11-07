@@ -416,12 +416,10 @@ const ORDER_CASES = [
     data: base({ date: iso(30), early_voting_from: iso(5), early_voting_to: iso(10),
                  early_voting_sites: SITES, early_voting_hours: HOURS }),
     order: ['dropbox', 'early', 'polling'], routed: /^drop box$/i, now: [], badges: [] },
-  // Early voting is offered ahead of its window, and is still not where the
-  // directions point: the polls lead the picker until ballots go out.
-  { name: 'before ballots go out',
-    data: base({ date: iso(60), early_voting_from: iso(45), early_voting_to: iso(50),
-                 early_voting_sites: SITES, early_voting_hours: HOURS }),
-    order: ['dropbox', 'early', 'polling'], routed: /^election day$/i, now: [], badges: [] },
+  // No 'before ballots go out' case: the pages are off-season until the day
+  // absentee ballots go out (Elections.season), so an election 60 days away
+  // shows no cards to order and no directions. tests/test_page.mjs checks
+  // the off-season page, and the day either side of that edge.
 ];
 
 // The kinds whose dates are highlighted, by the row's own class name.

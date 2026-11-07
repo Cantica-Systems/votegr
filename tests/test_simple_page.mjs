@@ -162,7 +162,7 @@ for (const width of [1280, 390, 320]) {
   // the shipped one says. That is what keeps "not the calendar" meaning
   // something: a page that ignored the clerk and read the calendar would
   // find no window there and draw no early block.
-  const cal = pinnedCalendar(ROOT, 60);
+  const cal = pinnedCalendar(ROOT, 30);
   const clerk = cal['/data/gr-clerk.json'];
   cal['/data/elections.json'].elections = cal['/data/elections.json'].elections.map(
     (e) => ({ ...e, early_voting_from: null, early_voting_to: null }));
@@ -255,7 +255,12 @@ for (const width of [1280, 390, 320]) {
 // asks the same lookup the map page does. Fixtures are polling places, so no
 // house is named: the Kentwood Activities Center (a city with wards) and Ada
 // Congregational (a township, without).
+//
+// Drop boxes are listed only in election mode, so this stretch is served a
+// calendar in season. Read from the one that ships, the drop box checks went
+// red the day after every election.
 {
+  served = pinnedCalendar(ROOT, 30);
   const { ctx, page, errors, offsite } = await open(390);
   const answerFor = async (text) => {
     await pick(page, text);
@@ -337,6 +342,30 @@ for (const width of [1280, 390, 320]) {
   ok('the county page still talks to nobody but its own host', offsite.length === 0);
   ok('and nothing failed to load or threw', errors.length === 0, errors.join(' | '));
   await ctx.close();
+  served = null;
+}
+
+// --- off-season ----------------------------------------------------------
+// Between elections the page names no drop box and gives no directions to a
+// polling place nobody votes at yet. It names the last election's place in the
+// past tense, and the next possible election date when none is entered.
+{
+  const real = pinnedCalendar(ROOT, 30)['/data/elections.json'];
+  served = { '/data/elections.json': { ...real, elections: [
+    { date: '2020-11-03', name: 'General Election' }] } };
+  const { ctx, page, errors } = await open(390);
+  await pick(page, '355 48th St SE');
+  const text = await page.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
+  ok('off-season: the banner says no election is scheduled', /No election is scheduled\./.test(text));
+  ok('off-season: and names the next possible date', /Next possible election date: \w+day, /.test(text));
+  ok('off-season: the polling place is the last election\'s',
+     /Polling place in the last election/.test(text) && /In the General Election on Tuesday, November 3, 2020/.test(text));
+  ok('off-season: no drop boxes', !(await page.$('.ev-boxes')));
+  ok('off-season: no early voting', !(await page.$('.ev-early')));
+  ok('off-season: no directions link', !(await page.$('#result a.dir-btn')));
+  ok('off-season: nothing threw', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+  served = null;
 }
 
 await browser.close();

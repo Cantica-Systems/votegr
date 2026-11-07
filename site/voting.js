@@ -384,10 +384,68 @@ function registrationRows(reg, e, hours, today) {
   return rows;
 }
 
+// ---- Election season ----
+// The pages are in election mode from the day absentee ballots go out (absenteeFrom,
+// 40 days by statute) through election day, for an election entered in elections.json.
+// Every other day is off-season: no countdown, no drop boxes, no hotline, and a lookup
+// speaks of the last election in the past tense. Both pages ask here, so they cannot
+// disagree about which mode they are in.
+
+// The latest election before today, or null. Sorted, as next() is, rather than
+// trusting file order.
+function last(list, today) {
+  const t = today || todayISO();
+  const past = (list || []).filter((e) => e && ISO.test(e.date) && e.date < t);
+  past.sort((a, b) => (a.date < b.date ? -1 : 1));
+  return past[past.length - 1] || null;
+}
+
+// The next election and whether the pages are in election mode for it:
+// { election, inSeason }. election is next(), null when nothing is entered.
+function season(list, today) {
+  const t = today || todayISO();
+  const e = next(list, t);
+  return { election: e, inSeason: !!e && t >= absenteeFrom(e) };
+}
+
+// The Tuesday after the first Monday of a month (0-based), as Michigan law sets its
+// regular May, August and November election days (MCL 168.641).
+function tuesdayAfterFirstMonday(year, month) {
+  const d = new Date(year, month, 1);
+  while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
+  d.setDate(d.getDate() + 1);
+  return isoOf(d);
+}
+
+// The fourth Tuesday in February, the presidential primary in a presidential year
+// (MCL 168.613a, as amended in 2023).
+function fourthTuesdayOfFebruary(year) {
+  const d = new Date(year, 1, 1);
+  while (d.getDay() !== 2) d.setDate(d.getDate() + 1);
+  d.setDate(d.getDate() + 21);
+  return isoOf(d);
+}
+
+// The first day on or after today that Michigan law allows a regular election. Only a
+// date: whether anything is on the ballot that day is not known until it is entered in
+// elections.json, so the page calls this the next POSSIBLE election date and nothing
+// else (no countdown, no drop boxes) keys off it.
+function nextPossible(today) {
+  const t = today || todayISO();
+  const year = Number(t.slice(0, 4));
+  for (const y of [year, year + 1]) {
+    const days = [5, 8, 11].map((m) => tuesdayAfterFirstMonday(y, m - 1));
+    if (y % 4 === 0) days.unshift(fourthTuesdayOfFebruary(y));
+    const hit = days.find((d) => d >= t);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 const Elections = {
   setLocale,
   todayISO, dayStart, monthDay, withWeekday, dayMonth, shortTime,
-  next, sites, absenteeFrom, atTime, pollsPhase, pollsToday, earlyVotingEnds, windowState,
+  next, last, season, nextPossible, sites, absenteeFrom, atTime, pollsPhase, pollsToday, earlyVotingEnds, windowState,
   earlyOpenNow,
   hoursRows, registerByMailUntil, registrationPhase, registrationRows
 };

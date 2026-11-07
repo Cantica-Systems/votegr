@@ -370,7 +370,17 @@ What a person has to do by hand, every election:
    rather than assuming it is gone. This is the only source carrying entrance
    notes and the consolidation footnotes, where one precinct votes at
    another's location for a single election.
-4. **Add the election to `elections.json` by hand**, with its date and name.
+4. **Add the election to `elections.json` by hand**, with its date and name,
+   and only once something is actually on a Kent County ballot that day.
+   Entering it is what puts the pages into election mode once its season
+   starts (the day absentee ballots go out, 40 days before); until then, and
+   between elections, they are off-season and name only the next date the law
+   allows an election, worked out in `voting.js` and called a possible date.
+   Do this in the same sitting as steps 1 to 3. Off-season with no election
+   entered, a lookup names the polling place on file as where the precinct
+   voted in the last election; once one is entered it calls it only the place
+   on file. A new directory published with no election entered would be
+   described as the old election's.
    The pages take the early voting window from `gr-clerk.json` while it names
    that election, so a window here is only a fallback. Never derive one from
    statute: the minimum is nine days ending the Sunday before, and Grand

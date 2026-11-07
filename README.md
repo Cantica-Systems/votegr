@@ -60,7 +60,7 @@ served from another address should put its own address in place of
 ## Languages
 
 The page is in English and Spanish. It opens in the reader's browser language, a
-`?lang=es` link opens it in Spanish, and a button above the countdown switches and
+`?lang=es` link opens it in Spanish, and a button in the footer switches and
 remembers the choice. The translations are written ahead of time in
 `site/i18n/<lang>.js` and ship with the page, so nothing is sent to a translation
 service. The Spanish is a draft that has not yet been reviewed by a native speaker,
@@ -93,6 +93,7 @@ Add `?debug` to the URL for a panel that routes between any two addresses or
 
 ```bash
 node tests/test_display_case.mjs         # display casing
+node tests/test_season.mjs               # election mode vs off-season, the next possible date
 node tests/test_precinct_outline.mjs     # each jurisdiction's outline is its border
 node tests/test_polling_data.mjs         # every place to vote has an address and a coordinate
 node tests/test_router.mjs               # routing, chunks, restrictions, the address index
