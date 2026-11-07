@@ -131,6 +131,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
    centring pushes the field below the fold on a phone. */
 #col:not(.has-result) { padding-top: clamp(1.25rem, 8vh, 4.5rem); }
 #col.has-result { padding-top: 1rem; }
+/* Off-season there is no countdown above the intro, so it starts near the header. */
+body.off-season #col:not(.has-result) { padding-top: 1.5rem; }
 /* On a phone the header, countdown and search box share the first screen. */
 @media (max-width: 700px) {
   #col:not(.has-result) { padding-top: .9rem; }
@@ -312,6 +314,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 
 /* ---- Intro ---- */
 .ask { padding: 0 0 26px; }
+/* Off-season only: the next election, or the next date the law allows one. */
+.next-line { margin: 12px 0 0; font-size: .92rem; font-weight: 600; color: var(--fg); }
 .ask .lede {
   margin: 0;
   font-size: 1.03rem;
@@ -320,8 +324,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
   max-width: 31rem;
 }
 
-/* Election Protection hotline: always shown, under the search, and under the
-   answer once there is one. */
+/* Election Protection hotline: in election mode only (applySeason in app.js), under the
+   search, and under the answer once there is one. */
 .help {
   margin: 24px 0 0; padding: 12px 14px; border-left: 3px solid var(--warn);
   background: var(--panel); border-radius: 0 6px 6px 0; max-width: 31rem;
@@ -888,8 +892,8 @@ summary, .vi-dest, .pp-place, .box-open, .box-list li[data-pick],
 .sf-links { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sf-links .about-btn { text-decoration: none; }
 @media (max-width: 640px) {
+  /* Shown under an answer too: the language switch lives here. */
   #siteFooter { padding: 12px 18px 14px; }
-  body.has-result #siteFooter { display: none; }
 }
 
 .cam-count {
@@ -1314,15 +1318,15 @@ ol.steps .scam {
 }
 
 /* ---- Language switch ----
-   Above the countdown, on the right, at every width: the header has no room for it on a
-   phone. It names the other language in that language. */
-.lang-row { display: flex; justify-content: flex-end; margin: 0 0 10px; }
-.lang-btn {
-  font: inherit; font-size: .92rem; font-weight: 700; color: var(--accent);
-  background: var(--panel); border: 1.5px solid var(--line); border-radius: 999px;
-  padding: 5px 14px; cursor: pointer; min-height: 32px;
-}
-.lang-btn:hover { border-color: var(--accent); }
+   In the footer, beside About, styled as its neighbors but in the accent so a reader who
+   cannot read the page can still find it. It names the other language in that language;
+   on a narrow phone, by its two-letter code, so the footer keeps to one row. */
+.lang-btn { color: var(--accent); font-weight: 700; }
 .lang-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lang-btn .lang-short { display: none; }
+@media (max-width: 420px) {
+  .lang-btn .lang-full { display: none; }
+  .lang-btn .lang-short { display: inline; }
+}
 /* In a translation still in draft, the intro says so on a line of its own. */
 .lede .lang-note { display: block; margin-top: 8px; font-size: .88rem; color: var(--warn); }

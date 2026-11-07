@@ -4,10 +4,12 @@
 # merge is a release. This runs the suites before that happens, so nobody has
 # to remember to, and gives branch protection something real to require.
 #
-# Eleven suites, cheapest first, so an obvious break fails in seconds rather
+# Twelve suites, cheapest first, so an obvious break fails in seconds rather
 # than after a browser download:
 #
 #   tests/test_display_case.mjs         display casing, over the real corpus
+#   tests/test_season.mjs               election mode vs off-season, the last
+#                                       election, the next possible date
 #   tests/test_precinct_outline.mjs     the jurisdiction outline is a border,
 #                                       not a line through the middle
 #   tests/test_polling_data.mjs         every polling place has a real address
@@ -77,6 +79,9 @@ jobs:
 
       - name: Display case
         run: node tests/test_display_case.mjs
+
+      - name: Election season
+        run: node tests/test_season.mjs
 
       # Reads the committed precincts.json only. It is here rather than left
       # to build_precincts.py because the data ships to browsers and the

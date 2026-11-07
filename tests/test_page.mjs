@@ -51,6 +51,11 @@ const TYPES = {
 // everything else reads the files that ship. servedHits counts what it
 // answered, so each of those stretches checks that its page really was
 // given the pinned files.
+// Since off-season (Elections.season) the shipped calendar is election mode only in
+// the 40 days before an election, so anything that looks for drop boxes, directions
+// or the hotline would go red between elections. The rest of the time the page is
+// served IN_SEASON, an election 30 days out, rather than the shipped calendar; every
+// other data file is the one that ships.
 let served = null, servedHits = 0;
 const server = createServer(async (req, res) => {
   const rel = normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
@@ -75,6 +80,8 @@ const URL_ = ORIGIN + '/index.html';
 // pinnedCalendar() is in pinned_calendar.mjs, shared with
 // test_simple_page.mjs, which has the same problem on the other page.
 const pinned = (daysOut) => pinnedCalendar(ROOT, daysOut);
+const IN_SEASON = pinned(30);
+served = IN_SEASON;
 const realElections = JSON.parse(await readFile(join(ROOT, 'data/elections.json'), 'utf8'));
 // Each town's clerk page, by MCD: what the page should link, read rather than restated.
 const CLERKS = JSON.parse(await readFile(join(ROOT, 'data/clerks.json'), 'utf8')).clerks;
@@ -236,10 +243,10 @@ for (const w of WIDTHS) {
   // on elements that were never made, which ends the whole run with every
   // later check unreported. On election day itself it goes red instead,
   // because the clock counts to the polls in hours, with no Days figure and
-  // no "days until" sentence. Any date ahead of today would do here; 60 is
+  // no "days until" sentence. Any date in season would do here; 30 is
   // the card block's, so the two stretches serve the same calendar.
   const hitsBefore = servedHits;
-  served = pinned(60);
+  served = pinned(30);
   await page.reload({ waitUntil: 'networkidle' });
   ok('the countdown is checked against the calendar served to it', servedHits > hitsBefore);
   const cd1 = await page.evaluate(() => {
@@ -312,7 +319,7 @@ for (const w of WIDTHS) {
     null, { timeout: 15000 });
   ok('the countdown stands down for the answer', await page.evaluate(() =>
     getComputedStyle(document.getElementById('countdown')).display === 'none'));
-  served = null;
+  served = IN_SEASON;
   await page.reload({ waitUntil: 'networkidle' });
 
   // --- a real lookup ---
@@ -524,7 +531,8 @@ for (const w of WIDTHS) {
   // No link anywhere is left to the browser's own blue, or to the purple it
   // turns once followed: both are illegible on a dark panel, and neither is
   // a state any link on this page has.
-  await page.evaluate(() => document.querySelector('.about-btn').click());
+  // By id: the language switch in the footer wears .about-btn too.
+  await page.evaluate(() => document.getElementById('aboutBtnFoot').click());
   await page.waitForTimeout(200);
   const linkColors = await page.evaluate(() => {
     const DEFAULTS = ['rgb(0, 0, 238)', 'rgb(85, 26, 139)', 'rgb(0, 0, 255)'];
@@ -618,15 +626,14 @@ for (const w of WIDTHS) {
 // Which cards are shut is a function of TODAY, so this block serves the
 // pinned calendar (pinned_calendar.mjs).
 //
-// 60 days out is the number that matters. ABSENTEE_LEAD_DAYS is 40 in
-// voting.js, so an election further out than that has not reached its absentee
-// window and the drop box card is reliably shut. Read from the live
-// calendar, this block fails as soon as the next election is within 40
-// days: the drop box card renders expanded, and the tap below closes it
-// instead of opening it.
+// 30 days out is the number that matters. The pages are in election mode only
+// from the day absentee ballots go out (40 days, Elections.season), so the drop
+// box card is open, while early voting, which Grand Rapids opens two weeks out,
+// has not started and its card is reliably shut. Read from the live calendar
+// this block would have no cards at all between elections.
 {
   const hitsBefore = servedHits;
-  served = pinned(60);
+  served = pinned(30);
   const ctx = await browser.newContext({ ...devices['Pixel 7'] });
   const page = await ctx.newPage();
   await page.goto(URL_, { waitUntil: 'networkidle' });
@@ -643,7 +650,9 @@ for (const w of WIDTHS) {
   })));
   ok('every card carries exactly one fold', cards.length === 3 && cards.every(c => c.folds === 1));
   ok('a window that has not opened yet is shut',
-     cards.filter(c => c.kind !== 'polling').every(c => !c.open));
+     cards.filter(c => c.kind === 'early').every(c => !c.open));
+  ok('and absentee voting, open now, is open',
+     (cards.filter(c => c.kind === 'dropbox')[0] || {}).open === true);
   ok('election day is open', (cards.filter(c => c.kind === 'polling')[0] || {}).open === true);
   ok('and the old pair of links is gone', await page.evaluate(() =>
      !document.querySelector('.vi-more, .vi-place')));
@@ -662,17 +671,8 @@ for (const w of WIDTHS) {
   ok('and the early voting card is not grayed out',
      await page.evaluate(() => !!document.querySelector('.vi-card-early') &&
                                !document.querySelector('.vi-card-early.is-off')));
-  // Tapping the head opens that card and nothing else.
-  await page.tap('.vi-card-dropbox summary');
-  await page.waitForTimeout(250);
-  const after = await page.evaluate(() => ({
-    box: document.querySelector('.vi-card-dropbox .vi-fold').open,
-    early: document.querySelector('.vi-card-early .vi-fold').open,
-    shows: !!document.querySelector('.vi-card-dropbox [data-kind="dropbox"]')
-  }));
-  ok('tapping a shut card opens it', after.box && after.shows);
-  ok('and leaves the others alone', !after.early);
-  // Open is a selected state, and has to look different from shut.
+  // Open is a selected state, and has to look different from shut. Read before
+  // the tap below opens the shut one.
   const lit = await page.evaluate(() => {
     const paint = (sel) => {
       const el = document.querySelector(sel);
@@ -684,6 +684,16 @@ for (const w of WIDTHS) {
   ok('an open card is lit differently from a shut one', lit.open !== lit.shut);
   ok('and a shut card carries no highlight of its own',
      /rgba\(0, 0, 0, 0\)/.test(lit.shut));
+  // Tapping the head opens that card and nothing else.
+  await page.tap('.vi-card-early summary');
+  await page.waitForTimeout(250);
+  const after = await page.evaluate(() => ({
+    box: document.querySelector('.vi-card-dropbox .vi-fold').open,
+    early: document.querySelector('.vi-card-early .vi-fold').open,
+    shows: !!document.querySelector('.vi-card-early [data-kind="early"]')
+  }));
+  ok('tapping a shut card opens it', after.early && after.shows);
+  ok('and leaves the others alone', after.box);
   // The section pills say where you are: the one you press lights, and
   // scrolling hands the light on, including to the last section, whose top
   // never reaches the bar because the page ends first.
@@ -928,7 +938,7 @@ for (const w of WIDTHS) {
   });
   ok('an open card is not painted in the accent', !noBlue.paint.includes(noBlue.rgb));
   await ctx.close();
-  served = null;
+  served = IN_SEASON;
 }
 
 // --- the About sheet closes with who made it ---
@@ -1092,16 +1102,17 @@ for (const w of WIDTHS) {
 }
 
 // --- the map stretch, on a calendar held still ------------------------
-// Everything from here to the next served = null measures the map as it
+// Everything from here to the next served = IN_SEASON measures the map as it
 // stands after an answer, and the answer fits the map to the route. Which
 // destination that route goes to is a function of today: the drop box while
 // absentee ballots are out, the polls before then and on the day. The drop
 // box nearest 300 Monroe Ave NW is at City Hall itself, so routing there
 // zooms the map to a few buildings, too few precincts for the ward tint and
-// too few labels for the drag probe. Sixty days out ballots have not gone
-// out, so the route goes to the polling place these checks were written
-// against, on every day the suite runs.
-served = pinned(60);
+// too few labels for the drag probe. On election day the route goes to the
+// polling place these checks were written against, on every day the suite runs.
+// (They used to be served sixty days out, before ballots go out; that is now
+// off-season, with no route at all.)
+served = pinned(0);
 
 // --- the map may not paint over the sticky bar on a phone ---
 // Leaflet numbers its own panes 200 to 700 and its controls 1000, against the
@@ -1873,7 +1884,7 @@ for (const theme of ['dark', 'light']) {
 
   await ctx.close();
 }
-served = null;
+served = IN_SEASON;
 
 // --- a street the address list cannot answer --------------------------
 // A street the address list cannot answer has to be told so accurately, and
@@ -1957,7 +1968,9 @@ served = null;
   await page.waitForFunction(() => !document.getElementById('routeBlock').hidden,
     null, { timeout: 15000 });
   ok('Start over appears with the answer', await shown('resetBtn'));
-  ok('while a phone puts the footer away', !(await shown('siteFooter')));
+  // Kept under an answer since the language switch moved into it.
+  ok('while a phone keeps the footer, with the language switch',
+     (await shown('siteFooter')) && (await shown('langBtn')));
   await page.click('#resetBtn');
   ok('Start over clears the answer', await page.evaluate(() =>
     document.getElementById('resultBlock').hidden &&
@@ -2121,8 +2134,94 @@ served = null;
   ok('crossing midnight throws nothing', errors.length === 0, errors.join(' | '));
   ok('and the countdown stands down once the day has passed', await page.evaluate(() =>
     document.getElementById('countdown').hidden));
-  served = null;
+  served = IN_SEASON;
   await ctx.close();
+}
+
+// --- off-season ---------------------------------------------------------
+// Between elections: no countdown, no hotline, no drop boxes and no directions,
+// the polling place said in the past tense, the map kept, and a line naming
+// the next possible election date. Served a calendar whose only election is
+// years past, so the page is off-season whatever today is. Then the day before
+// absentee ballots go out (off-season, the election named) and the day they go
+// out (election mode), the edges Elections.season draws.
+{
+  const real = pinned(30)['/data/elections.json'];
+  const past = { ...real, elections: [{ date: '2020-11-03', name: 'General Election' }] };
+  for (const width of [1280, 390]) {
+    const ctx = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    served = { '/data/elections.json': past };
+    await page.goto(URL_, { waitUntil: 'networkidle' });
+    await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 120000 });
+    const home = await page.evaluate(() => ({
+      off: document.body.classList.contains('off-season'),
+      countdown: document.getElementById('countdown').hidden,
+      help: document.getElementById('help').hidden,
+      line: document.getElementById('nextLine').textContent,
+      lineShown: !document.getElementById('nextLine').hidden,
+      langInFooter: !!document.querySelector('#siteFooter #langBtn:not([hidden])'),
+      overflow: document.documentElement.scrollWidth - innerWidth,
+    }));
+    ok(`off-season ${width}: marked off-season`, home.off);
+    ok(`off-season ${width}: no countdown and no hotline`, home.countdown && home.help);
+    ok(`off-season ${width}: says no election is scheduled and the next possible date`,
+       home.lineShown && /^No election is scheduled\. Next possible election date: \w+day, \w+ \d+, \d{4}\.$/.test(home.line),
+       home.line);
+    ok(`off-season ${width}: the language switch is in the footer`, home.langInFooter);
+    ok(`off-season ${width}: no sideways scroll`, home.overflow <= 0, home.overflow);
+
+    await page.fill('#addr', '300 Monroe Ave NW');
+    await page.press('#addr', 'Enter');
+    await page.waitForSelector('#precinctInfo .vi-past', { timeout: 10000 });
+    const ans = await page.evaluate(() => ({
+      text: document.getElementById('precinctInfo').innerText.replace(/\s+/g, ' '),
+      dropbox: !!document.querySelector('#precinctInfo [data-kind="dropbox"], #precinctInfo .vi-dropbox'),
+      dirButtons: document.querySelectorAll('#precinctInfo .dir-btn').length,
+      mapShown: !document.getElementById('mapBlock').hidden && !document.getElementById('routeBlock').hidden,
+      steps: document.getElementById('steps').innerText.trim(),
+      picker: document.getElementById('destPick').innerText.trim(),
+      legendBox: !document.querySelector('.map-legend .sitek[data-kind="dropbox"]').parentElement.hidden,
+      help: document.getElementById('help').hidden,
+      traffic: /Obey all traffic signs/.test(document.getElementById('advisory').innerText),
+    }));
+    ok(`off-season ${width}: the polling place is the last election's`,
+       /Polling place in the last election/i.test(ans.text) &&
+       /In the General Election on Tuesday, November 3, 2020, precinct \d+ voted here\./.test(ans.text), ans.text);
+    ok(`off-season ${width}: no drop box card`, !ans.dropbox);
+    ok(`off-season ${width}: no directions anywhere`, ans.dirButtons === 0 && !ans.steps && !ans.picker);
+    ok(`off-season ${width}: the map stays`, ans.mapShown);
+    ok(`off-season ${width}: no drop boxes in the map key`, !ans.legendBox);
+    ok(`off-season ${width}: still no hotline under the answer`, ans.help);
+    ok(`off-season ${width}: no traffic line without a route`, !ans.traffic);
+    ok(`off-season ${width}: nothing threw`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  // The season's edges, by the day the page is opened.
+  const e = real.elections[0];
+  const dayOf = (iso, by) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + by); return d; };
+  for (const [by, inSeason] of [[-41, false], [-40, true]]) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await ctx.newPage();
+    await page.clock.install({ time: dayOf(e.date, by) });
+    served = pinned(30);
+    // pinned() dates relative to the real today; the clock is what moves here.
+    await page.goto(URL_, { waitUntil: 'networkidle' });
+    const r = await page.evaluate(() => ({
+      off: document.body.classList.contains('off-season'),
+      line: document.getElementById('nextLine').textContent,
+      countdown: !document.getElementById('countdown').hidden,
+    }));
+    ok(`${-by} days before: ${inSeason ? 'election mode' : 'off-season'}`,
+       inSeason ? (!r.off && r.countdown) : (r.off && !r.countdown), r);
+    if (!inSeason) ok(`${-by} days before: the line names the election, not a possible date`,
+                      /^Next election: \w+day, /.test(r.line), r.line);
+    await ctx.close();
+  }
+  served = IN_SEASON;
 }
 
 // --- what search engines read ---

@@ -17,7 +17,12 @@ let P = null;           // Precincts.county(): every parcel address in the count
 let outside = null;     // street -> jurisdictions, for streets the address list cannot answer
 let clerk = null;       // gr-clerk.json: the city's early voting, drop boxes and registering
 let clerkPages = {};    // clerks.json: each jurisdiction's clerk page, by MCD
-let election = null;    // the next election, or null once every date has passed
+// The next election only while it is in season (Elections.season, as app.js reads it):
+// from the day absentee ballots go out through election day. Off-season it is null, so
+// every section keyed on it stands down, and the page speaks of lastElection instead.
+let election = null;
+let upcomingElection = null;   // the next election entered at all, in season or not
+let lastElection = null;       // the latest election before today
 let pollHours = null;   // election_day_hours: registering in person ends when the polls close
 let calendarElections = [];   // the whole calendar, for the day the line rolls over
 let suggestions = [];
@@ -130,6 +135,7 @@ function locationRow(place, extraClass, noLink) {
 }
 
 function pollingPlace(found) {
+  if (!election) return pastPollingPlace(found);
   const { place } = found;
   if (!place) {
     return [advisory('missing',
@@ -149,6 +155,35 @@ function pollingPlace(found) {
       `For this election, precinct ${found.precinct} votes at precinct ` +
       `${host}'s location${place.note ? `. ${place.note}.` : '.'}`));
   }
+  return parts;
+}
+
+// Off-season: where the precinct voted last time, said in the past tense, as app.js does.
+function pastPollingPlace(found) {
+  const { place } = found;
+  if (!place) {
+    return [advisory('missing',
+      `We do not have a polling place listed for precinct ${found.precinct}.`)];
+  }
+  // No directions link: nobody votes there until the next directory says so.
+  // Once the next election is entered, the polling files may already be its directory
+  // (BUILD.md), so the place is only "on file" and no election is named, as in app.js.
+  const past = !upcomingElection;
+  const parts = [heading('lead-2', past ? 'Polling place in the last election' : 'Polling place on file'),
+                 locationRow(place, null, true)];
+  if (past && lastElection) {
+    parts.push(el('div', 'ev-note',
+      `In the ${lastElection.name} on ${Elections.withWeekday(lastElection.date)}, ` +
+      `precinct ${found.precinct} voted here.`));
+  }
+  if (place.consolidated_with && past) {
+    const host = P.describe(place.consolidated_with).precinct;
+    parts.push(el('div', 'ev-note',
+      `Precinct ${found.precinct} voted with precinct ${host} in that election.`));
+  }
+  parts.push(el('div', 'ev-note', upcomingElection
+    ? `Polling places can change before the next election, on ${Elections.dayMonth(upcomingElection.date)}.`
+    : 'No election is scheduled. Polling places can change before the next one.'));
   return parts;
 }
 
@@ -357,7 +392,9 @@ function showPolls(next, hours) {
       // Midnight has passed: the calendar moves on and this line with it.
       clearInterval(pollsTimer); pollsTimer = null;
       banner.textContent = '';
-      showNextElection(Elections.next(calendarElections), hours);
+      setSeason();
+      showNextElection(election, hours);
+      showRegistrationLine();
       return;
     }
     const hms = (ms) => {
@@ -389,9 +426,37 @@ function showPolls(next, hours) {
   if (!pollsTimer) pollsTimer = setInterval(tick, 1000);
 }
 
+// The season, worked out again from the calendar and today.
+function setSeason() {
+  const s = Elections.season(calendarElections);
+  election = s.inSeason ? s.election : null;
+  upcomingElection = s.election;
+  lastElection = Elections.last(calendarElections);
+}
+
+// Off-season: the next election entered, or failing that the next date the law allows
+// one, called only that.
+function showOffSeason() {
+  const banner = $('election');
+  if (!banner) return;
+  banner.textContent = '';
+  const possible = Elections.nextPossible();
+  if (upcomingElection) {
+    banner.append('Next election: ', el('strong', null,
+      `${upcomingElection.name}, ${Elections.withWeekday(upcomingElection.date)}`));
+  } else {
+    banner.append('No election is scheduled.');
+    if (possible) {
+      banner.append(el('span', 'ev', `Next possible election date: ${Elections.withWeekday(possible)}.`));
+    }
+  }
+  banner.hidden = false;
+}
+
 function showNextElection(next, hours) {
   const banner = $('election');
-  if (!banner || !next) return;
+  if (!banner) return;
+  if (!next) { showOffSeason(); return; }
 
   if (hours && Elections.pollsPhase(next, hours)) { showPolls(next, hours); return; }
 
@@ -686,8 +751,8 @@ async function boot() {
     clerk = clerkData || null;
     clerkPages = clerkPageData?.clerks || {};
 
-    election = Elections.next(calendar.elections);
     calendarElections = calendar.elections;
+    setSeason();
     pollHours = calendar.election_day_hours || null;
     showNextElection(election, pollHours);
     showRegistrationLine();

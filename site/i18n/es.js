@@ -395,5 +395,23 @@ export default {
   '{n} months ago': 'hace {n} meses',
   '{n} years ago': 'hace {n} años',
   'No details recorded in OpenStreetMap.': 'OpenStreetMap no tiene más detalles.',
-  'version {n}': 'versión {n}'
+  'version {n}': 'versión {n}',
+
+  // ---- off-season (between elections) ----
+  'Next election: {date}.': 'Próximas elecciones: {date}.',
+  'No election is scheduled. Next possible election date: {date}.':
+    'No hay elecciones programadas. Próxima fecha posible de elecciones: {date}.',
+  'No election is scheduled.': 'No hay elecciones programadas.',
+  'Polling place in the last election': 'Lugar de votación en las últimas elecciones',
+  'Map': 'Mapa',
+  'In the {election} on {date}': 'En las {election} del {date}',
+  '{when}, precinct {n} voted here.': '{when}, el precinto {n} votó aquí.',
+  'Precinct {n} voted with precinct {host} in that election.':
+    'En esas elecciones, el precinto {n} votó con el precinto {host}.',
+  'Polling places can change before the next election, on {date}.':
+    'Los lugares de votación pueden cambiar antes de las próximas elecciones, el {date}.',
+  'No election is scheduled. Polling places can change before the next one.':
+    'No hay elecciones programadas. Los lugares de votación pueden cambiar antes de las próximas.',
+  'Your address': 'Su dirección',
+  'Polling place on file': 'Lugar de votación registrado'
 };

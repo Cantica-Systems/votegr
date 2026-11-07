@@ -57,9 +57,6 @@
 
 <main id="col">
 
-  <div class="lang-row">
-    <button type="button" class="lang-btn" id="langBtn" hidden></button>
-  </div>
 
   <section class="countdown" id="countdown" hidden>
     <p class="cd-label" id="cdLabel" data-i18n="#cd_label">Election Day is In:</p>
@@ -74,6 +71,7 @@
       open source, all the data is already loaded to your device by visiting
       this page.
       <a href="#" id="howLink" class="how-link">How?</a></p>
+    <p class="next-line" id="nextLine" hidden></p>
   </section>
 
   <div class="searchbar" id="searchBar">
@@ -146,7 +144,7 @@
     <div id="advisory"></div>
   </section>
 
-  <aside class="help" id="help" aria-labelledby="helpTitle">
+  <aside class="help" id="help" aria-labelledby="helpTitle" hidden>
     <h2 id="helpTitle" data-i18n="#help_title">Having trouble voting?</h2>
     <p data-i18n="#help_body">Turned away, not on the list, or intimidated? Call or
       text the nonpartisan Election Protection hotline:</p>
@@ -177,6 +175,7 @@
     </button>
   </div>
   <nav class="sf-links" aria-label="Site">
+    <button type="button" class="about-btn lang-btn" id="langBtn" hidden></button>
     <button type="button" class="about-btn" id="aboutBtnFoot" data-i18n="#about">About</button>
     <a class="about-btn" href="https://github.com/Cantica-Systems/votegr"
        target="_blank" rel="noopener">GitHub</a>

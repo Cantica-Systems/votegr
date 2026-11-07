@@ -34,7 +34,7 @@ for (const f of CODE) {
     used.add(Function(`return ${m[1]}`)());
   }
   const loose = [...src.matchAll(/(?<![\w.$])t\((?!\s*')([^)]*)/g)]
-    .map((m) => m[1]).filter((a) => a.trim() !== 'activeEl.name');
+    .map((m) => m[1]).filter((a) => !['activeEl.name', 'lastEl.name'].includes(a.trim()));
   ok(`${f}: every t() key is a literal this test can read`, !loose.length, loose.join(' | '));
 }
 const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
@@ -99,7 +99,7 @@ const ENGLISH = ['Ballot drop box', 'Early voting', 'Election day', 'Directions'
   const start = await page.evaluate(() => ({
     lang: document.documentElement.lang,
     label: document.querySelector('label[for="addr"]').textContent,
-    btn: document.getElementById('langBtn').textContent,
+    btn: document.getElementById('langBtn').getAttribute('aria-label'),
     btnLang: document.getElementById('langBtn').lang,
     stored: localStorage.getItem('lang'),
     how: !!document.getElementById('howLink'),
@@ -113,7 +113,7 @@ const ENGLISH = ['Ballot drop box', 'Early voting', 'Election day', 'Directions'
   await page.fill('#addr', '300 Monroe Ave NW');
   await page.waitForTimeout(400);
   await page.press('#addr', 'Enter');
-  await page.waitForSelector('#steps li, #routes .here', { timeout: 30000 });
+  await page.waitForSelector('#steps li, #routes .here, #precinctInfo .vi-past', { timeout: 30000 });
   const answer = await page.evaluate(() => ({
     info: document.getElementById('precinctInfo').textContent,
     route: document.getElementById('routeBlock').textContent,
@@ -132,7 +132,7 @@ const ENGLISH = ['Ballot drop box', 'Early voting', 'Election day', 'Directions'
   await ready(page);
   const back = await page.evaluate(() => ({
     lang: document.documentElement.lang, search: location.search,
-    stored: localStorage.getItem('lang'), btn: document.getElementById('langBtn').textContent,
+    stored: localStorage.getItem('lang'), btn: document.getElementById('langBtn').getAttribute('aria-label'),
     label: document.querySelector('label[for="addr"]').textContent,
   }));
   ok('the switch goes back to English', back.lang === 'en' && /Enter an Address/.test(back.label),
@@ -168,7 +168,7 @@ const ENGLISH = ['Ballot drop box', 'Early voting', 'Election day', 'Directions'
   await ready(page);
   const r = await page.evaluate(() => ({
     lang: document.documentElement.lang,
-    btn: document.getElementById('langBtn').textContent,
+    btn: document.getElementById('langBtn').getAttribute('aria-label'),
     btnLang: document.getElementById('langBtn').lang,
   }));
   ok('an English browser stays in English', r.lang === 'en', JSON.stringify(r));
