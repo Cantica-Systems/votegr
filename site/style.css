@@ -314,6 +314,13 @@ body.off-season #col:not(.has-result) { padding-top: 1.5rem; }
 
 /* ---- Intro ---- */
 .ask { padding: 0 0 26px; }
+/* Off-season, at the top of the page: what it shows is the last election's. */
+.archive-line {
+  margin: 0 0 14px; padding: 10px 14px; border-left: 3px solid var(--accent);
+  background: var(--panel); border-radius: 0 6px 6px 0; max-width: 31rem;
+  font-size: .95rem; font-weight: 600; color: var(--fg);
+}
+#col.has-result .archive-line { max-width: none; }
 /* Off-season only: the next election, or the next date the law allows one. */
 .next-line { margin: 12px 0 0; font-size: .92rem; font-weight: 600; color: var(--fg); }
 .ask .lede {

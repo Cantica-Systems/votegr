@@ -380,7 +380,12 @@ What a person has to do by hand, every election:
    entered, a lookup names the polling place on file as where the precinct
    voted in the last election; once one is entered it calls it only the place
    on file. A new directory published with no election entered would be
-   described as the old election's.
+   described as the old election's. Off-season the pages keep the last
+   election on show under a line at the top naming it: directions to the
+   polling place on file, and, in Grand Rapids, to that election's early
+   voting sites, read from `gr-clerk.json` while it still names that election
+   (else from the election's own entry here). Refreshing `gr-clerk.json` for
+   the next election before entering it here takes those sites off the page.
    The pages take the early voting window from `gr-clerk.json` while it names
    that election, so a window here is only a fallback. Never derive one from
    statute: the minimum is nine days ending the Sunday before, and Grand

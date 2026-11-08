@@ -2139,9 +2139,10 @@ served = IN_SEASON;
 }
 
 // --- off-season ---------------------------------------------------------
-// Between elections: no countdown, no hotline, no drop boxes and no directions,
-// the polling place said in the past tense, the map kept, and a line naming
-// the next possible election date. Served a calendar whose only election is
+// Between elections: no countdown, no hotline and no drop boxes. The last
+// election stays on show under a line at the top saying so: its polling place,
+// said in the past tense, with directions, and its early voting sites, and a
+// line naming the next possible election date. Served a calendar whose only election is
 // years past, so the page is off-season whatever today is. Then the day before
 // absentee ballots go out (off-season, the election named) and the day they go
 // out (election mode), the edges Elections.season draws.
@@ -2162,6 +2163,7 @@ served = IN_SEASON;
       help: document.getElementById('help').hidden,
       line: document.getElementById('nextLine').textContent,
       lineShown: !document.getElementById('nextLine').hidden,
+      arch: document.getElementById('archiveLine').hidden ? '' : document.getElementById('archiveLine').textContent,
       langInFooter: !!document.querySelector('#siteFooter #langBtn:not([hidden])'),
       overflow: document.documentElement.scrollWidth - innerWidth,
     }));
@@ -2170,6 +2172,9 @@ served = IN_SEASON;
     ok(`off-season ${width}: says no election is scheduled and the next possible date`,
        home.lineShown && /^No election is scheduled\. Next possible election date: \w+day, \w+ \d+, \d{4}\.$/.test(home.line),
        home.line);
+    ok(`off-season ${width}: the top says the page shows the last election`,
+       home.arch === 'Showing information from the last election, the General Election on Tuesday, November 3, 2020.',
+       home.arch);
     ok(`off-season ${width}: the language switch is in the footer`, home.langInFooter);
     ok(`off-season ${width}: no sideways scroll`, home.overflow <= 0, home.overflow);
 
@@ -2191,12 +2196,53 @@ served = IN_SEASON;
        /Polling place in the last election/i.test(ans.text) &&
        /In the General Election on Tuesday, November 3, 2020, precinct \d+ voted here\./.test(ans.text), ans.text);
     ok(`off-season ${width}: no drop box card`, !ans.dropbox);
-    ok(`off-season ${width}: no directions anywhere`, ans.dirButtons === 0 && !ans.steps && !ans.picker);
+    ok(`off-season ${width}: directions to the last election's polling place`,
+       ans.dirButtons === 1 && !!ans.steps, JSON.stringify(ans));
     ok(`off-season ${width}: the map stays`, ans.mapShown);
     ok(`off-season ${width}: no drop boxes in the map key`, !ans.legendBox);
     ok(`off-season ${width}: still no hotline under the answer`, ans.help);
-    ok(`off-season ${width}: no traffic line without a route`, !ans.traffic);
+    ok(`off-season ${width}: the traffic line comes with the route`, ans.traffic);
     ok(`off-season ${width}: nothing threw`, errors.length === 0, errors.join(' | '));
+    await ctx.close();
+  }
+
+  // An election a few days past whose clerk's file is still its own: its early
+  // voting sites stay on show and route, after the polling place.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    served = pinned(-5);
+    await page.goto(URL_, { waitUntil: 'networkidle' });
+    await page.waitForFunction(() => !document.getElementById('addr').disabled, null, { timeout: 120000 });
+    await page.fill('#addr', '300 Monroe Ave NW');
+    await page.press('#addr', 'Enter');
+    await page.waitForSelector('#precinctInfo .vi-past', { timeout: 10000 });
+    const first = await page.evaluate(() => ({
+      off: document.body.classList.contains('off-season'),
+      arch: !document.getElementById('archiveLine').hidden,
+      kinds: [...document.querySelectorAll('#precinctInfo [data-kind]')].map(e => e.dataset.kind),
+      text: document.getElementById('precinctInfo').innerText.replace(/\s+/g, ' '),
+      picker: document.getElementById('destPick').innerText.replace(/\s+/g, ' '),
+      legendEarly: !document.querySelector('.map-legend .sitek[data-kind="early"]').parentElement.hidden,
+    }));
+    ok('last election: off-season, with the line at the top', first.off && first.arch);
+    ok('last election: the polling place first, then early voting',
+       first.kinds.join() === 'polling,early', first.kinds.join());
+    ok('last election: early voting is called the last election\'s',
+       /Early voting in the last election/i.test(first.text), first.text);
+    ok('last election: both are in the picker',
+       /Election day/.test(first.picker) && /Early voting/.test(first.picker), first.picker);
+    ok('last election: early voting sites are in the map key', first.legendEarly);
+    await page.click('#precinctInfo .dir-btn[data-dir="early"]');
+    await page.waitForTimeout(500);
+    const early = await page.evaluate(() => ({
+      steps: document.getElementById('steps').innerText.trim(),
+      sub: document.getElementById('routes').innerText,
+    }));
+    ok('last election: an early voting site routes', !!early.steps, early.sub);
+    ok('last election: nothing threw', errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
 

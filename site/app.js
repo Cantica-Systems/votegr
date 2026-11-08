@@ -21,6 +21,10 @@ let electionList = null;
 // the next election entered at all, in season or not; seasonDay is the day all three were
 // worked out on, so a page left open past midnight can work them out again.
 let lastEl = null, upcomingEl = null, seasonDay = null;
+// Off-season, the last election, kept on show: a lookup still routes to its polling place
+// and to its early voting sites, under a line at the top saying whose they were. Null in
+// season, or with no election past.
+let archEl = null;
 // The answer the off-season map is showing, or null. Cameras show while it is set.
 let pastView = null;
 let ownBase = null;
@@ -1381,7 +1385,7 @@ function earlyVotingCard(r) {
                         live: !evState.off, off: evState.off,
                         now: now ? t('Open now') : null },
              routable ? evHoursHtml(evWindow(r)) : ''),
-    { collapsed: evState.off || (!!ev && !evState.open) });
+    { collapsed: !evState.past && (evState.off || (!!ev && !evState.open)) });
 }
 
 // The polls' badge on election day, by Elections.pollsToday(); /simple says the same.
@@ -1389,7 +1393,7 @@ const POLLS_BADGE = { open: t('Open now'), today: t('Today') };
 
 // multi: there are other destinations to choose between.
 function pollingCard(r, multi) {
-  if (!activeEl) return pastPollingCard(r);
+  if (!activeEl) return pastPollingCard(r, multi);
   const badge = POLLS_BADGE[Elections.pollsToday(activeEl, electionDayHours)] || null;
   let html = `<div class="vi-where${activeEl ? '' : ' vi-full'}${badge ? ' is-now' : ''}"` +
     ' data-kind="polling">' +
@@ -1491,10 +1495,11 @@ function show(r, focusKind, landOn) {
   const boxHtml = dropBoxCard(r), evHtml = earlyVotingCard(r),
       pollHtml = pollingCard(r, multi), regHtml = registrationCard(r);
 
-  // The drop box first, the order a voter can act in, except on election day, when the
-  // polls come first. destinations() puts the routed default in the same place.
-  html += (isElectionDay() ? pollHtml + boxHtml + evHtml
-                           : boxHtml + evHtml + pollHtml) + regHtml;
+  // The drop box first, the order a voter can act in, except on election day and
+  // off-season, when the polls come first. destinations() puts the routed default in the same place.
+  // Off-season, the last election's polling place first, then its early voting sites.
+  html += (isElectionDay() || !activeEl ? pollHtml + boxHtml + evHtml
+                                        : boxHtml + evHtml + pollHtml) + regHtml;
 
   html += '</div></div>';
   $('precinctInfo').innerHTML = html;
@@ -1577,7 +1582,7 @@ function show(r, focusKind, landOn) {
   else if (r.inferred) adv.push(esc(t('This exact number is not in the address list, so the precinct was taken from its neighbors and checked against the precinct boundary.')));
   if (r.edgeMeters < 30) adv.push(esc(t('This address is close to a precinct boundary, so the answer is less certain.')));
   if (r.ambiguousStreet) adv.push(esc(t('Read as {street}. Other streets also match what you typed.', { street: displayCase(r.street) })));
-  if (activeEl) adv.push(esc(t('Obey all traffic signs and laws.')));
+  if (shownEl()) adv.push(esc(t('Obey all traffic signs and laws.')));
   $('advisory').innerHTML = `<div class="advisory">${adv.join(' ')}</div>`;
 
   routeTo(r, focusKind);
@@ -1616,21 +1621,34 @@ function evWindow(r) {
              early_voting_days: clerk.early_voting.days || [],
              early_voting_sites: clerk.sites };
   }
-  return activeEl;
+  return shownEl();
 }
+
+// The election the page describes: the next one in season, the last one off-season.
+function shownEl() { return activeEl || archEl; }
 
 // gr-clerk.json describes only the election it names; it must never date another one.
 function clerkForThisElection(r) {
-  return !!(inGrandRapids(r) && clerk?.early_voting && activeEl &&
-            clerk.election === activeEl.date);
+  const e = shownEl();
+  return !!(inGrandRapids(r) && clerk?.early_voting && e && clerk.election === e.date);
 }
 
 // 'none' (a half-published window) yields no row at all.
 function earlyVotingForBlock(r) {
-  const w = activeEl && evWindow(r);
+  const w = shownEl() && evWindow(r);
   if (!w) return null;
   const to = w.early_voting_to;
-  switch (Elections.windowState(w)) {
+  const state = Elections.windowState(w);
+  // Off-season: the last election's sites, as they were, routable, under the line at the
+  // top that says whose they were.
+  if (!activeEl) {
+    if (state === 'none') return null;
+    return { label: t('Early voting in the last election'),
+             status: t('{from} to {to}', { from: Elections.dayMonth(w.early_voting_from), to: Elections.dayMonth(to) }),
+             site: inGrandRapids(r), past: true,
+             note: t('These were the early voting sites in that election. Sites and hours can change before the next one.') };
+  }
+  switch (state) {
     case 'none':
       return null;
     case 'closed':
@@ -1660,6 +1678,7 @@ function refreshSeason() {
   activeEl = s.inSeason ? s.election : null;
   upcomingEl = s.election;
   lastEl = Elections.last(electionList);
+  archEl = activeEl ? null : lastEl;
   seasonDay = Elections.todayISO();
   applySeason();
 }
@@ -1682,16 +1701,28 @@ function applySeason() {
       : t('No election is scheduled.');
     line.hidden = !off;
   }
-  // Drop boxes and early voting sites are not on the map off-season, so not in its key.
-  document.querySelectorAll('.map-legend .sitek[data-kind="dropbox"], .map-legend .sitek[data-kind="early"]')
+  // At the top of the page: off-season, what the page shows is the last election's.
+  const arch = $('archiveLine');
+  if (arch) {
+    arch.textContent = archEl
+      ? t('Showing information from the last election, the {election} on {date}.',
+          { election: t(archEl.name), date: Elections.withWeekday(archEl.date) })
+      : '';
+    arch.hidden = !archEl;
+  }
+  // Drop boxes are not on the map off-season, so not in its key; early voting sites are
+  // while the last election's are on show.
+  document.querySelectorAll('.map-legend .sitek[data-kind="dropbox"]')
     .forEach((el) => { el.parentElement.hidden = off; });
+  document.querySelectorAll('.map-legend .sitek[data-kind="early"]')
+    .forEach((el) => { el.parentElement.hidden = off && !archEl; });
   const pollKey = document.querySelector('.map-legend .sitek[data-kind="polling"] + span');
   if (pollKey) {
     pollKey.textContent = !off ? t('Polling place')
       : upcomingEl ? t('Polling place on file') : t('Polling place in the last election');
   }
   const dirNav = document.querySelector('#sectionNav [data-goto="routeBlock"]');
-  if (dirNav) dirNav.textContent = off ? t('Map') : t('Directions');
+  if (dirNav) dirNav.textContent = off && !archEl ? t('Map') : t('Directions');
 }
 
 // "In the General Election on Tuesday, November 3, 2026" or '' with no past election.
@@ -1706,20 +1737,24 @@ function lastElectionPhrase() {
 // Once the next election is entered, the polling files may already be its directory
 // (BUILD.md refreshes them 60 days out, before the 40-day season), so the card then
 // says only that this is the place on file, and claims nothing about either election.
-function pastPollingCard(r) {
+function pastPollingCard(r, multi) {
   const past = !upcomingEl;
-  let html = '<div class="vi-where vi-full vi-past">' +
-    `<div class="vi-lbl">${esc(past ? t('Polling place in the last election') : t('Polling place on file'))}</div>`;
   const place = r.place;
+  // Routable, as in season, while the last election is on show (archEl).
+  const clickable = !!(place?.lat && place.lng);
+  const routable = clickable && !!archEl;
+  let html = `<div class="vi-where vi-full vi-past"${routable ? ' data-kind="polling"' : ''}>` +
+    `<div class="vi-lbl">${esc(past ? t('Polling place in the last election') : t('Polling place on file'))}</div>`;
   if (place) {
-    const clickable = !!(place.lat && place.lng);
-    const showAttrs = clickable
+    const showAttrs = clickable && !multi
       ? ` id="showPlaceBtn" role="button" tabindex="0" title="${esc(t('Show it on the map'))}"`
       : '';
     html += `<div${clickable ? ' class="pp-place"' : ''}${showAttrs}>` +
       `<div class="pp-name">${esc(displayCase(place.name))}</div>` +
       `<div class="pp-addr">${esc(addressForDisplay(place.address))}</div>` +
-      '</div>';
+      metaBlock([locLine(place.entrance_note)]) +
+      '</div>' +
+      (routable ? actionRow('polling') : '');
     const when = past ? lastElectionPhrase() : '';
     if (when) {
       html += `<div class="pp-note">${esc(t('{when}, precinct {n} voted here.', { when, n: r.precinct }))}</div>`;
@@ -2008,13 +2043,14 @@ function evOpensOn(pick, r) {
 function evRanked(r) {
   const sites = !inGrandRapids(r) ? []
             : (clerkForThisElection(r) && clerk.sites.length) ? clerk.sites
-            : Elections.sites(activeEl).filter((s) => s.lat && s.lng);
+            : Elections.sites(shownEl()).filter((s) => s.lat && s.lng);
   return nearest(addressPoint(r), sites);
 }
 
 function destinations(r) {
-  // Off-season nothing is a destination: no box takes ballots and no polls are open.
-  if (!activeEl) return [];
+  // Off-season no box takes ballots, so the last election's polling place and early
+  // voting sites are the only destinations, the polling place first.
+  if (!activeEl) return archEl ? pastDestinations(r) : [];
   const out = [];
   const origin = addressPoint(r);
 
@@ -2054,6 +2090,17 @@ function destinations(r) {
      : absenteePhase() === 'open' ? 'dropbox'
      : evNow ? 'early' : 'polling'] = 0;
   out.sort((a, b) => rank[a.kind] - rank[b.kind]);
+  return out;
+}
+
+function pastDestinations(r) {
+  const out = [];
+  if (r.place?.lat) out.push({ kind: 'polling', label: t('Election day'), place: r.place });
+  const ranked = Elections.windowState(evWindow(r)) !== 'none' ? evRanked(r) : null;
+  if (ranked) {
+    out.push({ kind: 'early', label: t('Early voting'),
+               place: ranked[chosen.early] || ranked[0], all: ranked, state: 'past' });
+  }
   return out;
 }
 

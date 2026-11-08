@@ -165,12 +165,12 @@ function pastPollingPlace(found) {
     return [advisory('missing',
       `We do not have a polling place listed for precinct ${found.precinct}.`)];
   }
-  // No directions link: nobody votes there until the next directory says so.
-  // Once the next election is entered, the polling files may already be its directory
-  // (BUILD.md), so the place is only "on file" and no election is named, as in app.js.
+  // With directions, as app.js routes to it, under the banner saying it is the last
+  // election's. Once the next election is entered, the polling files may already be its
+  // directory (BUILD.md), so the place is only "on file" and no election is named.
   const past = !upcomingElection;
   const parts = [heading('lead-2', past ? 'Polling place in the last election' : 'Polling place on file'),
-                 locationRow(place, null, true)];
+                 locationRow(place, null, !lastElection)];
   if (past && lastElection) {
     parts.push(el('div', 'ev-note',
       `In the ${lastElection.name} on ${Elections.withWeekday(lastElection.date)}, ` +
@@ -214,9 +214,9 @@ function render(found, text) {
       el('span', 'wp-label', 'Precinct:'), el('span', 'wp-value', String(precinct))),
     // Its own line: in the row above it would break across lines on a phone.
     clerkPages[found.mcd]?.url ? el('div', 'clerk-line', 'Your clerk: ', clerkLink(found)) : null,
-    // Same order as app.js: polling place first on election day, last on every other day,
-    // and registering after them all.
-    ...(isElectionDay()
+    // Same order as app.js: polling place first on election day and off-season, last on
+    // every other day, and registering after them all.
+    ...(isElectionDay() || !election
       ? [...pollingPlace(found), ...dropBoxes(found), ...earlyVoting(found, uncertain)]
       : [...dropBoxes(found), ...earlyVoting(found, uncertain), ...pollingPlace(found)]),
     ...registering(found),
@@ -441,6 +441,11 @@ function showOffSeason() {
   if (!banner) return;
   banner.textContent = '';
   const possible = Elections.nextPossible();
+  if (lastElection) {
+    banner.append(el('strong', 'archive-line',
+      `Showing information from the last election, the ${lastElection.name} on ` +
+      `${Elections.withWeekday(lastElection.date)}.`), ' ');
+  }
   if (upcomingElection) {
     banner.append('Next election: ', el('strong', null,
       `${upcomingElection.name}, ${Elections.withWeekday(upcomingElection.date)}`));
@@ -485,7 +490,8 @@ function showNextElection(next, hours) {
 // gr-clerk.json names the election it describes. A file about a finished election must not
 // supply dates for the next one, so it is used only when it matches.
 const clerkWindow = () => {
-  if (!clerk?.early_voting || !election || clerk.election !== election.date) return null;
+  const e = election || lastElection;
+  if (!clerk?.early_voting || !e || clerk.election !== e.date) return null;
   return {
     early_voting_from: clerk.early_voting.from,
     early_voting_to: clerk.early_voting.to,
@@ -497,7 +503,8 @@ const clerkWindow = () => {
 
 // Grand Rapids only: other clerks set their own dates and sites, and this page has no source.
 function earlyVoting(found, uncertain) {
-  if (!election || found.mcd !== GR_MCD) return [];
+  if (found.mcd !== GR_MCD) return [];
+  if (!election) return pastEarlyVoting();
   const source = clerkWindow() || election;
   const { early_voting_from: from, early_voting_to: to,
           early_voting_sites: sites } = source;
@@ -546,6 +553,30 @@ function earlyVoting(found, uncertain) {
 
   return [el('div', `ev-block ev-early${open && !isElectionDay() ? ' is-now' : ''}` +
                     `${open ? '' : ' is-off'}`, ...parts)];
+}
+
+// Off-season: the last election's sites, as they were, with directions, as app.js shows
+// them under the banner saying whose they were.
+function pastEarlyVoting() {
+  if (!lastElection) return [];
+  const source = clerkWindow() || lastElection;
+  const { early_voting_from: from, early_voting_to: to, early_voting_sites: sites } = source;
+  if (!(sites || []).length || Elections.windowState(source) === 'none') return [];
+  const parts = [
+    heading('lead-2 sec-head', 'Early voting in the last election'),
+    el('div', 'sec-sub', el('strong', 'when', Elections.withWeekday(from)),
+       ' through ', el('strong', 'when', Elections.withWeekday(to))),
+    el('div', 'ev-note',
+      'These were the early voting sites in that election. Sites and hours can change before the next one.'),
+  ];
+  for (const site of sites) parts.push(locationRow(site, 'ev-site'));
+  const rows = Elections.hoursRows(source, null);
+  if (rows.length) {
+    const table = el('div', 'ev-hours');
+    for (const row of rows) table.append(el('span', 'ev-day', row.label), el('span', 'ev-time', row.hours));
+    parts.push(table);
+  }
+  return [el('div', 'ev-block ev-early ev-past', ...parts)];
 }
 
 // The voter's own clerk's page, as app.js links it: read by hand from each clerk's site.
