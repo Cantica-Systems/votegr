@@ -413,5 +413,10 @@ export default {
   'No election is scheduled. Polling places can change before the next one.':
     'No hay elecciones programadas. Los lugares de votación pueden cambiar antes de las próximas.',
   'Your address': 'Su dirección',
-  'Polling place on file': 'Lugar de votación registrado'
+  'Polling place on file': 'Lugar de votación registrado',
+  'Showing information from the last election, the {election} on {date}.':
+    'Se muestra la información de las últimas elecciones, las {election} del {date}.',
+  'Early voting in the last election': 'Votación anticipada en las últimas elecciones',
+  'These were the early voting sites in that election. Sites and hours can change before the next one.':
+    'Estos fueron los lugares de votación anticipada en esas elecciones. Los lugares y horarios pueden cambiar antes de las próximas.'
 };

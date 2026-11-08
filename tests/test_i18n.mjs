@@ -34,7 +34,7 @@ for (const f of CODE) {
     used.add(Function(`return ${m[1]}`)());
   }
   const loose = [...src.matchAll(/(?<![\w.$])t\((?!\s*')([^)]*)/g)]
-    .map((m) => m[1]).filter((a) => !['activeEl.name', 'lastEl.name'].includes(a.trim()));
+    .map((m) => m[1]).filter((a) => !['activeEl.name', 'lastEl.name', 'archEl.name'].includes(a.trim()));
   ok(`${f}: every t() key is a literal this test can read`, !loose.length, loose.join(' | '));
 }
 const html = readFileSync(join(ROOT, 'index.html'), 'utf8');

@@ -346,9 +346,10 @@ for (const width of [1280, 390, 320]) {
 }
 
 // --- off-season ----------------------------------------------------------
-// Between elections the page names no drop box and gives no directions to a
-// polling place nobody votes at yet. It names the last election's place in the
-// past tense, and the next possible election date when none is entered.
+// Between elections the page names no drop box. It shows the last election, under
+// a banner saying so: its polling place in the past tense, with directions, and in
+// Grand Rapids its early voting sites; and the next possible election date when
+// none is entered.
 {
   const real = pinnedCalendar(ROOT, 30)['/data/elections.json'];
   served = { '/data/elections.json': { ...real, elections: [
@@ -361,9 +362,35 @@ for (const width of [1280, 390, 320]) {
   ok('off-season: the polling place is the last election\'s',
      /Polling place in the last election/.test(text) && /In the General Election on Tuesday, November 3, 2020/.test(text));
   ok('off-season: no drop boxes', !(await page.$('.ev-boxes')));
-  ok('off-season: no early voting', !(await page.$('.ev-early')));
-  ok('off-season: no directions link', !(await page.$('#result a.dir-btn')));
+  ok('off-season: the banner says the page shows the last election',
+     /Showing information from the last election, the General Election on Tuesday, November 3, 2020\./.test(text));
+  ok('off-season: no early voting outside Grand Rapids', !(await page.$('.ev-early')));
+  ok('off-season: directions to the last election\'s polling place',
+     (await page.$$('#result a.dir-btn')).length === 1);
   ok('off-season: nothing threw', errors.length === 0, errors.join(' | '));
+  await ctx.close();
+  served = null;
+}
+
+// An election a few days past whose clerk's file is still its own: Grand Rapids keeps
+// its early voting sites on show, after the polling place, each with directions.
+{
+  served = pinnedCalendar(ROOT, -5);
+  const { ctx, page, errors } = await open(390);
+  await pick(page, '300 Monroe Ave NW');
+  const r = await page.evaluate(() => ({
+    text: document.getElementById('result').innerText.replace(/\s+/g, ' '),
+    sites: document.querySelectorAll('#result .ev-early .ev-site').length,
+    siteLinks: document.querySelectorAll('#result .ev-early .ev-site a.dir-btn').length,
+    boxes: !!document.querySelector('#result .ev-boxes'),
+  }));
+  ok('last election: Grand Rapids lists its early voting sites',
+     /Early voting in the last election/.test(r.text) && r.sites > 0, r.text);
+  ok('last election: each with directions', r.siteLinks === r.sites);
+  ok('last election: after the polling place',
+     r.text.indexOf('Polling place in the last election') < r.text.indexOf('Early voting in the last election'));
+  ok('last election: still no drop boxes', !r.boxes);
+  ok('last election: nothing threw', errors.length === 0, errors.join(' | '));
   await ctx.close();
   served = null;
 }
