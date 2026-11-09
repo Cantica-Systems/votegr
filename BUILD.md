@@ -280,27 +280,13 @@ If an endpoint returns 429, back off rather than retrying immediately.
 | Grand Rapids early voting and drop boxes | the City Clerk's current-election page |
 | Drop boxes where the county lists none | the Bureau of Elections' FOIA release, committed under `records/` |
 
-### Kent County's own servers
+### Parcels
 
-Nothing in this repository contacts Kent County any more, for data or for
-the weekly link check. What changed, and when:
-
-| Kent County host | What it does now | Since |
-|---|---|---|
-| `www.kentcountymi.gov` (polling place, drop box and early voting pages) | answers this project's scripts with 403 Forbidden, cause unknown | 2026-09-24 |
-| `gis.kentcountymi.gov`, `ParcelsWithCondos` | answers with ArcGIS error 499, "Token Required" | last good read 2026-11-01, first failure 2026-11-08 |
-| `gis.kentcountymi.gov`, its address locators | the same token requirement | the week of 2026-11-06 |
-| `gis.kentcountymi.gov`, `CitiesTownshipsVillages` | the service is gone (404) | 2026-11-08 |
-
-The parcel layer is replaced by the snapshot under
-`records/kent-parcels-2026-11-01/`, whose README lists the alternatives that
-were checked and why none of them was used. The committed files under
-`site/data/` that came from the county's pages (`polling/`, `early-voting.json`)
-are the reference as of their own `generated` dates. `refresh_polling.py` and
-`refresh_early_voting.py` still read the county's pages and fail with 403;
-they are kept for the day the site answers again, and the early voting
-workflow is off its schedule. `check_links.mjs` skips every `kentcountymi.gov`
-URL, so the provenance links stay as a record without being requested.
+Until November 2026 `refresh_addresses.py` and `geocode_places.py` read Kent
+County's `ParcelsWithCondos` layer directly. The layer now requires a token,
+so both read the snapshot under `records/kent-parcels-2026-11-01/` instead,
+taken from the last read on 2026-11-01. `check_links.mjs` skips
+`gis.kentcountymi.gov`.
 
 The precinct layer is statewide, so `refresh_precincts.py` filters it
 server-side with `CountyFIPS='081'` and receives Kent County's 202 precincts
