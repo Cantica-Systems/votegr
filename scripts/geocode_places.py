@@ -9,12 +9,12 @@ centerline gives one, but it puts the marker on the road outside the building
 rather than on the building.
 
 The county's own parcel layer already has the answer, and this project already
-reads it. refresh_addresses.py pulls the centroid of every addressed parcel in
-Kent County -- about 232,000 of them -- uses it to decide which precinct the
-address is in, and then throws the coordinate away. That discard is right for
-the published address files, which are served to browsers and must not become
-an address-to-owner index. It is wrong for 263 buildings that are public
-polling places. So this reads the same layer and keeps the centroid for those.
+reads it. refresh_addresses.py reads a point for every addressed parcel in
+Kent County -- about 231,000 of them, from the snapshot under records/ -- uses
+it to decide which precinct the address is in, and then throws the coordinate
+away. That discard is right for the published address files, which are served
+to browsers. It is wrong for 263 buildings that are public polling places. So
+this reads the same snapshot and keeps the point for those.
 
 A parcel centroid beats an interpolated centerline point: it is the building's
 own parcel rather than a guess at where along the block it sits.
@@ -25,17 +25,16 @@ without one and reported, because a marker in the wrong place is worse than
 no marker: somebody drives to it. The misses are listed at the end so they
 can be looked at rather than averaged away.
 
-Usage: python3 geocode_places.py [--parcels CACHE.json] [--dry-run]
+Usage: python3 geocode_places.py [--parcels FILE.csv[.gz]] [--dry-run]
 """
 import argparse
 import json
 import pathlib
 import re
 import subprocess
-import time
 from collections import defaultdict
 
-from useragent import USER_AGENT
+import kent_parcels
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 POLLING_DIR = ROOT / "site" / "data" / "polling"
@@ -181,70 +180,9 @@ def split_address(text):
     return None
 
 
-PARCELS = ("https://gis.kentcountymi.gov/agisprod/rest/services/"
-           "ParcelsWithCondos/FeatureServer/0/query")
-UA = {"User-Agent": USER_AGENT}
-PAGE = 1000            # the layer's own maxRecordCount; asking for more is clamped
-DELAY_SECONDS = 1.0    # be a polite guest on someone else's server
-
-
-def fetch_parcels():
-    """Every addressed parcel in the county, as (address, lng, lat).
-
-    The same query refresh_addresses.py makes, repeated here rather than
-    imported: that module needs shapely to do its precinct work, and this one
-    needs nothing but the centroid. A geocoder that cannot run without a
-    geometry library it never calls is a geocoder people stop running.
-
-    requests is imported here, not at the top, for the same reason:
-    merge_foia_dropboxes.py borrows this module's helpers and never fetches,
-    and a run from an existing --parcels cache never fetches either.
-    """
-    import requests
-
-    rows, offset = [], 0
-    while True:
-        params = {
-            "where": "PROPERTYADDRESS IS NOT NULL",
-            "outFields": "PROPERTYADDRESS",
-            "returnGeometry": "false",
-            "returnCentroid": "true",
-            "outSR": "4326",
-            "orderByFields": "OBJECTID ASC",
-            "resultRecordCount": str(PAGE),
-            "resultOffset": str(offset),
-            "f": "json",
-        }
-        response = requests.get(PARCELS, params=params, headers=UA, timeout=90)
-        response.raise_for_status()
-        data = response.json()
-        if "error" in data:
-            raise SystemExit(f"upstream error at offset {offset}: {data['error']}")
-        features = data.get("features") or []
-        for feature in features:
-            address = (feature.get("attributes") or {}).get("PROPERTYADDRESS")
-            centroid = feature.get("centroid") or {}
-            if address and centroid.get("x") is not None:
-                rows.append((address.strip(), centroid["x"], centroid["y"]))
-        if offset % 25000 == 0:
-            print(f"  {len(rows):,} parcels", flush=True)
-        if not data.get("exceededTransferLimit") or not features:
-            print(f"  {len(rows):,} parcels", flush=True)
-            return rows
-        offset += len(features)
-        time.sleep(DELAY_SECONDS)
-
-
-def load_parcels(cache):
-    """(address, lng, lat) rows, from the cache or straight from the county."""
-    if cache and cache.exists():
-        rows = json.loads(cache.read_text())
-        print(f"read {len(rows):,} parcels from {cache}")
-        return rows
-    rows = fetch_parcels()
-    if cache:
-        cache.write_text(json.dumps(rows, separators=(",", ":")))
-    return rows
+def load_parcels(path=None):
+    """(address, lng, lat) rows, from the committed snapshot or another file."""
+    return kent_parcels.load(path or kent_parcels.REFERENCE)
 
 
 def build_index(parcels):
@@ -438,7 +376,8 @@ class Run:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--parcels", type=pathlib.Path, default=None,
-                        help="cache file of (address, lng, lat) rows")
+                        help="parcel file (address,lng,lat CSV, optionally "
+                             "gzipped); default: the snapshot under records/")
     parser.add_argument("--dry-run", action="store_true",
                         help="report the hit rate and write nothing")
     args = parser.parse_args()

@@ -19,7 +19,9 @@ pip install -r requirements.txt
 
 `scripts/refresh_addresses.py` and `scripts/refresh_precincts.py` need both;
 `scripts/build_precincts.py` and `scripts/build_graph_chunks.py` need `shapely`
-alone; `scripts/geocode_places.py` needs `requests` for its parcel pull.
+alone. Both `refresh_addresses.py` and `scripts/geocode_places.py` read Kent
+County's parcels from the snapshot under `records/kent-parcels-2026-11-01/`
+(through `scripts/kent_parcels.py`) and make no request for them.
 `geocode_places.py` and `scripts/merge_foia_dropboxes.py` also need `node`, for
 the street centerline pass, and `scripts/refresh_gr_clerk.py` uses it to give
 the clerk's addresses their street types (without it they stay as published). Everything else runs on a bare interpreter. Every
@@ -33,8 +35,8 @@ every script that scrapes a page reads it as text through
 |---|---|---|
 | `graph/<mcd>.json` | `build_graph.py`, `build_restrictions.py`, then `build_graph_chunks.py` | REGIS/Kent centerlines, OpenStreetMap restrictions |
 | `graph/index.json` | `build_graph_chunks.py` | sizes of every chunk, so the browser allocates once and streams them |
-| `addresses/<mcd>.json` | `refresh_addresses.py` | Kent County parcels, matched to precincts, one file per jurisdiction |
-| `polling/<mcd>.json` | `refresh_polling.py`, then `merge_foia_dropboxes.py`, then `geocode_places.py` | Kent County's polling place and drop box pages, the state's drop box report for the 24 jurisdictions the county lists none for, then parcel centroids and street centerlines for coordinates |
+| `addresses/<mcd>.json` | `refresh_addresses.py` | Kent County parcels (the 2026-11-01 snapshot under `records/`), matched to precincts, one file per jurisdiction. The committed files were built from the live layer on 2026-09-08 and are left as built |
+| `polling/<mcd>.json` | `refresh_polling.py`, then `merge_foia_dropboxes.py`, then `geocode_places.py` | Kent County's polling place and drop box pages, the state's drop box report for the 24 jurisdictions the county lists none for, then parcel points from the `records/` snapshot and street centerlines for coordinates |
 | `early-voting.json` | `refresh_early_voting.py` (by hand since 2026-11-09, see below), then `geocode_places.py` | Kent County's early voting page, with the city's as a cross-check |
 | `gr-clerk.json` | `refresh_gr_clerk.py` | the Grand Rapids City Clerk's election pages |
 | `sources.json` | `refresh_gr_clerk.py` and `merge_foia_dropboxes.py`, through `sources.py` | the registry that records with a `src` key point at |
@@ -152,9 +154,9 @@ street centerlines second, and the centerline pass runs `site/router.js`
 itself, the same file the page loads, so a coordinate computed at build time
 cannot drift from one the browser would compute. Grand Rapids is skipped:
 `polling.json` carries the city's own coordinates, and the page places the
-clerk's sites and boxes itself. Pass `--parcels FILE` to cache the parcel pull
-(232,000 rows, a few minutes) between runs, and `--dry-run` to see the hit
-rate without writing. Anything it cannot place is listed by name at the end
+clerk's sites and boxes itself. It reads parcels from the snapshot under
+`records/`; pass `--parcels FILE` (an `address,lng,lat` CSV, gzipped or not)
+to try another, and `--dry-run` to see the hit rate without writing. Anything it cannot place is listed by name at the end
 rather than guessed.
 
 **`merge_foia_dropboxes.py` fills a gap the county leaves.** The county's
@@ -269,7 +271,7 @@ If an endpoint returns 429, back off rather than retrying immediately.
 |---|---|
 | Street centerlines, one-ways, speeds | `services2.arcgis.com/L81TiOwAPO1ZvU9b/…/Transport_Street_Centerlines/FeatureServer/6`, the REGIS/Kent dataset, hosted by the City |
 | Voting precincts | `services3.arcgis.com/dxRQUfTDNtfqZ301/…/VotingPrecinct/FeatureServer/0` |
-| Parcel addresses, and coordinates for places to vote | `gis.kentcountymi.gov/agisprod/…/ParcelsWithCondos/FeatureServer/0` |
+| Parcel addresses, and coordinates for places to vote | `records/kent-parcels-2026-11-01/`, a snapshot of Kent County's `ParcelsWithCondos` layer as of 2026-11-01 (see below) |
 | City limits, neighboring streets | `gisagocss.state.mi.us/…/michigan_geographic_framework/MapServer` |
 | Cameras, turn restrictions, water, parks, rail | Overpass API, OpenStreetMap |
 | Polling places, drop boxes, clerks | `www.kentcountymi.gov`, one page per jurisdiction; Algoma Township's own elections page for one address |
@@ -277,6 +279,28 @@ If an endpoint returns 429, back off rather than retrying immediately.
 | Early voting | `www.kentcountymi.gov/250/Drop-Box-Polling-Locations`, and the City Clerk's early voting page as a cross-check |
 | Grand Rapids early voting and drop boxes | the City Clerk's current-election page |
 | Drop boxes where the county lists none | the Bureau of Elections' FOIA release, committed under `records/` |
+
+### Kent County's own servers
+
+Nothing in this repository contacts Kent County any more, for data or for
+the weekly link check. What changed, and when:
+
+| Kent County host | What it does now | Since |
+|---|---|---|
+| `www.kentcountymi.gov` (polling place, drop box and early voting pages) | answers this project's scripts with 403 Forbidden, cause unknown | 2026-09-24 |
+| `gis.kentcountymi.gov`, `ParcelsWithCondos` | answers with ArcGIS error 499, "Token Required" | last good read 2026-11-01, first failure 2026-11-08 |
+| `gis.kentcountymi.gov`, its address locators | the same token requirement | the week of 2026-11-06 |
+| `gis.kentcountymi.gov`, `CitiesTownshipsVillages` | the service is gone (404) | 2026-11-08 |
+
+The parcel layer is replaced by the snapshot under
+`records/kent-parcels-2026-11-01/`, whose README lists the alternatives that
+were checked and why none of them was used. The committed files under
+`site/data/` that came from the county's pages (`polling/`, `early-voting.json`)
+are the reference as of their own `generated` dates. `refresh_polling.py` and
+`refresh_early_voting.py` still read the county's pages and fail with 403;
+they are kept for the day the site answers again, and the early voting
+workflow is off its schedule. `check_links.mjs` skips every `kentcountymi.gov`
+URL, so the provenance links stay as a record without being requested.
 
 The precinct layer is statewide, so `refresh_precincts.py` filters it
 server-side with `CountyFIPS='081'` and receives Kent County's 202 precincts
