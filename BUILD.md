@@ -35,7 +35,7 @@ every script that scrapes a page reads it as text through
 | `graph/index.json` | `build_graph_chunks.py` | sizes of every chunk, so the browser allocates once and streams them |
 | `addresses/<mcd>.json` | `refresh_addresses.py` | Kent County parcels, matched to precincts, one file per jurisdiction |
 | `polling/<mcd>.json` | `refresh_polling.py`, then `merge_foia_dropboxes.py`, then `geocode_places.py` | Kent County's polling place and drop box pages, the state's drop box report for the 24 jurisdictions the county lists none for, then parcel centroids and street centerlines for coordinates |
-| `early-voting.json` | `refresh_early_voting.py` (weekly, see below), then `geocode_places.py` | Kent County's early voting page, with the city's as a cross-check |
+| `early-voting.json` | `refresh_early_voting.py` (by hand since 2026-11-09, see below), then `geocode_places.py` | Kent County's early voting page, with the city's as a cross-check |
 | `gr-clerk.json` | `refresh_gr_clerk.py` | the Grand Rapids City Clerk's election pages |
 | `sources.json` | `refresh_gr_clerk.py` and `merge_foia_dropboxes.py`, through `sources.py` | the registry that records with a `src` key point at |
 | `cameras.json` | `refresh_cameras.py` (daily, see below) | OpenStreetMap |
