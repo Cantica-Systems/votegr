@@ -91,6 +91,11 @@ const SKIP = [
   /^https?:\/\/(127\.0\.0\.1|localhost)/,
   // An XML namespace name in lookup.js, not a page anyone links to.
   /www\.w3\.org\/2000\/svg/,
+  // Kent County's GIS server. Between 2026-11-01 and 2026-11-08 it began
+  // asking for a token on the parcel layer, so the provenance URL in the
+  // address files is a record of where they came from, not a link to check.
+  // The snapshot the build now reads is under records/kent-parcels-2026-11-01/.
+  /^https?:\/\/gis\.kentcountymi\.gov(\/|$)/,
 ];
 
 // An honest user agent, with the project named so a server log can tell who

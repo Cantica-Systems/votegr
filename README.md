@@ -126,8 +126,9 @@ This tool is an estimate, and these are the ways it is wrong.
 - Your precinct is legally set by the state voter file, not by a line on a
   map. Near a precinct boundary, or where it had to infer a number from the
   neighbors, the page says so.
-- Coverage is Kent County parcel addresses, so a brand new build may be
-  missing. 109 addresses appear in two jurisdictions, and the page asks which
+- Coverage is Kent County parcel addresses as of 2026-09-08, so a brand new
+  build may be missing. A 2026-11-01 copy of the county's parcel
+  addresses is under `records/kent-parcels-2026-11-01/`. 109 addresses appear in two jurisdictions, and the page asks which
   you mean.
 - Polling places change every election. Outside Grand Rapids a marker may sit
   on the road outside the building rather than on it.
