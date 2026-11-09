@@ -35,7 +35,7 @@ every script that scrapes a page reads it as text through
 | `graph/index.json` | `build_graph_chunks.py` | sizes of every chunk, so the browser allocates once and streams them |
 | `addresses/<mcd>.json` | `refresh_addresses.py` | Kent County parcels, matched to precincts, one file per jurisdiction |
 | `polling/<mcd>.json` | `refresh_polling.py`, then `merge_foia_dropboxes.py`, then `geocode_places.py` | Kent County's polling place and drop box pages, the state's drop box report for the 24 jurisdictions the county lists none for, then parcel centroids and street centerlines for coordinates |
-| `early-voting.json` | `refresh_early_voting.py` (weekly, see below), then `geocode_places.py` | Kent County's early voting page, with the city's as a cross-check |
+| `early-voting.json` | `refresh_early_voting.py` (by hand since 2026-11-09, see below), then `geocode_places.py` | Kent County's early voting page, with the city's as a cross-check |
 | `gr-clerk.json` | `refresh_gr_clerk.py` | the Grand Rapids City Clerk's election pages |
 | `sources.json` | `refresh_gr_clerk.py` and `merge_foia_dropboxes.py`, through `sources.py` | the registry that records with a `src` key point at |
 | `cameras.json` | `refresh_cameras.py` (daily, see below) | OpenStreetMap |
@@ -66,12 +66,13 @@ latest set, so the change in count is printed in the log and in the commit
 subject instead.
 
 `.github/workflows/refresh-early-voting.yml` runs
-`scripts/refresh_early_voting.py` every Tuesday at 07:43 UTC and commits
-`early-voting.json` if it changed. It does not geocode: the script carries a
-site's coordinates forward while its address text is unchanged, and a new site
-waits for `geocode_places.py`, run by hand. Since 2026-09-24 the county's site
-has answered this project with 403, so the run is expected to fail until that
-changes. Neither page loads the file, so nothing a reader sees depends on it.
+`scripts/refresh_early_voting.py` and commits `early-voting.json` if it
+changed. It ran every Tuesday at 07:43 UTC until 2026-11-09, when its schedule
+was removed and the workflow disabled: from 2026-09-24 the county's site
+answered it with 403 Forbidden on every run, so it wrote nothing. It can still be run by hand. It does not geocode: the script carries
+a site's coordinates forward while its address text is unchanged, and a new
+site waits for `geocode_places.py`, run by hand. Neither page loads the file,
+so nothing a reader sees depends on it.
 
 ## Where each file came from
 

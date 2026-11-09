@@ -31,12 +31,11 @@
 #     refresh into a commit nobody can review. Run it by hand when sites move.
 name: Refresh early voting
 
+# OFF SCHEDULE since 2026-11-09. From 2026-09-24 every Tuesday run got 403
+# Forbidden from the county's page and wrote nothing, so the schedule is
+# removed rather than left failing; the workflow is also disabled in the
+# repository settings. The script itself can still be run by hand.
 on:
-  schedule:
-    # 07:43 UTC on Tuesdays. Off the hour, and off the day and hour of the
-    # other two scheduled jobs (cameras 06:17 daily, link check 06:30 Monday),
-    # so a slow run never queues behind one of them.
-    - cron: '43 7 * * 2'
   workflow_dispatch:
 
 # contents: write, to push the refreshed file back.
