@@ -3,7 +3,9 @@
 """Regenerate the per-jurisdiction address chunks under site/data/addresses/.
 
 The page answers a lookup without geocoding anything: every parcel address in
-Kent County is matched to its precinct here, once, offline. The browser then
+Kent County is matched to its precinct here, once, offline, from the parcel
+snapshot committed under records/ (see kent_parcels.py for why it is a
+snapshot). The browser then
 does a dictionary lookup instead of calling a geocoding service. That is why
 the page keeps working when a county or city GIS server goes down, and why the
 address never leaves the browser.
@@ -34,22 +36,13 @@ import json
 import math
 import pathlib
 import sys
-import time
 from collections import defaultdict
 
-import requests
 from shapely.geometry import shape, Point
 from shapely.ops import transform
 from shapely.strtree import STRtree
 
-from useragent import USER_AGENT
-
-PARCELS = ("https://gis.kentcountymi.gov/agisprod/rest/services/"
-           "ParcelsWithCondos/FeatureServer/0/query")
-WHERE = "PROPERTYADDRESS IS NOT NULL"
-UA = {"User-Agent": USER_AGENT}
-PAGE = 1000                    # the layer's own maxRecordCount; asking more is clamped
-DELAY_SECONDS = 1.5            # be a polite guest on someone else's server
+import kent_parcels
 
 # Paths are anchored to the repository root, one level up from this
 # file, since these scripts live in scripts/ and write into site/data.
@@ -61,45 +54,6 @@ EXPECTED_PRECINCTS = 202
 EXPECTED_JURISDICTIONS = 30
 MIN_ADDRESSES = 100_000        # ~150k expected; a big drop means upstream changed
 NEAR_CAP_M = 60                # beyond this we only ever say "not near a line"
-
-
-def fetch_parcels():
-    """Every parcel in the county with an address, as (address_text, lng, lat).
-
-    returnCentroid keeps polygons off the wire: we need a point, not a shape,
-    and asking for geometry would move hundreds of megabytes for no reason.
-    """
-    rows, offset = [], 0
-    while True:
-        params = {
-            "where": WHERE,
-            "outFields": "PROPERTYADDRESS",
-            "returnGeometry": "false",
-            "returnCentroid": "true",
-            "outSR": "4326",
-            "orderByFields": "OBJECTID ASC",
-            "resultRecordCount": str(PAGE),
-            "resultOffset": str(offset),
-            "f": "json",
-        }
-        response = requests.get(PARCELS, params=params, headers=UA, timeout=90)
-        response.raise_for_status()
-        data = response.json()
-        if "error" in data:
-            raise SystemExit(f"upstream error at offset {offset}: {data['error']}")
-        features = data.get("features") or []
-        for feature in features:
-            address = (feature.get("attributes") or {}).get("PROPERTYADDRESS")
-            centroid = feature.get("centroid") or {}
-            if address and centroid.get("x") is not None:
-                rows.append((address.strip(), centroid["x"], centroid["y"]))
-        if offset % 20000 == 0:
-            print(f"  {len(rows):,} parcels", flush=True)
-        if not data.get("exceededTransferLimit") or not features:
-            print(f"  {len(rows):,} parcels", flush=True)
-            return rows
-        offset += len(features)
-        time.sleep(DELAY_SECONDS)
 
 
 def split_address(text):
@@ -184,9 +138,7 @@ def main():
     # Each precinct's boundary in its own local meter frame, built once.
     frames = [meter_frame(p) for p in polygons]
 
-    print("fetching parcels from Kent County...")
-    parcels = fetch_parcels()
-    print(f"fetched {len(parcels):,} parcels")
+    parcels = kent_parcels.load()
 
     # street rows per jurisdiction, keyed by MCD FIPS
     chunks = defaultdict(lambda: defaultdict(list))
@@ -237,8 +189,8 @@ def main():
             "provenance": {
                 "description": f"{name} parcel addresses, each matched to its "
                                "voting precinct. Generated, not edited by hand.",
-                "source": "Kent County ParcelsWithCondos FeatureServer",
-                "source_url": PARCELS.rsplit("/query", 1)[0],
+                "source": kent_parcels.SOURCE,
+                "source_url": kent_parcels.SOURCE_URL,
                 "matched_against": "site/data/precincts.geojson",
                 "generated": datetime.date.today().isoformat(),
                 "address_count": count,

@@ -223,8 +223,10 @@ ADDRESS_OVERRIDES = {
         "source": "Kent County parcel layer and road centerlines, which both "
                   "spell it GEZON, as does the Bureau of Elections' own "
                   "November 2026 export",
-        "source_url": "https://gis.kentcountymi.gov/agisprod/rest/services/"
-                      "ParcelsWithCondos/FeatureServer/0",
+        # The county's parcel service has asked for a token since
+        # 2026-11; the snapshot read from it is committed under records/.
+        "source_url": "https://github.com/Cantica-Systems/votegr/tree/main/"
+                      "records/kent-parcels-2026-11-01",
     },
 }
 
