@@ -2,13 +2,10 @@
 """Kent County parcel addresses and points, read from the committed reference.
 
 refresh_addresses.py and geocode_places.py both need every addressed parcel
-in Kent County as (address, lng, lat). Until 2026-11 they pulled it from the
-county's ParcelsWithCondos FeatureServer. Between 2026-11-01 and 2026-11-08
-that service began answering every request with ArcGIS error 499, "Token
-Required", and no other public source carries the county's addresses (see
-records/kent-parcels-2026-11-01/README.md for what was checked). So the
-scripts now read a snapshot committed under records/, and nothing here makes
-a network request.
+in Kent County as (address, lng, lat). Until November 2026 they read the
+county's ParcelsWithCondos layer directly; it now requires a token, so they
+read the snapshot committed under records/ instead. Nothing here makes a
+network request.
 
 The snapshot holds three columns and nothing else: the parcel's property
 address, and the longitude and latitude of a point inside it. No owner,
