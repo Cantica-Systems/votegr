@@ -31,13 +31,10 @@
 #     refresh into a commit nobody can review. Run it by hand when sites move.
 name: Refresh early voting
 
-# OFF SCHEDULE since 2026-11-09. From 2026-09-24 the county's website has
-# answered this job with 403 Forbidden, cause unknown (most likely bot
-# protection that blocks data-center addresses such as GitHub's), so every
-# Tuesday run failed and wrote nothing. The schedule is removed rather than
-# left failing; the workflow is also disabled in the repository settings.
-# It can still be run by hand. Before putting a schedule back, confirm by
-# hand that the page answers this script again.
+# OFF SCHEDULE since 2026-11-09. From 2026-09-24 every Tuesday run got 403
+# Forbidden from the county's page and wrote nothing, so the schedule is
+# removed rather than left failing; the workflow is also disabled in the
+# repository settings. The script itself can still be run by hand.
 on:
   workflow_dispatch:
 

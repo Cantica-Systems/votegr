@@ -69,8 +69,7 @@ subject instead.
 `scripts/refresh_early_voting.py` and commits `early-voting.json` if it
 changed. It ran every Tuesday at 07:43 UTC until 2026-11-09, when its schedule
 was removed and the workflow disabled: from 2026-09-24 the county's site
-answered it with 403 Forbidden on every run, cause unknown, so it wrote
-nothing. It can still be run by hand. It does not geocode: the script carries
+answered it with 403 Forbidden on every run, so it wrote nothing. It can still be run by hand. It does not geocode: the script carries
 a site's coordinates forward while its address text is unchanged, and a new
 site waits for `geocode_places.py`, run by hand. Neither page loads the file,
 so nothing a reader sees depends on it.
