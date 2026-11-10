@@ -1,168 +1,163 @@
 # Vote Grand Rapids
 
-Live at [votegr.org](https://votegr.org).
+Find where you vote in Kent County, Michigan, without telling anyone who you
+are. Live at [votegr.org](https://votegr.org).
 
-Type any address in Kent County, Michigan, or drop a pin, and get your
-precinct, your ward where there is one, where you vote, where to return an
-absentee ballot, and a driving route there that avoids the license plate
-readers this project knows about. It covers all 30 cities and townships, 202
-precincts and 200+ known plate readers.
+Type an address or drop a pin and the page shows you:
 
-The data loads once into your browser and every lookup and route is computed
-there. Nothing you type leaves your device. The unlisted
-[light version](https://votegr.org/simple/) gives the same answers from the
-same code with no map or directions, for an old phone, a slow connection or a
-screen reader.
+- your precinct, and your ward where there is one
+- where to vote, early or on election day
+- where to return an absentee ballot
+- a driving route there that avoids known license plate readers
 
-This project is independent and unofficial, offered with no guarantee of
-accuracy, and unaffiliated with the City of Grand Rapids, Kent County or the
-State of Michigan. The Michigan Voter Information Center is the official
-source of record; always verify there, or with your clerk.
+It covers all 30 cities and townships in the county, 202 precincts and more
+than 200 known plate readers.
 
-## Why
+Everything runs in your browser. The data loads once, every lookup and route
+is computed on your device, and nothing you type is sent anywhere. A
+[light version](https://votegr.org/simple/) gives the same answers with no map
+or directions, for an old phone, a slow connection or a screen reader.
 
-Finding out where you vote should not require identifying yourself. The
-state's Voter Information Center asks for your name, birth month and year and
-ZIP code, runs the lookup on its servers, and notes that "information such as
-a name or address may be disclosed in response to a FOIA request." Your voter
-record is already public, but asking could create a second record, that you
-looked yourself up from this address on this day, and whether that one is
-disclosable is a separate question. This site is a proof of
-concept that the lookup can happen entirely on your device, leaving no query
-log that could identify you.
+This is an independent, unofficial project with no guarantee of accuracy. It
+is not affiliated with the City of Grand Rapids, Kent County or the State of
+Michigan. The Michigan Voter Information Center is the official source; always
+check there or with your clerk.
 
-Getting there should not require identifying yourself either, including by
-your vehicle. Plate readers on signals and poles track every passing car and
-can alert an officer in real time when one is flagged, false positives
-included. The directions here go around the cameras this project knows about,
-and where every route passes one, the page says so and takes the route that
-passes the fewest.
+## Why it exists
 
-## Layout
+Looking up where you vote shouldn't mean identifying yourself. The state's
+lookup asks for your name, birth month and year and ZIP code, runs on the
+state's servers, and warns that "information such as a name or address may be
+disclosed in response to a FOIA request." Your voter record is already
+public, but the lookup itself can create a second record: that someone at
+your address looked themselves up on a given day. This site shows the lookup
+can happen entirely on your device, with no query log at all.
 
-There is no build step. Copy `site/` to any web host and it works. A copy
-served from another address should put its own address in place of
-`https://votegr.org/` in the head of `index.html`, in `robots.txt` and in
-`sitemap.xml`, or search engines will treat it as a duplicate of this one.
+Getting to the polls shouldn't identify you either. Plate readers on signals
+and poles log every passing car and can alert an officer in real time,
+false matches included. The directions here route around the cameras this
+project knows about. When every route passes one, the page says so and picks
+the route that passes the fewest.
 
-- `site/` holds the page (`index.html`, `app.js`, `style.css`), the shared
-  lookup in `voting.js`, the canvas map in `map.js`, routing and geocoding in
-  `router.js`, and the light version in `simple/`.
-- `site/data/` holds every data file, committed. A file named `<mcd>.json`
-  covers one jurisdiction, named by the state's five-digit code (`34000` is
-  Grand Rapids), which is also the middle of every 13-digit precinct code.
-- `scripts/` regenerates the data. [BUILD.md](BUILD.md) has what makes what,
-  the rebuild order and the per-election checklist.
-- `tests/` holds the suites below.
-- `records/` holds the state's FOIA release, which supplies the drop boxes the
-  county's pages do not list.
+## Running it
 
-## Languages
+There is no build step. Copy `site/` to any web host and it works.
 
-The page is in English and Spanish. It opens in the reader's browser language, a
-`?lang=es` link opens it in Spanish, and a button in the footer switches and
-remembers the choice. The translations are written ahead of time in
-`site/i18n/<lang>.js` and ship with the page, so nothing is sent to a translation
-service. The Spanish is a draft that has not yet been reviewed by a native speaker,
-and the page says so.
+If you host a copy at another address, replace `https://votegr.org/` with your
+own in the head of `index.html`, in `robots.txt` and in `sitemap.xml`, so
+search engines don't treat it as a duplicate.
 
-In code, the English text is its own key: `t('Open now')`. Markup in `index.html`
-carries `data-i18n="#key"`. Street, place and clerk names are never translated.
-To add a language, copy `site/i18n/es.js`, translate the values, and add it to
-`LANGS` in `site/i18n.js`; `tests/test_i18n.mjs` fails until every key has a
-translation and every `{slot}` matches.
+## What's in the repo
 
-## Routing
+| Folder | Contents |
+|---|---|
+| `site/` | The page (`index.html`, `app.js`, `style.css`), the shared lookup (`voting.js`), the map (`map.js`), routing and geocoding (`router.js`), and the light version (`simple/`) |
+| `site/data/` | Every data file, committed. `<mcd>.json` covers one jurisdiction, named by the state's five-digit code (`34000` is Grand Rapids) |
+| `scripts/` | Rebuilds the data. [BUILD.md](BUILD.md) explains what makes what, the rebuild order and the checklist for each election |
+| `tests/` | The test suites below |
+| `records/` | The state's FOIA release, the source for drop boxes the county doesn't list |
 
-Streets, one-ways and speed limits come from the Kent County (REGIS) street
-centerlines, which carry names and address ranges, so the road network doubles
-as the geocoder. Turn restrictions come from OpenStreetMap alone. Freeways are
-left out, since a trip to the polls is a neighborhood trip and surface streets
-are where the camera data applies.
+## How routing works
 
-The whole county stays in memory. The page streams thirty per-jurisdiction
-chunks, overlapping 150 m at each border, into flat typed arrays of about
-13 MiB (about 70 as ordinary objects), so a route across a town line needs no
-further fetch.
+The road network comes from Kent County's street centerlines, which include
+street names, one-ways, speed limits and address ranges, so the same data
+doubles as the address lookup. Turn restrictions come from OpenStreetMap.
+Freeways are left out on purpose: a trip to the polls is a neighborhood trip,
+and surface streets are where the camera data applies.
+
+The whole county fits in memory, about 13 MiB. The page loads it as thirty
+pieces, one per city or township, that overlap a little at each border, so a
+route across a town line needs nothing more from the network.
 
 Add `?debug` to the URL for a panel that routes between any two addresses or
-`lat,lng` pairs and dumps everything the engine computed as JSON. Its
-`?debug&from=…&to=…` URL reproduces a case in one click.
+`lat,lng` points and shows everything the router computed. Its
+`?debug&from=…&to=…` link reproduces a case in one click.
 
-## Checking the data
+## Testing
+
+The browser suites need two setup commands first (that's all `package.json`
+is for):
 
 ```bash
-node tests/test_display_case.mjs         # display casing
-node tests/test_season.mjs               # election mode vs off-season, the next possible date
-node tests/test_precinct_outline.mjs     # each jurisdiction's outline is its border
-node tests/test_polling_data.mjs         # every place to vote has an address and a coordinate
-node tests/test_router.mjs               # routing, chunks, restrictions, the address index
-node tests/audit_routes.mjs              # hundreds of real trips countywide, every route checked
-node tests/test_page.mjs                 # the page in a browser, at three widths
-node tests/test_simple_page.mjs          # /simple in a browser, at three widths
-node tests/test_early_voting_states.mjs  # early voting states and election day, both pages
-node tests/test_registration.mjs         # registering by mail, then in person, both pages
-node tests/test_i18n.mjs                 # every key translated, the page in Spanish
-node tests/test_check_links.mjs          # what the link checker makes of a response
-node tests/test_check_links_inputs.mjs   # that it can still read every file it names
-node scripts/compare_osrm.mjs 30         # our routes against OSRM
-node scripts/check_links.mjs             # every external link in the docs, pages and data
+npm ci
+npx playwright install chromium
 ```
 
-The four browser suites need `npm ci` and `npx playwright install chromium`
-first, which is all `package.json` is for. The eleven suites run on every pull
-request and push to `main`. The last two commands reach other people's
-servers, so they run by hand, and the link check also runs weekly.
+These run on every pull request and every push to `main`:
 
-`tests/audit_routes.mjs` is the one that matters. It drives seeded trips to
-all 202 polling places and checks every route mechanically for broken edges,
-wrong-way one-ways, freeways, restricted turns, needless U-turns and step
-distances that do not add up.
+| Command | Checks |
+|---|---|
+| `node tests/audit_routes.mjs` | Hundreds of real trips to all 202 polling places, every route checked |
+| `node tests/test_router.mjs` | Routing, map pieces, turn restrictions, the address index |
+| `node tests/test_polling_data.mjs` | Every place to vote has an address and a location |
+| `node tests/test_precinct_outline.mjs` | Each jurisdiction's outline matches its border |
+| `node tests/test_season.mjs` | Election season vs. off-season, and the next possible election date |
+| `node tests/test_display_case.mjs` | How addresses and names are capitalized |
+| `node tests/test_page.mjs` | The page in a browser, at three screen widths |
+| `node tests/test_simple_page.mjs` | The light version in a browser, at three screen widths |
+| `node tests/test_early_voting_states.mjs` | Early voting and election day, on both pages |
+| `node tests/test_registration.mjs` | Registering by mail, then in person, on both pages |
+| `node tests/test_check_links.mjs` | How the link checker reads a response |
+| `node tests/test_check_links_inputs.mjs` | The link checker can still read every file it covers |
 
-## Limits
+The route audit is the one that matters most. It drives seeded trips to every
+polling place and checks each route for broken roads, wrong-way one-ways,
+freeways, illegal turns, needless U-turns and distances that don't add up.
 
-This tool is an estimate, and these are the ways it is wrong.
+These two contact other people's servers, so they run by hand (the link check
+also runs weekly):
 
-- Your precinct is legally set by the state voter file, not by a line on a
-  map. Near a precinct boundary, or where it had to infer a number from the
-  neighbors, the page says so.
-- Coverage is Kent County parcel addresses as of 2026-09-08, so a brand new
-  build may be missing. A 2026-11-01 copy of the county's parcel
-  addresses is under `records/kent-parcels-2026-11-01/`. 109 addresses appear in two jurisdictions, and the page asks which
-  you mean.
-- Polling places change every election. Outside Grand Rapids a marker may sit
-  on the road outside the building rather than on it.
-- An absentee ballot goes only to your own clerk (MCL 168.764a), so the page
-  never sends you to a neighbor's drop box, and names your clerk's office where
-  it has no box to show.
-- Early voting is shown for Grand Rapids addresses only, where the City Clerk
+```bash
+node scripts/compare_osrm.mjs 30   # compare our routes with OSRM
+node scripts/check_links.mjs       # every outside link in the docs, pages and data
+```
+
+## Known limits
+
+This is an estimate. Here is where it can be wrong.
+
+- Precincts. Your precinct is legally set by the state voter file, not a
+  line on a map. Near a boundary, or where the precinct had to be inferred
+  from its neighbors, the page tells you.
+- New addresses. Coverage comes from Kent County parcel addresses as of
+  2026-09-08, so a brand new build may be missing. (A 2026-11-01 copy is in
+  `records/kent-parcels-2026-11-01/`.) 109 addresses fall in two
+  jurisdictions, and the page asks which you mean.
+- Polling places change every election. Outside Grand Rapids, a marker
+  may sit on the road in front of the building.
+- Absentee ballots can only go to your own clerk (MCL 168.764a), so the
+  page never sends you to a neighboring town's drop box. Where your clerk has
+  no box to show, it names the clerk's office.
+- Early voting is shown only for Grand Rapids, the one place that
   publishes current sites and dates. Elsewhere, ask your clerk.
-- In the two weeks before an election, when registering is in person only,
-  the page names your clerk's office. Only Grand Rapids publishes its hours
-  for that; elsewhere the page gives the clerk's phone number.
-- The map draws water, parks and rail only around Grand Rapids.
+- Last-minute registration. In the final two weeks, when you can only
+  register in person, the page names your clerk's office. Only Grand Rapids
+  publishes office hours; elsewhere you get the clerk's phone number.
+- The map shows water, parks and rail only around Grand Rapids.
 
 ## Privacy
 
-The page makes no third-party request, which you can watch in the network
-panel and which `tests/test_page.mjs` and `tests/test_simple_page.mjs` assert.
-The camera list ships with the site, refreshed daily by
-`scripts/refresh_cameras.py`. The OpenStreetMap data names the people who
-mapped those cameras, and this project leaves their usernames out, because
-that mapping carries real risk.
+The page makes no requests to anyone else's servers. You can confirm it in
+your browser's network panel, and the browser tests check it on every change.
+
+The plate reader list ships with the site and is refreshed daily by
+`scripts/refresh_cameras.py`. OpenStreetMap records who mapped each camera;
+this project leaves those usernames out, because mapping cameras carries real
+risk for the people who do it.
 
 ## License
 
-Code is public domain under the [Unlicense](UNLICENSE). Two bundled pieces keep
-their own licenses: [Leaflet](https://leafletjs.com) 1.9.4 (BSD 2-Clause, in
-`site/vendor/leaflet/`) and the Hanken Grotesk typeface (SIL Open Font License
-1.1, in `site/fonts/`). The address matching in `site/voting.js` is carried
-over from the earlier vote-gr project.
+The code is public domain under the [Unlicense](UNLICENSE). Two bundled pieces
+keep their own licenses: [Leaflet](https://leafletjs.com) 1.9.4 (BSD 2-Clause,
+in `site/vendor/leaflet/`) and the Hanken Grotesk typeface (SIL Open Font
+License 1.1, in `site/fonts/`). The address matching in `site/voting.js` comes
+from the earlier vote-gr project.
 
-The data is public record of Kent County, the City of Grand Rapids and the
-State of Michigan, and is not ours to license; every file says where it came
+The data is public record from Kent County, the City of Grand Rapids and the
+State of Michigan, and isn't ours to license; every file says where it came
 from. Camera locations, turn restrictions, water, parks and rail come from
-OpenStreetMap under the ODbL, so the graph chunks, `graph.json`, `cameras.json`
-and `landcover.json` keep its attribution and share alike. Much of the camera mapping
-is the work of the [DeFlock](https://deflock.org/) community, where you can
-contribute to the plate reader database.
+OpenStreetMap under the ODbL, so the graph chunks, `graph.json`,
+`cameras.json` and `landcover.json` keep its attribution and share-alike
+terms. Much of the camera mapping is the work of the
+[DeFlock](https://deflock.org/) community, where you can add to the plate
+reader database.
