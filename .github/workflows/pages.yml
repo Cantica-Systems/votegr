@@ -26,17 +26,36 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# Two jobs, upload then deploy, not one. deploy-pages looks the artifact up by
+# name, and run straight after the upload in the same job that lookup can come
+# back empty for an artifact finalized half a second earlier: runs #200 and
+# #202 failed with "Found 0 artifact(s)" 0.64 s and 0.46 s after the upload,
+# while the passes in between had waited 0.66 to 0.71 s. The artifact was
+# there all along (a re-run of #200 found it, beside its own), it simply was
+# not listed yet. Reported upstream as actions/deploy-pages#451. The job
+# boundary puts a runner start between the two, which is the layout GitHub's
+# own Pages workflows use.
+#
+# If deploy still fails, use "Re-run failed jobs", which re-runs deploy alone
+# against the artifact build already uploaded. Not "Re-run all jobs": that
+# uploads a second artifact of the same name into the same run, and
+# deploy-pages refuses a run with two (#200's re-run did exactly that).
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5
