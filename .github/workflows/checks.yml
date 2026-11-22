@@ -65,14 +65,14 @@ concurrency:
 
 jobs:
   test:
-    # Pinned, not ubuntu-latest. GitHub moved ubuntu-latest to Ubuntu 26.04
-    # between 2026-10-19 and 2026-11-19, and the Playwright in package.json
-    # (1.56.1) has no Chromium build for 26.04: from run #345 on 2026-11-17
-    # every run stopped at "Install Chromium" with "Playwright does not
-    # support chromium on ubuntu26.04-x64". Playwright 1.61.0 is the first to
-    # list ubuntu26.04. Go back to ubuntu-latest together with that upgrade,
-    # not before.
-    runs-on: ubuntu-24.04
+    # ubuntu-latest moves to each new Ubuntu release on GitHub's schedule, and
+    # Playwright only installs Chromium on releases it already knows. When it
+    # moved to 26.04 in November 2026, the 1.56.1 in package.json had no build
+    # for it, and every run failed at "Install Chromium" with "Playwright does
+    # not support chromium on ubuntu26.04-x64" until 1.61 (the first to list
+    # 26.04). If that error comes back, upgrade Playwright; pinning runs-on to
+    # the previous image is the stopgap while the upgrade is tested.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
